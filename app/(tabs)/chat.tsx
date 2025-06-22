@@ -18,11 +18,10 @@ import {
   Globe,
   Plus,
   Settings,
-  Key
+  Database
 } from 'lucide-react-native';
-import { ConversationView } from '../../components/ConversationView';
-import { APIKeySetup } from '../../components/APIKeySetup';
-import { claudeAPI } from '../../services/claudeAPI';
+import { SupabaseConversationView } from '../../components/SupabaseConversationView';
+import { supabaseClaudeAPI } from '../../services/supabaseClaudeAPI';
 
 const conversationModes = [
   {
@@ -78,23 +77,25 @@ const conversationModes = [
 export default function ChatScreen() {
   const [selectedMode, setSelectedMode] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [showAPIKeySetup, setShowAPIKeySetup] = useState(false);
-  const [isAPIConfigured, setIsAPIConfigured] = useState(false);
+  const [isSupabaseConfigured, setIsSupabaseConfigured] = useState(false);
+  const [configStatus, setConfigStatus] = useState({ hasUrl: false, hasKey: false });
 
   useEffect(() => {
-    // Check if API key is configured
-    setIsAPIConfigured(claudeAPI.isConfigured());
+    // Check if Supabase is properly configured
+    const status = supabaseClaudeAPI.getConfigStatus();
+    setIsSupabaseConfigured(status.configured);
+    setConfigStatus(status);
   }, []);
 
   const startConversation = (modeId: string) => {
-    if (!isAPIConfigured) {
+    if (!isSupabaseConfigured) {
       Alert.alert(
-        'API Key Required',
-        'Please configure your Claude API key to start conversations.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Setup', onPress: () => setShowAPIKeySetup(true) }
-        ]
+        'Configuration Required',
+        'Supabase is not properly configured. Please check your environment variables:\n\n' +
+        (!configStatus.hasUrl ? '• EXPO_PUBLIC_SUPABASE_URL\n' : '') +
+        (!configStatus.hasKey ? '• EXPO_PUBLIC_SUPABASE_ANON_KEY\n' : '') +
+        '\nAlso ensure your Claude API key is set in the Supabase Edge Function.',
+        [{ text: 'OK' }]
       );
       return;
     }
@@ -108,14 +109,9 @@ export default function ChatScreen() {
     setSessionId(null);
   };
 
-  const handleAPIKeySuccess = () => {
-    setIsAPIConfigured(true);
-    setShowAPIKeySetup(false);
-  };
-
   if (selectedMode && sessionId) {
     return (
-      <ConversationView
+      <SupabaseConversationView
         mode={selectedMode}
         sessionId={sessionId}
         onClose={endConversation}
@@ -134,16 +130,25 @@ export default function ChatScreen() {
           <View>
             <Text style={styles.title}>AI Conversation</Text>
             <Text style={styles.subtitle}>
-              {isAPIConfigured ? 'Choose your conversation mode' : 'Setup required to start'}
+              {isSupabaseConfigured ? 'Choose your conversation mode' : 'Configuration required'}
             </Text>
           </View>
           <View style={styles.headerActions}>
-            {!isAPIConfigured && (
+            {!isSupabaseConfigured && (
               <TouchableOpacity
-                style={[styles.actionButton, styles.keyButton]}
-                onPress={() => setShowAPIKeySetup(true)}
+                style={[styles.actionButton, styles.configButton]}
+                onPress={() => {
+                  Alert.alert(
+                    'Supabase Configuration',
+                    'Please set the following environment variables:\n\n' +
+                    '• EXPO_PUBLIC_SUPABASE_URL\n' +
+                    '• EXPO_PUBLIC_SUPABASE_ANON_KEY\n\n' +
+                    'Also ensure your Claude API key is configured in the Supabase Edge Function.',
+                    [{ text: 'OK' }]
+                  );
+                }}
               >
-                <Key size={20} color="white" />
+                <Database size={20} color="white" />
               </TouchableOpacity>
             )}
             <TouchableOpacity style={styles.settingsButton}>
@@ -152,19 +157,18 @@ export default function ChatScreen() {
           </View>
         </View>
 
-        {/* API Status Banner */}
-        {!isAPIConfigured && (
+        {/* Configuration Status Banner */}
+        {!isSupabaseConfigured && (
           <View style={styles.statusBanner}>
-            <Key size={20} color="#F59E0B" />
-            <Text style={styles.statusText}>
-              Claude API key required to start conversations
-            </Text>
-            <TouchableOpacity
-              style={styles.setupButton}
-              onPress={() => setShowAPIKeySetup(true)}
-            >
-              <Text style={styles.setupButtonText}>Setup</Text>
-            </TouchableOpacity>
+            <Database size={20} color="#EF4444" />
+            <View style={styles.statusTextContainer}>
+              <Text style={styles.statusTitle}>Supabase Configuration Required</Text>
+              <Text style={styles.statusText}>
+                {!configStatus.hasUrl && 'Missing SUPABASE_URL. '}
+                {!configStatus.hasKey && 'Missing SUPABASE_ANON_KEY. '}
+                Claude API key must be set in Edge Function.
+              </Text>
+            </View>
           </View>
         )}
 
@@ -182,13 +186,13 @@ export default function ChatScreen() {
                   key={mode.id}
                   style={[
                     styles.modeCard,
-                    !isAPIConfigured && styles.modeCardDisabled
+                    !isSupabaseConfigured && styles.modeCardDisabled
                   ]}
                   onPress={() => startConversation(mode.id)}
-                  activeOpacity={isAPIConfigured ? 0.8 : 0.5}
+                  activeOpacity={isSupabaseConfigured ? 0.8 : 0.5}
                 >
                   <LinearGradient
-                    colors={isAPIConfigured ? mode.color : ['#D1D5DB', '#9CA3AF']}
+                    colors={isSupabaseConfigured ? mode.color : ['#D1D5DB', '#9CA3AF']}
                     style={styles.modeGradient}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
@@ -206,7 +210,7 @@ export default function ChatScreen() {
                     <View style={styles.startButton}>
                       <Plus size={16} color="white" />
                       <Text style={styles.startButtonText}>
-                        {isAPIConfigured ? 'Start' : 'Setup Required'}
+                        {isSupabaseConfigured ? 'Start' : 'Config Required'}
                       </Text>
                     </View>
                   </LinearGradient>
@@ -214,6 +218,21 @@ export default function ChatScreen() {
               );
             })}
           </View>
+
+          {/* Setup Instructions */}
+          {!isSupabaseConfigured && (
+            <View style={styles.setupSection}>
+              <Text style={styles.setupTitle}>Setup Instructions</Text>
+              <View style={styles.setupCard}>
+                <Text style={styles.setupStep}>1. Create a Supabase project at supabase.com</Text>
+                <Text style={styles.setupStep}>2. Set environment variables:</Text>
+                <Text style={styles.setupCode}>   EXPO_PUBLIC_SUPABASE_URL=your_url</Text>
+                <Text style={styles.setupCode}>   EXPO_PUBLIC_SUPABASE_ANON_KEY=your_key</Text>
+                <Text style={styles.setupStep}>3. Deploy the Claude proxy Edge Function</Text>
+                <Text style={styles.setupStep}>4. Set CLAUDE_API_KEY in Supabase dashboard</Text>
+              </View>
+            </View>
+          )}
 
           {/* Recent Conversations */}
           <View style={styles.recentSection}>
@@ -224,12 +243,6 @@ export default function ChatScreen() {
           </View>
         </ScrollView>
       </LinearGradient>
-
-      <APIKeySetup
-        visible={showAPIKeySetup}
-        onClose={() => setShowAPIKeySetup(false)}
-        onSuccess={handleAPIKeySuccess}
-      />
     </SafeAreaView>
   );
 }
@@ -275,8 +288,8 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  keyButton: {
-    backgroundColor: '#F59E0B',
+  configButton: {
+    backgroundColor: '#EF4444',
   },
   settingsButton: {
     width: 44,
@@ -293,31 +306,28 @@ const styles = StyleSheet.create({
   },
   statusBanner: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF3C7',
+    alignItems: 'flex-start',
+    backgroundColor: '#FEE2E2',
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 16,
     marginHorizontal: 20,
     marginBottom: 16,
     borderRadius: 12,
     gap: 12,
   },
-  statusText: {
+  statusTextContainer: {
     flex: 1,
-    fontSize: 14,
-    color: '#92400E',
-    fontWeight: '500',
   },
-  setupButton: {
-    backgroundColor: '#F59E0B',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  setupButtonText: {
-    fontSize: 14,
-    color: 'white',
+  statusTitle: {
+    fontSize: 16,
+    color: '#DC2626',
     fontWeight: '600',
+    marginBottom: 4,
+  },
+  statusText: {
+    fontSize: 14,
+    color: '#B91C1C',
+    lineHeight: 20,
   },
   scrollView: {
     flex: 1,
@@ -393,6 +403,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'white',
     fontWeight: '600',
+  },
+  setupSection: {
+    marginBottom: 32,
+  },
+  setupTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 16,
+  },
+  setupCard: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3B82F6',
+  },
+  setupStep: {
+    fontSize: 14,
+    color: '#374151',
+    marginBottom: 8,
+    lineHeight: 20,
+  },
+  setupCode: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    backgroundColor: '#F3F4F6',
+    padding: 8,
+    borderRadius: 4,
+    marginBottom: 8,
   },
   recentSection: {
     marginTop: 16,
