@@ -6,12 +6,7 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-  MessageSquare,
-  Settings,
-  RotateCcw,
-  HelpCircle,
-} from 'lucide-react-native';
+import { MessageSquare, Settings, RotateCcw, CircleHelp as HelpCircle } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useInputStore } from '@/src/stores/inputStore';

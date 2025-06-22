@@ -9,7 +9,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Mic, Square, Loader, AlertCircle } from 'lucide-react-native';
+import { Mic, Square, Loader, CircleAlert as AlertCircle } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useVoiceStore } from '@/src/stores/voiceStore';

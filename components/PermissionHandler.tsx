@@ -9,7 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Mic, Settings, AlertTriangle, CheckCircle } from 'lucide-react-native';
+import { Mic, Settings, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle } from 'lucide-react-native';
 import { Audio } from 'expo-av';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useSettingsStore } from '@/src/stores/settingsStore';
