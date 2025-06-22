@@ -11,7 +11,7 @@ import {
   TextInput
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Send, RotateCcw, Copy, Bookmark, MoveHorizontal as MoreHorizontal, Wifi, WifiOff, Zap, AlertCircle } from 'lucide-react-native';
+import { Send, RotateCcw, Copy, Bookmark, MoveHorizontal as MoreHorizontal, Wifi, WifiOff, Zap, CircleAlert as AlertCircle } from 'lucide-react-native';
 import { useSupabaseConversation } from '../hooks/useSupabaseConversation';
 import { ConversationMessage } from '../types/api';
 
