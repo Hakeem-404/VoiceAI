@@ -7,7 +7,8 @@ import {
   StyleSheet,
   Dimensions,
   Platform,
-  ActivityIndicator
+  ActivityIndicator,
+  TextInput
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Send, RotateCcw, Copy, Bookmark, MoveHorizontal as MoreHorizontal, Wifi, WifiOff, Zap } from 'lucide-react-native';
@@ -63,12 +64,27 @@ export function ConversationView({
   // Network status monitoring
   useEffect(() => {
     if (Platform.OS !== 'web') {
+      // Only import and use NetInfo on native platforms
       import('@react-native-community/netinfo').then(({ default: NetInfo }) => {
         const unsubscribe = NetInfo.addEventListener(state => {
           setIsOnline(state.isConnected ?? false);
         });
         return unsubscribe;
+      }).catch(() => {
+        // Fallback if NetInfo is not available
+        setIsOnline(true);
       });
+    } else {
+      // For web, use navigator.onLine
+      const updateOnlineStatus = () => setIsOnline(navigator.onLine);
+      
+      window.addEventListener('online', updateOnlineStatus);
+      window.addEventListener('offline', updateOnlineStatus);
+      
+      return () => {
+        window.removeEventListener('online', updateOnlineStatus);
+        window.removeEventListener('offline', updateOnlineStatus);
+      };
     }
   }, []);
 
@@ -97,7 +113,7 @@ export function ConversationView({
   const MessageBubble = ({ message, index }: { message: ConversationMessage; index: number }) => {
     const isUser = message.role === 'user';
     const isLastMessage = index === messages.length - 1;
-    const isStreaming = isLastMessage && message.role === 'assistant' && isStreaming;
+    const isStreamingMessage = isLastMessage && message.role === 'assistant' && isStreaming;
 
     return (
       <View style={[styles.messageContainer, isUser ? styles.userMessageContainer : styles.assistantMessageContainer]}>
@@ -106,7 +122,7 @@ export function ConversationView({
             {message.content}
           </Text>
           
-          {isStreaming && (
+          {isStreamingMessage && (
             <View style={styles.streamingIndicator}>
               <ActivityIndicator size="small" color="#666" />
             </View>
