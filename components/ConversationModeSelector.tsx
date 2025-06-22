@@ -9,16 +9,7 @@ import {
   Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-  X,
-  Search,
-  Filter,
-  Star,
-  Clock,
-  TrendingUp,
-  Grid3X3,
-  List,
-} from 'lucide-react-native';
+import { X, Search, Filter, Star, Clock, TrendingUp, Grid3x3 as Grid3X3, List } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { ConversationMode } from '@/src/types';
 import { ModeSelectionCard } from './ModeSelectionCard';

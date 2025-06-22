@@ -10,19 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-  Pause,
-  Play,
-  Square,
-  RotateCcw,
-  Bookmark,
-  Highlighter,
-  Volume2,
-  VolumeX,
-  MessageSquare,
-  Settings,
-  MoreHorizontal,
-} from 'lucide-react-native';
+import { Pause, Play, Square, RotateCcw, Bookmark, Highlighter, Volume2, VolumeX, MessageSquare, Settings, MoveHorizontal as MoreHorizontal } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { ConversationSession, Message } from '@/src/types';
 import { VoiceRecordButton } from './VoiceRecordButton';

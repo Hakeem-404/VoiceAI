@@ -10,18 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { 
-  Target, 
-  Trophy, 
-  Clock, 
-  Star,
-  Play,
-  CheckCircle,
-  TrendingUp,
-  Zap,
-  Award,
-  Calendar,
-} from 'lucide-react-native';
+import { Target, Trophy, Clock, Star, Play, CircleCheck as CheckCircle, TrendingUp, Zap, Award, Calendar } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useUserStore } from '@/src/stores/userStore';
 import { useConversationStore } from '@/src/stores/conversationStore';
