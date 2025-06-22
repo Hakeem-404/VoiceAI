@@ -256,16 +256,9 @@ class AudioService {
   }
 
   private getPlatformRecordingOptions(): any {
-    switch (Platform.OS) {
-      case 'ios':
-        return this.recordingOptions.ios;
-      case 'android':
-        return this.recordingOptions.android;
-      case 'web':
-        return this.recordingOptions.web;
-      default:
-        return this.recordingOptions.android; // Fallback
-    }
+    // Return the complete recording options object with both android and ios properties
+    // This is required by Audio.Recording.createAsync which expects the full options structure
+    return this.recordingOptions;
   }
 
   async stopRecording(): Promise<string | null> {
