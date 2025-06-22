@@ -339,7 +339,7 @@ class ClaudeAPIService {
     });
 
     const requestData = {
-      model: 'claude-3-sonnet-20240229',
+      model: 'claude-3-5-sonnet-20240620',
       max_tokens: this.getMaxTokensForMode(context.mode),
       messages,
       temperature: this.getTemperatureForMode(context.mode),
@@ -398,7 +398,7 @@ class ClaudeAPIService {
     });
 
     const requestData = {
-      model: 'claude-3-sonnet-20240229',
+      model: 'claude-3-5-sonnet-20240620',
       max_tokens: this.getMaxTokensForMode(context.mode),
       messages,
       temperature: this.getTemperatureForMode(context.mode),

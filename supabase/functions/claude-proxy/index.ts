@@ -118,8 +118,9 @@ serve(async (req) => {
       )
     }
 
-    // Use a supported Claude model
+    // Use a supported Claude model - updated to use Claude 3.5 Sonnet
     const supportedModels = [
+      'claude-3-5-sonnet-20240620',
       'claude-3-sonnet-20240229',
       'claude-3-haiku-20240307',
       'claude-3-opus-20240229'
@@ -127,8 +128,8 @@ serve(async (req) => {
     
     let modelToUse = requestBody.model
     if (!supportedModels.includes(modelToUse)) {
-      console.log('Unsupported model:', modelToUse, 'using claude-3-sonnet-20240229')
-      modelToUse = 'claude-3-sonnet-20240229'
+      console.log('Unsupported model:', modelToUse, 'using claude-3-5-sonnet-20240620')
+      modelToUse = 'claude-3-5-sonnet-20240620'
     }
 
     // Prepare Claude API request with correct format
