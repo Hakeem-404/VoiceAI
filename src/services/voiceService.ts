@@ -1,4 +1,4 @@
-import { Audio } from 'expo-av';
+import { Audio } from 'expo-audio';
 import * as Speech from 'expo-speech';
 import { Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
@@ -33,7 +33,7 @@ class VoiceService {
     onAudioLevel?: (level: number) => void,
     onVoiceActivity?: (detected: boolean) => void,
     config: Partial<VoiceActivityConfig> = {}
-  ): Promise<Audio.Recording> {
+  ): Promise<Audio.Recording | null> {
     const voiceConfig = { ...this.defaultConfig, ...config };
     this.recordingStartTime = Date.now();
     this.lastVoiceActivity = Date.now();
@@ -78,7 +78,7 @@ class VoiceService {
       onVoiceActivity
     );
 
-    // Haptic feedback on start
+    // Haptic feedback on start (only on mobile)
     if (Platform.OS !== 'web') {
       try {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -99,7 +99,7 @@ class VoiceService {
 
     const uri = await audioService.stopRecording();
 
-    // Haptic feedback on stop
+    // Haptic feedback on stop (only on mobile)
     if (Platform.OS !== 'web') {
       try {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

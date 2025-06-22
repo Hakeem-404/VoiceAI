@@ -1,20 +1,20 @@
-import { Audio } from 'expo-av';
+import { Audio } from 'expo-audio';
 import * as Speech from 'expo-speech';
 import { Platform } from 'react-native';
 
 export interface PlatformRecordingOptions {
   android: {
     extension: '.m4a';
-    outputFormat: Audio.AndroidOutputFormat;
-    audioEncoder: Audio.AndroidAudioEncoder;
+    outputFormat: string;
+    audioEncoder: string;
     sampleRate: number;
     numberOfChannels: number;
     bitRate: number;
   };
   ios: {
     extension: '.m4a';
-    outputFormat: Audio.IOSOutputFormat;
-    audioQuality: Audio.IOSAudioQuality;
+    outputFormat: string;
+    audioQuality: string;
     sampleRate: number;
     numberOfChannels: number;
     bitRate: number;
@@ -30,31 +30,33 @@ export interface PlatformRecordingOptions {
 
 class AudioService {
   private recording: Audio.Recording | null = null;
-  private sound: Audio.Sound | null = null;
+  private audioPlayer: Audio.AudioPlayer | null = null;
   private isInitialized = false;
+  private webMediaRecorder: MediaRecorder | null = null;
+  private webAudioChunks: Blob[] = [];
 
   private readonly recordingOptions: PlatformRecordingOptions = {
     android: {
       extension: '.m4a',
-      outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-      audioEncoder: Audio.AndroidAudioEncoder.AAC,
+      outputFormat: 'mpeg4',
+      audioEncoder: 'aac',
       sampleRate: 44100,
-      numberOfChannels: 2,
+      numberOfChannels: 1,
       bitRate: 128000,
     },
     ios: {
       extension: '.m4a',
-      outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
-      audioQuality: Audio.IOSAudioQuality.HIGH,
+      outputFormat: 'mpeg4aac',
+      audioQuality: 'high',
       sampleRate: 44100,
-      numberOfChannels: 2,
+      numberOfChannels: 1,
       bitRate: 128000,
       linearPCMBitDepth: 16,
       linearPCMIsBigEndian: false,
       linearPCMIsFloat: false,
     },
     web: {
-      mimeType: 'audio/webm',
+      mimeType: 'audio/webm;codecs=opus',
       bitsPerSecond: 128000,
     },
   };
@@ -73,7 +75,7 @@ class AudioService {
         }
       }
 
-      const { status } = await Audio.requestPermissionsAsync();
+      const { status } = await Audio.requestRecordingPermissionsAsync();
       return status === 'granted';
     } catch (error) {
       console.error('Permission request failed:', error);
@@ -97,8 +99,6 @@ class AudioService {
         shouldDuckAndroid: true,
         playThroughEarpieceAndroid: false,
         staysActiveInBackground: false,
-        interruptionModeIOS: Audio.InterruptionModeIOS.DoNotMix,
-        interruptionModeAndroid: Audio.InterruptionModeAndroid.DoNotMix,
       });
 
       this.isInitialized = true;
@@ -111,7 +111,7 @@ class AudioService {
   async startRecording(
     onAudioLevel?: (level: number) => void,
     onVoiceActivity?: (detected: boolean) => void
-  ): Promise<Audio.Recording> {
+  ): Promise<Audio.Recording | null> {
     try {
       // Ensure audio is initialized
       await this.initializeAudio();
@@ -121,26 +121,20 @@ class AudioService {
         await this.stopRecording();
       }
 
-      // Get platform-specific recording options
-      const options = this.getPlatformRecordingOptions();
-
       if (Platform.OS === 'web') {
         // Web recording implementation
         return await this.startWebRecording(onAudioLevel, onVoiceActivity);
       }
 
-      // Native recording implementation
-      const { recording } = await Audio.Recording.createAsync(
-        options,
-        undefined,
-        100 // Update interval for metering in milliseconds
-      );
-
-      this.recording = recording;
-
+      // Native recording implementation using expo-audio
+      const options = this.getPlatformRecordingOptions();
+      
+      this.recording = new Audio.Recording();
+      await this.recording.prepareToRecordAsync(options);
+      
       // Set up audio level monitoring
       if (onAudioLevel || onVoiceActivity) {
-        recording.setOnRecordingStatusUpdate((status) => {
+        this.recording.setOnRecordingStatusUpdate((status) => {
           if (status.isRecording && status.metering !== undefined) {
             // Convert metering to 0-1 range for visualization
             // Metering typically ranges from -160 to 0 dB
@@ -154,7 +148,8 @@ class AudioService {
         });
       }
 
-      return recording;
+      await this.recording.startAsync();
+      return this.recording;
     } catch (error) {
       console.error('Failed to start recording:', error);
       this.recording = null;
@@ -165,39 +160,119 @@ class AudioService {
   private async startWebRecording(
     onAudioLevel?: (level: number) => void,
     onVoiceActivity?: (detected: boolean) => void
-  ): Promise<Audio.Recording> {
-    // For web, we'll create a mock recording object that behaves like expo-av Recording
-    // In a real implementation, you'd use MediaRecorder API
-    const mockRecording = {
-      getURI: () => 'mock://web-recording.webm',
-      stopAndUnloadAsync: async () => {},
-      setOnRecordingStatusUpdate: (callback: any) => {
-        // Mock audio level updates for web testing
-        const interval = setInterval(() => {
-          const mockLevel = Math.random() * 0.8 + 0.1;
-          callback({
-            isRecording: true,
-            metering: (mockLevel * 160) - 160,
-          });
-          onAudioLevel?.(mockLevel);
-          onVoiceActivity?.(mockLevel > 0.3);
-        }, 100);
+  ): Promise<Audio.Recording | null> {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 44100,
+        },
+      });
 
-        // Store interval for cleanup
-        (mockRecording as any)._interval = interval;
-      },
-    } as Audio.Recording;
+      // Set up audio level monitoring for web
+      if (onAudioLevel || onVoiceActivity) {
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const analyser = audioContext.createAnalyser();
+        const microphone = audioContext.createMediaStreamSource(stream);
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-    this.recording = mockRecording;
-    return mockRecording;
+        microphone.connect(analyser);
+        analyser.fftSize = 256;
+
+        const updateAudioLevel = () => {
+          analyser.getByteFrequencyData(dataArray);
+          const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+          const normalizedLevel = average / 255;
+          
+          onAudioLevel?.(normalizedLevel);
+          onVoiceActivity?.(normalizedLevel > 0.1);
+
+          if (this.webMediaRecorder && this.webMediaRecorder.state === 'recording') {
+            requestAnimationFrame(updateAudioLevel);
+          }
+        };
+
+        updateAudioLevel();
+      }
+
+      // Set up MediaRecorder for web recording
+      this.webAudioChunks = [];
+      this.webMediaRecorder = new MediaRecorder(stream, {
+        mimeType: this.recordingOptions.web.mimeType,
+        audioBitsPerSecond: this.recordingOptions.web.bitsPerSecond,
+      });
+
+      this.webMediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          this.webAudioChunks.push(event.data);
+        }
+      };
+
+      this.webMediaRecorder.start();
+
+      // Create a mock recording object that behaves like expo-audio Recording
+      const mockRecording = {
+        getURI: () => {
+          if (this.webAudioChunks.length > 0) {
+            const blob = new Blob(this.webAudioChunks, { type: this.recordingOptions.web.mimeType });
+            return URL.createObjectURL(blob);
+          }
+          return null;
+        },
+        stopAndUnloadAsync: async () => {
+          if (this.webMediaRecorder && this.webMediaRecorder.state === 'recording') {
+            this.webMediaRecorder.stop();
+          }
+          stream.getTracks().forEach(track => track.stop());
+        },
+        setOnRecordingStatusUpdate: (callback: any) => {
+          // Mock status updates for web
+          const interval = setInterval(() => {
+            if (this.webMediaRecorder && this.webMediaRecorder.state === 'recording') {
+              callback({
+                isRecording: true,
+                metering: Math.random() * 160 - 160, // Mock metering value
+              });
+            } else {
+              clearInterval(interval);
+            }
+          }, 100);
+        },
+      } as Audio.Recording;
+
+      this.recording = mockRecording;
+      return mockRecording;
+    } catch (error) {
+      console.error('Web recording failed:', error);
+      throw error;
+    }
   }
 
   private getPlatformRecordingOptions(): any {
     switch (Platform.OS) {
       case 'ios':
-        return this.recordingOptions.ios;
+        return {
+          extension: this.recordingOptions.ios.extension,
+          outputFormat: this.recordingOptions.ios.outputFormat,
+          audioQuality: this.recordingOptions.ios.audioQuality,
+          sampleRate: this.recordingOptions.ios.sampleRate,
+          numberOfChannels: this.recordingOptions.ios.numberOfChannels,
+          bitRate: this.recordingOptions.ios.bitRate,
+          linearPCMBitDepth: this.recordingOptions.ios.linearPCMBitDepth,
+          linearPCMIsBigEndian: this.recordingOptions.ios.linearPCMIsBigEndian,
+          linearPCMIsFloat: this.recordingOptions.ios.linearPCMIsFloat,
+        };
       case 'android':
-        return this.recordingOptions.android;
+        return {
+          extension: this.recordingOptions.android.extension,
+          outputFormat: this.recordingOptions.android.outputFormat,
+          audioEncoder: this.recordingOptions.android.audioEncoder,
+          sampleRate: this.recordingOptions.android.sampleRate,
+          numberOfChannels: this.recordingOptions.android.numberOfChannels,
+          bitRate: this.recordingOptions.android.bitRate,
+        };
       case 'web':
         return this.recordingOptions.web;
       default:
@@ -211,12 +286,10 @@ class AudioService {
 
       if (Platform.OS === 'web') {
         // Clean up web recording
-        const interval = (this.recording as any)._interval;
-        if (interval) {
-          clearInterval(interval);
-        }
+        await this.recording.stopAndUnloadAsync();
         const uri = this.recording.getURI();
         this.recording = null;
+        this.webMediaRecorder = null;
         return uri;
       }
 
@@ -236,19 +309,20 @@ class AudioService {
   async playAudio(uri: string): Promise<void> {
     try {
       // Stop any existing playback
-      if (this.sound) {
-        await this.sound.unloadAsync();
+      if (this.audioPlayer) {
+        await this.audioPlayer.unloadAsync();
       }
 
-      if (Platform.OS === 'web' && uri.startsWith('mock://')) {
-        // Mock playback for web testing
-        console.log('Mock audio playback:', uri);
+      if (Platform.OS === 'web') {
+        // Web audio playback
+        const audio = new window.Audio(uri);
+        audio.play();
         return;
       }
 
-      const { sound } = await Audio.Sound.createAsync({ uri });
-      this.sound = sound;
-      await sound.playAsync();
+      // Native audio playback using expo-audio
+      this.audioPlayer = new Audio.AudioPlayer(uri);
+      await this.audioPlayer.playAsync();
     } catch (error) {
       console.error('Failed to play audio:', error);
       throw new Error(`Audio playback failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -257,10 +331,10 @@ class AudioService {
 
   async stopAudio(): Promise<void> {
     try {
-      if (this.sound) {
-        await this.sound.stopAsync();
-        await this.sound.unloadAsync();
-        this.sound = null;
+      if (this.audioPlayer) {
+        await this.audioPlayer.stopAsync();
+        await this.audioPlayer.unloadAsync();
+        this.audioPlayer = null;
       }
     } catch (error) {
       console.error('Failed to stop audio:', error);
@@ -333,7 +407,7 @@ class AudioService {
         }
       }
 
-      const { status } = await Audio.getPermissionsAsync();
+      const { status } = await Audio.getRecordingPermissionsAsync();
       return status as 'granted' | 'denied' | 'undetermined';
     } catch (error) {
       console.error('Failed to check permissions:', error);
@@ -360,6 +434,8 @@ class AudioService {
 
       await this.initializeAudio();
       const recording = await this.startRecording();
+      
+      if (!recording) return false;
       
       // Record for 1 second
       await new Promise(resolve => setTimeout(resolve, 1000));

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Audio } from 'expo-av';
+import { Audio } from 'expo-audio';
 
 export interface VoiceState {
   isRecording: boolean;

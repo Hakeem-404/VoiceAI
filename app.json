@@ -15,7 +15,7 @@
     "android": {
       "package": "com.voiceai.companion",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#6366F1"
       }
     },
@@ -31,7 +31,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/notification-icon.png",
+          "icon": "./assets/images/icon.png",
           "color": "#6366F1"
         }
       ]
