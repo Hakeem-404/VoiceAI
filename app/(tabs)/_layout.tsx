@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
-import { useTheme } from '@/src/hooks/useTheme';
 import { 
   Home, 
+  MessageCircle,
   Target, 
   History, 
   BarChart3, 
@@ -9,17 +9,15 @@ import {
 } from 'lucide-react-native';
 
 export default function TabLayout() {
-  const { colors } = useTheme();
-
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textTertiary,
+        tabBarActiveTintColor: '#6366F1',
+        tabBarInactiveTintColor: '#9CA3AF',
         tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
+          backgroundColor: 'white',
+          borderTopColor: '#E5E7EB',
           borderTopWidth: 1,
           height: 84,
           paddingBottom: 20,
@@ -37,6 +35,15 @@ export default function TabLayout() {
           title: 'Home',
           tabBarIcon: ({ size, color }) => (
             <Home size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="chat"
+        options={{
+          title: 'Chat',
+          tabBarIcon: ({ size, color }) => (
+            <MessageCircle size={size} color={color} />
           ),
         }}
       />
