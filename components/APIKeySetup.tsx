@@ -9,7 +9,7 @@ import {
   Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Key, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react-native';
+import { Key, Eye, EyeOff, CircleCheck as CheckCircle, CircleAlert as AlertCircle } from 'lucide-react-native';
 import { claudeAPI } from '../services/claudeAPI';
 
 interface APIKeySetupProps {
