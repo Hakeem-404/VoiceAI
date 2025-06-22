@@ -12,6 +12,8 @@ export interface UserPreferences {
   voiceSettings: VoiceSettings;
   notifications: NotificationSettings;
   language: string;
+  favoriteMode?: string;
+  recentModes: string[];
 }
 
 export interface VoiceSettings {
@@ -42,6 +44,23 @@ export interface Conversation {
   feedback?: FeedbackData;
   createdAt: Date;
   updatedAt: Date;
+  bookmarks?: ConversationBookmark[];
+  highlights?: ConversationHighlight[];
+}
+
+export interface ConversationBookmark {
+  id: string;
+  messageId: string;
+  note?: string;
+  timestamp: Date;
+}
+
+export interface ConversationHighlight {
+  id: string;
+  messageId: string;
+  text: string;
+  color: string;
+  timestamp: Date;
 }
 
 export interface Message {
@@ -59,9 +78,31 @@ export interface ConversationMode {
   description: string;
   icon: string;
   systemPrompt: string;
-  category: 'interview' | 'presentation' | 'casual' | 'business' | 'learning';
+  category: 'social' | 'critical-thinking' | 'creativity' | 'professional' | 'presentation' | 'education';
   difficulty: 'beginner' | 'intermediate' | 'advanced';
   estimatedDuration: number;
+  color: {
+    primary: string;
+    secondary: string;
+    gradient: string[];
+  };
+  features: string[];
+  topics: string[];
+  aiPersonalities: string[];
+  sessionTypes: {
+    quick: { duration: number; description: string };
+    standard: { duration: number; description: string };
+    extended: { duration: number; description: string };
+  };
+}
+
+export interface ModeConfiguration {
+  modeId: string;
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  sessionType: 'quick' | 'standard' | 'extended';
+  selectedTopics: string[];
+  aiPersonality: string;
+  customSettings?: Record<string, any>;
 }
 
 export interface FeedbackData {
@@ -112,6 +153,12 @@ export interface AnalyticsData {
     clarity: number;
   };
   achievements: Achievement[];
+  modeStats: Record<string, {
+    sessionsCompleted: number;
+    totalTime: number;
+    averageScore: number;
+    lastUsed: Date;
+  }>;
 }
 
 export interface Achievement {
@@ -120,7 +167,22 @@ export interface Achievement {
   description: string;
   icon: string;
   unlockedAt: Date;
-  category: 'conversation' | 'practice' | 'streak' | 'improvement';
+  category: 'conversation' | 'practice' | 'streak' | 'improvement' | 'mode-specific';
+  modeId?: string;
+}
+
+export interface DailyChallenge {
+  id: string;
+  modeId: string;
+  title: string;
+  description: string;
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  reward: {
+    points: number;
+    badge?: string;
+  };
+  expiresAt: Date;
+  completed: boolean;
 }
 
 export type RecordingState = 'idle' | 'recording' | 'processing' | 'playing';
@@ -129,4 +191,18 @@ export interface AudioVisualizationData {
   levels: number[];
   maxLevel: number;
   isRecording: boolean;
+}
+
+export interface ConversationSession {
+  id: string;
+  modeId: string;
+  configuration: ModeConfiguration;
+  startTime: Date;
+  endTime?: Date;
+  isPaused: boolean;
+  pausedAt?: Date;
+  totalPauseTime: number;
+  messages: Message[];
+  bookmarks: ConversationBookmark[];
+  highlights: ConversationHighlight[];
 }

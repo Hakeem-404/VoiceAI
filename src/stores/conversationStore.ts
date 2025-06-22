@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Conversation, Message, ConversationMode, RecordingState } from '../types';
+import { Conversation, Message, ConversationMode, RecordingState, ConversationSession, ModeConfiguration, ConversationBookmark, ConversationHighlight } from '../types';
 
 interface ConversationState {
   currentConversation: Conversation | null;
@@ -8,17 +8,23 @@ interface ConversationState {
   recordingState: RecordingState;
   isProcessing: boolean;
   audioLevels: number[];
+  currentSession: ConversationSession | null;
   
   // Actions
-  startConversation: (mode: ConversationMode) => void;
+  startConversation: (mode: ConversationMode, configuration?: ModeConfiguration) => void;
   endConversation: () => void;
+  pauseSession: () => void;
+  resumeSession: () => void;
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void;
+  addBookmark: (messageId: string, note?: string) => void;
+  addHighlight: (messageId: string, text: string, color: string) => void;
   setRecordingState: (state: RecordingState) => void;
   setProcessing: (processing: boolean) => void;
   updateAudioLevels: (levels: number[]) => void;
   saveConversation: (conversation: Conversation) => void;
   loadConversations: () => void;
   deleteConversation: (id: string) => void;
+  switchMode: (mode: ConversationMode) => void;
 }
 
 export const useConversationStore = create<ConversationState>((set, get) => ({
@@ -28,45 +34,105 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   recordingState: 'idle',
   isProcessing: false,
   audioLevels: [],
+  currentSession: null,
 
-  startConversation: (mode: ConversationMode) => {
+  startConversation: (mode: ConversationMode, configuration?: ModeConfiguration) => {
+    const sessionId = Date.now().toString();
+    const conversationId = `${sessionId}_conversation`;
+    
     const newConversation: Conversation = {
-      id: Date.now().toString(),
+      id: conversationId,
       mode,
       title: `${mode.name} - ${new Date().toLocaleDateString()}`,
       duration: 0,
       messages: [],
       createdAt: new Date(),
       updatedAt: new Date(),
+      bookmarks: [],
+      highlights: [],
+    };
+
+    const newSession: ConversationSession = {
+      id: sessionId,
+      modeId: mode.id,
+      configuration: configuration || {
+        modeId: mode.id,
+        difficulty: mode.difficulty,
+        sessionType: 'standard',
+        selectedTopics: mode.topics.slice(0, 2),
+        aiPersonality: mode.aiPersonalities[0],
+      },
+      startTime: new Date(),
+      isPaused: false,
+      totalPauseTime: 0,
+      messages: [],
+      bookmarks: [],
+      highlights: [],
     };
     
     set({
       currentConversation: newConversation,
       currentMode: mode,
+      currentSession: newSession,
       recordingState: 'idle',
     });
   },
 
   endConversation: () => {
-    const { currentConversation, conversations } = get();
-    if (currentConversation) {
+    const { currentConversation, currentSession, conversations } = get();
+    if (currentConversation && currentSession) {
+      const endTime = new Date();
+      const totalDuration = Math.floor((endTime.getTime() - currentSession.startTime.getTime() - currentSession.totalPauseTime) / 1000);
+      
       const updatedConversation = {
         ...currentConversation,
-        updatedAt: new Date(),
+        duration: totalDuration,
+        updatedAt: endTime,
+        bookmarks: currentSession.bookmarks,
+        highlights: currentSession.highlights,
       };
       
       set({
         conversations: [updatedConversation, ...conversations],
         currentConversation: null,
         currentMode: null,
+        currentSession: null,
         recordingState: 'idle',
       });
     }
   },
 
+  pauseSession: () => {
+    const { currentSession } = get();
+    if (currentSession && !currentSession.isPaused) {
+      set({
+        currentSession: {
+          ...currentSession,
+          isPaused: true,
+          pausedAt: new Date(),
+        }
+      });
+    }
+  },
+
+  resumeSession: () => {
+    const { currentSession } = get();
+    if (currentSession && currentSession.isPaused && currentSession.pausedAt) {
+      const pauseDuration = new Date().getTime() - currentSession.pausedAt.getTime();
+      set({
+        currentSession: {
+          ...currentSession,
+          isPaused: false,
+          pausedAt: undefined,
+          totalPauseTime: currentSession.totalPauseTime + pauseDuration,
+        }
+      });
+    }
+  },
+
   addMessage: (messageData) => {
-    const { currentConversation } = get();
-    if (!currentConversation) return;
+    const { currentConversation, currentSession } = get();
+    if (!currentConversation || !currentSession) return;
 
     const newMessage: Message = {
       ...messageData,
@@ -80,7 +146,82 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       updatedAt: new Date(),
     };
 
-    set({ currentConversation: updatedConversation });
+    const updatedSession = {
+      ...currentSession,
+      messages: [...currentSession.messages, newMessage],
+    };
+
+    set({ 
+      currentConversation: updatedConversation,
+      currentSession: updatedSession,
+    });
+  },
+
+  addBookmark: (messageId: string, note?: string) => {
+    const { currentSession } = get();
+    if (!currentSession) return;
+
+    const newBookmark: ConversationBookmark = {
+      id: Date.now().toString(),
+      messageId,
+      note,
+      timestamp: new Date(),
+    };
+
+    set({
+      currentSession: {
+        ...currentSession,
+        bookmarks: [...currentSession.bookmarks, newBookmark],
+      }
+    });
+  },
+
+  addHighlight: (messageId: string, text: string, color: string) => {
+    const { currentSession } = get();
+    if (!currentSession) return;
+
+    const newHighlight: ConversationHighlight = {
+      id: Date.now().toString(),
+      messageId,
+      text,
+      color,
+      timestamp: new Date(),
+    };
+
+    set({
+      currentSession: {
+        ...currentSession,
+        highlights: [...currentSession.highlights, newHighlight],
+      }
+    });
+  },
+
+  switchMode: (mode: ConversationMode) => {
+    const { currentConversation, currentSession } = get();
+    if (!currentConversation || !currentSession) return;
+
+    // Update current conversation and session with new mode
+    const updatedConversation = {
+      ...currentConversation,
+      mode,
+      title: `${mode.name} - ${new Date().toLocaleDateString()}`,
+      updatedAt: new Date(),
+    };
+
+    const updatedSession = {
+      ...currentSession,
+      modeId: mode.id,
+      configuration: {
+        ...currentSession.configuration,
+        modeId: mode.id,
+      },
+    };
+
+    set({
+      currentConversation: updatedConversation,
+      currentMode: mode,
+      currentSession: updatedSession,
+    });
   },
 
   setRecordingState: (state: RecordingState) => {
