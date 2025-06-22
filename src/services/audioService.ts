@@ -1,20 +1,20 @@
-import { Audio } from 'expo-audio';
+import { Audio } from 'expo-av';
 import * as Speech from 'expo-speech';
 import { Platform } from 'react-native';
 
 export interface PlatformRecordingOptions {
   android: {
     extension: '.m4a';
-    outputFormat: string;
-    audioEncoder: string;
+    outputFormat: Audio.AndroidOutputFormat;
+    audioEncoder: Audio.AndroidAudioEncoder;
     sampleRate: number;
     numberOfChannels: number;
     bitRate: number;
   };
   ios: {
     extension: '.m4a';
-    outputFormat: string;
-    audioQuality: string;
+    outputFormat: Audio.IOSOutputFormat;
+    audioQuality: Audio.IOSAudioQuality;
     sampleRate: number;
     numberOfChannels: number;
     bitRate: number;
@@ -30,7 +30,7 @@ export interface PlatformRecordingOptions {
 
 class AudioService {
   private recording: Audio.Recording | null = null;
-  private audioPlayer: Audio.AudioPlayer | null = null;
+  private sound: Audio.Sound | null = null;
   private isInitialized = false;
   private webMediaRecorder: MediaRecorder | null = null;
   private webAudioChunks: Blob[] = [];
@@ -38,18 +38,18 @@ class AudioService {
   private readonly recordingOptions: PlatformRecordingOptions = {
     android: {
       extension: '.m4a',
-      outputFormat: 'mpeg4',
-      audioEncoder: 'aac',
+      outputFormat: Audio.AndroidOutputFormat.MPEG_4,
+      audioEncoder: Audio.AndroidAudioEncoder.AAC,
       sampleRate: 44100,
-      numberOfChannels: 1,
+      numberOfChannels: 2,
       bitRate: 128000,
     },
     ios: {
       extension: '.m4a',
-      outputFormat: 'mpeg4aac',
-      audioQuality: 'high',
+      outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
+      audioQuality: Audio.IOSAudioQuality.HIGH,
       sampleRate: 44100,
-      numberOfChannels: 1,
+      numberOfChannels: 2,
       bitRate: 128000,
       linearPCMBitDepth: 16,
       linearPCMIsBigEndian: false,
@@ -75,7 +75,7 @@ class AudioService {
         }
       }
 
-      const { status } = await Audio.requestRecordingPermissionsAsync();
+      const { status } = await Audio.requestPermissionsAsync();
       return status === 'granted';
     } catch (error) {
       console.error('Permission request failed:', error);
@@ -99,6 +99,8 @@ class AudioService {
         shouldDuckAndroid: true,
         playThroughEarpieceAndroid: false,
         staysActiveInBackground: false,
+        interruptionModeIOS: Audio.InterruptionModeIOS.DoNotMix,
+        interruptionModeAndroid: Audio.InterruptionModeAndroid.DoNotMix,
       });
 
       this.isInitialized = true;
@@ -126,15 +128,20 @@ class AudioService {
         return await this.startWebRecording(onAudioLevel, onVoiceActivity);
       }
 
-      // Native recording implementation using expo-audio
+      // Native recording implementation using expo-av
       const options = this.getPlatformRecordingOptions();
       
-      this.recording = new Audio.Recording();
-      await this.recording.prepareToRecordAsync(options);
-      
+      const { recording } = await Audio.Recording.createAsync(
+        options,
+        undefined,
+        100 // Update interval for metering in milliseconds
+      );
+
+      this.recording = recording;
+
       // Set up audio level monitoring
       if (onAudioLevel || onVoiceActivity) {
-        this.recording.setOnRecordingStatusUpdate((status) => {
+        recording.setOnRecordingStatusUpdate((status) => {
           if (status.isRecording && status.metering !== undefined) {
             // Convert metering to 0-1 range for visualization
             // Metering typically ranges from -160 to 0 dB
@@ -148,8 +155,7 @@ class AudioService {
         });
       }
 
-      await this.recording.startAsync();
-      return this.recording;
+      return recording;
     } catch (error) {
       console.error('Failed to start recording:', error);
       this.recording = null;
@@ -212,7 +218,7 @@ class AudioService {
 
       this.webMediaRecorder.start();
 
-      // Create a mock recording object that behaves like expo-audio Recording
+      // Create a mock recording object that behaves like expo-av Recording
       const mockRecording = {
         getURI: () => {
           if (this.webAudioChunks.length > 0) {
@@ -253,26 +259,9 @@ class AudioService {
   private getPlatformRecordingOptions(): any {
     switch (Platform.OS) {
       case 'ios':
-        return {
-          extension: this.recordingOptions.ios.extension,
-          outputFormat: this.recordingOptions.ios.outputFormat,
-          audioQuality: this.recordingOptions.ios.audioQuality,
-          sampleRate: this.recordingOptions.ios.sampleRate,
-          numberOfChannels: this.recordingOptions.ios.numberOfChannels,
-          bitRate: this.recordingOptions.ios.bitRate,
-          linearPCMBitDepth: this.recordingOptions.ios.linearPCMBitDepth,
-          linearPCMIsBigEndian: this.recordingOptions.ios.linearPCMIsBigEndian,
-          linearPCMIsFloat: this.recordingOptions.ios.linearPCMIsFloat,
-        };
+        return this.recordingOptions.ios;
       case 'android':
-        return {
-          extension: this.recordingOptions.android.extension,
-          outputFormat: this.recordingOptions.android.outputFormat,
-          audioEncoder: this.recordingOptions.android.audioEncoder,
-          sampleRate: this.recordingOptions.android.sampleRate,
-          numberOfChannels: this.recordingOptions.android.numberOfChannels,
-          bitRate: this.recordingOptions.android.bitRate,
-        };
+        return this.recordingOptions.android;
       case 'web':
         return this.recordingOptions.web;
       default:
@@ -309,20 +298,26 @@ class AudioService {
   async playAudio(uri: string): Promise<void> {
     try {
       // Stop any existing playback
-      if (this.audioPlayer) {
-        await this.audioPlayer.unloadAsync();
+      if (this.sound) {
+        await this.sound.unloadAsync();
       }
 
       if (Platform.OS === 'web') {
         // Web audio playback
-        const audio = new window.Audio(uri);
-        audio.play();
-        return;
+        if (uri.startsWith('blob:') || uri.startsWith('http')) {
+          const audio = new window.Audio(uri);
+          audio.play();
+          return;
+        } else {
+          console.log('Mock audio playback:', uri);
+          return;
+        }
       }
 
-      // Native audio playback using expo-audio
-      this.audioPlayer = new Audio.AudioPlayer(uri);
-      await this.audioPlayer.playAsync();
+      // Native audio playback using expo-av
+      const { sound } = await Audio.Sound.createAsync({ uri });
+      this.sound = sound;
+      await sound.playAsync();
     } catch (error) {
       console.error('Failed to play audio:', error);
       throw new Error(`Audio playback failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -331,10 +326,10 @@ class AudioService {
 
   async stopAudio(): Promise<void> {
     try {
-      if (this.audioPlayer) {
-        await this.audioPlayer.stopAsync();
-        await this.audioPlayer.unloadAsync();
-        this.audioPlayer = null;
+      if (this.sound) {
+        await this.sound.stopAsync();
+        await this.sound.unloadAsync();
+        this.sound = null;
       }
     } catch (error) {
       console.error('Failed to stop audio:', error);
@@ -407,7 +402,7 @@ class AudioService {
         }
       }
 
-      const { status } = await Audio.getRecordingPermissionsAsync();
+      const { status } = await Audio.getPermissionsAsync();
       return status as 'granted' | 'denied' | 'undetermined';
     } catch (error) {
       console.error('Failed to check permissions:', error);

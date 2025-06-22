@@ -1,7 +1,6 @@
-import { Audio } from 'expo-audio';
+import { Audio } from 'expo-av';
 import * as Speech from 'expo-speech';
 import { Platform } from 'react-native';
-import * as Haptics from 'expo-haptics';
 import { audioService } from './audioService';
 
 export interface VoiceActivityConfig {
@@ -81,7 +80,8 @@ class VoiceService {
     // Haptic feedback on start (only on mobile)
     if (Platform.OS !== 'web') {
       try {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        const { impactAsync, ImpactFeedbackStyle } = await import('expo-haptics');
+        await impactAsync(ImpactFeedbackStyle.Medium);
       } catch (error) {
         console.warn('Haptic feedback not available:', error);
       }
@@ -102,7 +102,8 @@ class VoiceService {
     // Haptic feedback on stop (only on mobile)
     if (Platform.OS !== 'web') {
       try {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        const { impactAsync, ImpactFeedbackStyle } = await import('expo-haptics');
+        await impactAsync(ImpactFeedbackStyle.Light);
       } catch (error) {
         console.warn('Haptic feedback not available:', error);
       }
