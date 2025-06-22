@@ -19,7 +19,8 @@ import {
   Globe,
   Plus,
   Settings,
-  Database
+  Database,
+  TestTube
 } from 'lucide-react-native';
 import { SupabaseConversationView } from '../../components/SupabaseConversationView';
 import { supabaseClaudeAPI } from '../../services/supabaseClaudeAPI';
@@ -80,6 +81,7 @@ export default function ChatScreen() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isSupabaseConfigured, setIsSupabaseConfigured] = useState(false);
   const [configStatus, setConfigStatus] = useState({ hasUrl: false, hasKey: false });
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
 
   useEffect(() => {
     // Check if Supabase is properly configured
@@ -87,6 +89,45 @@ export default function ChatScreen() {
     setIsSupabaseConfigured(status.configured);
     setConfigStatus(status);
   }, []);
+
+  const testConnection = async () => {
+    if (!isSupabaseConfigured) {
+      Alert.alert(
+        'Configuration Required',
+        'Please configure Supabase first before testing the connection.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    setIsTestingConnection(true);
+    
+    try {
+      const result = await supabaseClaudeAPI.testConnection();
+      
+      if (result.success) {
+        Alert.alert(
+          'Connection Test Successful! ✅',
+          'Your Supabase Edge Function and Claude API are working correctly.',
+          [{ text: 'Great!' }]
+        );
+      } else {
+        Alert.alert(
+          'Connection Test Failed ❌',
+          `Error: ${result.error}\n\nPlease check:\n• Claude API key is set in Supabase Edge Function\n• Edge Function is deployed\n• API key is valid`,
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      Alert.alert(
+        'Connection Test Failed ❌',
+        `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsTestingConnection(false);
+    }
+  };
 
   const startConversation = (modeId: string) => {
     if (!isSupabaseConfigured) {
@@ -135,6 +176,15 @@ export default function ChatScreen() {
             </Text>
           </View>
           <View style={styles.headerActions}>
+            {isSupabaseConfigured && (
+              <TouchableOpacity
+                style={[styles.actionButton, styles.testButton]}
+                onPress={testConnection}
+                disabled={isTestingConnection}
+              >
+                <TestTube size={20} color="white" />
+              </TouchableOpacity>
+            )}
             {!isSupabaseConfigured && (
               <TouchableOpacity
                 style={[styles.actionButton, styles.configButton]}
@@ -168,6 +218,22 @@ export default function ChatScreen() {
                 {!configStatus.hasUrl && 'Missing SUPABASE_URL. '}
                 {!configStatus.hasKey && 'Missing SUPABASE_ANON_KEY. '}
                 Claude API key must be set in Edge Function.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Test Connection Banner */}
+        {isSupabaseConfigured && (
+          <View style={styles.testBanner}>
+            <TestTube size={20} color="#10B981" />
+            <View style={styles.statusTextContainer}>
+              <Text style={styles.testTitle}>Ready to Chat!</Text>
+              <Text style={styles.testText}>
+                {isTestingConnection 
+                  ? 'Testing connection...' 
+                  : 'Tap the test button to verify your Claude API connection.'
+                }
               </Text>
             </View>
           </View>
@@ -231,6 +297,7 @@ export default function ChatScreen() {
                 <Text style={styles.setupCode}>   EXPO_PUBLIC_SUPABASE_ANON_KEY=your_key</Text>
                 <Text style={styles.setupStep}>3. Deploy the Claude proxy Edge Function</Text>
                 <Text style={styles.setupStep}>4. Set CLAUDE_API_KEY in Supabase dashboard</Text>
+                <Text style={styles.setupStep}>5. Test with "Hello" message</Text>
               </View>
             </View>
           )}
@@ -292,6 +359,9 @@ const styles = StyleSheet.create({
   configButton: {
     backgroundColor: '#EF4444',
   },
+  testButton: {
+    backgroundColor: '#10B981',
+  },
   settingsButton: {
     width: 44,
     height: 44,
@@ -316,6 +386,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 12,
   },
+  testBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderRadius: 12,
+    gap: 12,
+  },
   statusTextContainer: {
     flex: 1,
   },
@@ -328,6 +409,17 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 14,
     color: '#B91C1C',
+    lineHeight: 20,
+  },
+  testTitle: {
+    fontSize: 16,
+    color: '#059669',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  testText: {
+    fontSize: 14,
+    color: '#047857',
     lineHeight: 20,
   },
   scrollView: {

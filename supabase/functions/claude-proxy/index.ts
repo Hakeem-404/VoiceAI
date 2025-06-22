@@ -6,13 +6,15 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+interface ClaudeMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
+
 interface ClaudeRequest {
   model: string;
   max_tokens: number;
-  messages: Array<{
-    role: string;
-    content: string;
-  }>;
+  messages: ClaudeMessage[];
   temperature?: number;
   stream?: boolean;
 }
@@ -26,6 +28,7 @@ serve(async (req) => {
   try {
     // Only allow POST requests
     if (req.method !== 'POST') {
+      console.error('Method not allowed:', req.method)
       return new Response(
         JSON.stringify({ error: 'Method not allowed' }),
         { 
@@ -38,6 +41,7 @@ serve(async (req) => {
     // Get Claude API key from environment variables
     const claudeApiKey = Deno.env.get('CLAUDE_API_KEY')
     if (!claudeApiKey) {
+      console.error('Claude API key not found in environment variables')
       return new Response(
         JSON.stringify({ error: 'Claude API key not configured' }),
         { 
@@ -47,11 +51,37 @@ serve(async (req) => {
       )
     }
 
+    console.log('Claude API key found, length:', claudeApiKey.length)
+
     // Parse request body
-    const requestBody: ClaudeRequest = await req.json()
+    let requestBody: ClaudeRequest
+    try {
+      requestBody = await req.json()
+      console.log('Request body parsed:', {
+        model: requestBody.model,
+        max_tokens: requestBody.max_tokens,
+        messages_count: requestBody.messages?.length,
+        temperature: requestBody.temperature,
+        stream: requestBody.stream
+      })
+    } catch (error) {
+      console.error('Failed to parse request body:', error)
+      return new Response(
+        JSON.stringify({ error: 'Invalid JSON in request body' }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
 
     // Validate required fields
     if (!requestBody.model || !requestBody.messages || !requestBody.max_tokens) {
+      console.error('Missing required fields:', {
+        model: !!requestBody.model,
+        messages: !!requestBody.messages,
+        max_tokens: !!requestBody.max_tokens
+      })
       return new Response(
         JSON.stringify({ error: 'Missing required fields: model, messages, max_tokens' }),
         { 
@@ -61,16 +91,67 @@ serve(async (req) => {
       )
     }
 
-    // Prepare Claude API request
+    // Validate messages array
+    if (!Array.isArray(requestBody.messages) || requestBody.messages.length === 0) {
+      console.error('Invalid messages array:', requestBody.messages)
+      return new Response(
+        JSON.stringify({ error: 'Messages must be a non-empty array' }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
+    // Filter out system messages and prepare for Claude API
+    const userMessages = requestBody.messages.filter(msg => msg.role !== 'system')
+    
+    // Ensure we have at least one user message
+    if (userMessages.length === 0) {
+      console.error('No user messages found after filtering')
+      return new Response(
+        JSON.stringify({ error: 'At least one user message is required' }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
+    // Use a supported Claude model
+    const supportedModels = [
+      'claude-3-sonnet-20240229',
+      'claude-3-haiku-20240307',
+      'claude-3-opus-20240229'
+    ]
+    
+    let modelToUse = requestBody.model
+    if (!supportedModels.includes(modelToUse)) {
+      console.log('Unsupported model:', modelToUse, 'using claude-3-sonnet-20240229')
+      modelToUse = 'claude-3-sonnet-20240229'
+    }
+
+    // Prepare Claude API request with correct format
     const claudeRequest = {
-      model: requestBody.model,
-      max_tokens: requestBody.max_tokens,
-      messages: requestBody.messages,
-      temperature: requestBody.temperature || 0.7,
+      model: modelToUse,
+      max_tokens: Math.min(Math.max(requestBody.max_tokens, 1), 4096), // Ensure valid range
+      messages: userMessages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      })),
+      temperature: Math.min(Math.max(requestBody.temperature || 0.7, 0), 1), // Ensure valid range
       stream: requestBody.stream || false
     }
 
-    // Make request to Claude API
+    console.log('Sending request to Claude API:', {
+      model: claudeRequest.model,
+      max_tokens: claudeRequest.max_tokens,
+      messages_count: claudeRequest.messages.length,
+      temperature: claudeRequest.temperature,
+      stream: claudeRequest.stream
+    })
+
+    // Make request to Claude API with correct headers
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -81,12 +162,39 @@ serve(async (req) => {
       body: JSON.stringify(claudeRequest)
     })
 
+    console.log('Claude API response status:', claudeResponse.status)
+
     // Handle streaming responses
     if (requestBody.stream) {
+      console.log('Handling streaming response')
+      
+      if (!claudeResponse.ok) {
+        const errorText = await claudeResponse.text()
+        console.error('Claude API streaming error:', claudeResponse.status, errorText)
+        
+        return new Response(
+          JSON.stringify({ 
+            error: `Claude API error: ${claudeResponse.status}`,
+            details: errorText
+          }),
+          { 
+            status: claudeResponse.status, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
+
       // For streaming, we need to proxy the stream
       const reader = claudeResponse.body?.getReader()
       if (!reader) {
-        throw new Error('No response body for streaming')
+        console.error('No response body for streaming')
+        return new Response(
+          JSON.stringify({ error: 'No response body for streaming' }),
+          { 
+            status: 500, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
       }
 
       const stream = new ReadableStream({
@@ -117,13 +225,22 @@ serve(async (req) => {
 
     // Handle non-streaming responses
     if (!claudeResponse.ok) {
-      const errorData = await claudeResponse.text()
-      console.error('Claude API error:', claudeResponse.status, errorData)
+      const errorText = await claudeResponse.text()
+      console.error('Claude API error:', claudeResponse.status, errorText)
+      
+      let errorDetails
+      try {
+        errorDetails = JSON.parse(errorText)
+        console.error('Claude API error details:', errorDetails)
+      } catch {
+        errorDetails = { message: errorText }
+      }
       
       return new Response(
         JSON.stringify({ 
           error: `Claude API error: ${claudeResponse.status}`,
-          details: errorData
+          details: errorDetails,
+          message: errorDetails.error?.message || errorText
         }),
         { 
           status: claudeResponse.status, 
@@ -133,6 +250,7 @@ serve(async (req) => {
     }
 
     const responseData = await claudeResponse.json()
+    console.log('Claude API response received successfully')
 
     return new Response(
       JSON.stringify(responseData),
@@ -147,7 +265,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
       }),
       { 
         status: 500, 

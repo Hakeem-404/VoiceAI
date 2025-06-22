@@ -218,6 +218,16 @@ class SupabaseClaudeAPIService {
         headers['Accept-Encoding'] = 'gzip, deflate';
       }
 
+      console.log('Making request to Supabase Edge Function:', {
+        url: `${this.supabaseUrl}/functions/v1/claude-proxy`,
+        data: {
+          model: data.model,
+          max_tokens: data.max_tokens,
+          messages_count: data.messages?.length,
+          temperature: data.temperature
+        }
+      });
+
       const response = await fetch(`${this.supabaseUrl}/functions/v1/claude-proxy`, {
         method: 'POST',
         headers,
@@ -228,15 +238,12 @@ class SupabaseClaudeAPIService {
       clearTimeout(timeoutId);
       this.activeRequests.delete(requestId);
 
+      console.log('Supabase Edge Function response status:', response.status);
+
       if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error('Unauthorized. Please check your Supabase configuration.');
-        }
-        if (response.status === 429) {
-          throw new Error('Rate limit exceeded. Please try again later.');
-        }
-        
         const errorText = await response.text();
+        console.error('Supabase Edge Function error:', response.status, errorText);
+        
         let errorMessage = `API Error: ${response.status} ${response.statusText}`;
         
         try {
@@ -244,14 +251,25 @@ class SupabaseClaudeAPIService {
           if (errorData.error) {
             errorMessage = errorData.error;
           }
+          if (errorData.details) {
+            console.error('Error details:', errorData.details);
+          }
         } catch {
           // Use default error message if parsing fails
+        }
+        
+        if (response.status === 401) {
+          throw new Error('Unauthorized. Please check your Supabase configuration.');
+        }
+        if (response.status === 429) {
+          throw new Error('Rate limit exceeded. Please try again later.');
         }
         
         throw new Error(errorMessage);
       }
 
       const result = await response.json();
+      console.log('Supabase Edge Function response received successfully');
 
       // Cache successful responses
       if (cache && response.status === 200) {
@@ -276,6 +294,7 @@ class SupabaseClaudeAPIService {
       this.activeRequests.delete(requestId);
       
       if (retries > 0 && this.shouldRetry(error)) {
+        console.log(`Retrying request, attempts left: ${retries - 1}`);
         await this.delay(this.getRetryDelay(3 - retries));
         return this.makeRequest(data, { ...options, retries: retries - 1 });
       }
@@ -352,6 +371,14 @@ class SupabaseClaudeAPIService {
       stream: false
     };
 
+    console.log('Sending message to Claude:', {
+      mode: context.mode,
+      message_length: message.length,
+      total_messages: messages.length,
+      model: requestData.model,
+      max_tokens: requestData.max_tokens
+    });
+
     try {
       const response = await this.makeRequest<any>(requestData, options);
       
@@ -363,6 +390,10 @@ class SupabaseClaudeAPIService {
           timestamp: new Date()
         };
 
+        console.log('Received response from Claude:', {
+          response_length: assistantMessage.content.length
+        });
+
         return {
           data: assistantMessage,
           status: response.status,
@@ -370,8 +401,10 @@ class SupabaseClaudeAPIService {
         };
       }
 
+      console.error('Invalid response format from Claude:', response.data);
       throw new Error('Invalid response format');
     } catch (error) {
+      console.error('Error sending message to Claude:', error);
       return {
         error: error instanceof Error ? error.message : 'Unknown error',
         status: 500,
@@ -411,6 +444,12 @@ class SupabaseClaudeAPIService {
       stream: true
     };
 
+    console.log('Starting streaming message to Claude:', {
+      mode: context.mode,
+      message_length: message.length,
+      total_messages: messages.length
+    });
+
     try {
       const response = await fetch(`${this.supabaseUrl}/functions/v1/claude-proxy`, {
         method: 'POST',
@@ -423,6 +462,9 @@ class SupabaseClaudeAPIService {
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Streaming request failed:', response.status, errorText);
+        
         if (response.status === 401) {
           throw new Error('Unauthorized. Please check your Supabase configuration.');
         }
@@ -460,12 +502,15 @@ class SupabaseClaudeAPIService {
         }
       }
 
+      console.log('Streaming completed, total content length:', content.length);
+
       onChunk({
         content,
         isComplete: true
       });
 
     } catch (error) {
+      console.error('Streaming error:', error);
       onChunk({
         content: '',
         isComplete: true,
@@ -476,7 +521,9 @@ class SupabaseClaudeAPIService {
 
   // Context management with intelligent truncation
   private prepareMessages(context: ConversationContext, systemPrompt: string): any[] {
-    const messages = [{ role: 'system', content: systemPrompt }];
+    // For Claude API, we don't include system messages in the messages array
+    // Instead, we'll prepend the system prompt to the first user message
+    const messages: any[] = [];
     
     // Intelligent context truncation for mobile memory management
     const maxMessages = this.getMaxMessagesForDevice();
@@ -487,13 +534,16 @@ class SupabaseClaudeAPIService {
       const summary = this.generateContextSummary(
         context.messages.slice(0, context.messages.length - maxMessages)
       );
-      messages.push({
-        role: 'system',
-        content: `Previous conversation summary: ${summary}`
-      });
+      // Prepend summary to the first message
+      if (recentMessages.length > 0 && recentMessages[0].role === 'user') {
+        recentMessages[0] = {
+          ...recentMessages[0],
+          content: `Previous conversation summary: ${summary}\n\n${recentMessages[0].content}`
+        };
+      }
     }
 
-    // Add recent messages
+    // Add recent messages, filtering out system messages
     recentMessages.forEach(msg => {
       if (msg.role !== 'system') {
         messages.push({
@@ -502,6 +552,14 @@ class SupabaseClaudeAPIService {
         });
       }
     });
+
+    // If we have messages and the first one is a user message, prepend the system prompt
+    if (messages.length > 0 && messages[0].role === 'user') {
+      messages[0] = {
+        ...messages[0],
+        content: `${systemPrompt}\n\n${messages[0].content}`
+      };
+    }
 
     return messages;
   }
@@ -648,6 +706,39 @@ class SupabaseClaudeAPIService {
       await AsyncStorage.setItem('conversation_metrics', JSON.stringify(metricsArray));
     } catch (error) {
       console.warn('Failed to log metrics:', error);
+    }
+  }
+
+  // Test the connection with a simple "Hello" message
+  async testConnection(): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log('Testing connection to Claude API via Supabase...');
+      
+      const testContext: ConversationContext = {
+        messages: [],
+        mode: 'general-chat',
+        sessionId: 'test',
+        metadata: {
+          startTime: new Date(),
+          lastActivity: new Date(),
+          messageCount: 0,
+          totalTokens: 0
+        }
+      };
+
+      const response = await this.sendMessage('Hello', testContext);
+      
+      if (response.error) {
+        console.error('Connection test failed:', response.error);
+        return { success: false, error: response.error };
+      }
+
+      console.log('Connection test successful!');
+      return { success: true };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Connection test failed:', errorMessage);
+      return { success: false, error: errorMessage };
     }
   }
 
