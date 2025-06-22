@@ -218,6 +218,15 @@ class SupabaseClaudeAPIService {
         headers['Accept-Encoding'] = 'gzip, deflate';
       }
 
+      console.log('Making request to Supabase Edge Function:', {
+        url: `${this.supabaseUrl}/functions/v1/claude-proxy`,
+        data: {
+          model: data.model,
+          messageCount: data.messages?.length,
+          maxTokens: data.max_tokens
+        }
+      });
+
       const response = await fetch(`${this.supabaseUrl}/functions/v1/claude-proxy`, {
         method: 'POST',
         headers,
@@ -228,7 +237,20 @@ class SupabaseClaudeAPIService {
       clearTimeout(timeoutId);
       this.activeRequests.delete(requestId);
 
+      console.log('Supabase Edge Function response:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
+      });
+
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Supabase Edge Function error:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+
         if (response.status === 401) {
           throw new Error('Unauthorized. Please check your Supabase configuration.');
         }
@@ -236,7 +258,6 @@ class SupabaseClaudeAPIService {
           throw new Error('Rate limit exceeded. Please try again later.');
         }
         
-        const errorText = await response.text();
         let errorMessage = `API Error: ${response.status} ${response.statusText}`;
         
         try {
@@ -252,6 +273,7 @@ class SupabaseClaudeAPIService {
       }
 
       const result = await response.json();
+      console.log('Supabase Edge Function success');
 
       // Cache successful responses
       if (cache && response.status === 200) {
@@ -274,8 +296,10 @@ class SupabaseClaudeAPIService {
 
     } catch (error) {
       this.activeRequests.delete(requestId);
+      console.error('Request failed:', error);
       
       if (retries > 0 && this.shouldRetry(error)) {
+        console.log(`Retrying request (${3 - retries + 1}/3)...`);
         await this.delay(this.getRetryDelay(3 - retries));
         return this.makeRequest(data, { ...options, retries: retries - 1 });
       }
@@ -341,16 +365,25 @@ class SupabaseClaudeAPIService {
     const messages = this.prepareMessages(context, systemPrompt);
     messages.push({
       role: 'user',
-      content: message
+      content: message.trim()
     });
 
+    // Use the latest Claude model
     const requestData = {
-      model: 'claude-3-sonnet-20240229',
+      model: 'claude-3-5-sonnet-20241022',
       max_tokens: this.getMaxTokensForMode(context.mode),
       messages,
       temperature: this.getTemperatureForMode(context.mode),
       stream: false
     };
+
+    console.log('Sending message to Claude:', {
+      mode: context.mode,
+      messageCount: messages.length,
+      model: requestData.model,
+      maxTokens: requestData.max_tokens,
+      temperature: requestData.temperature
+    });
 
     try {
       const response = await this.makeRequest<any>(requestData, options);
@@ -370,8 +403,9 @@ class SupabaseClaudeAPIService {
         };
       }
 
-      throw new Error('Invalid response format');
+      throw new Error('Invalid response format from Claude API');
     } catch (error) {
+      console.error('Send message error:', error);
       return {
         error: error instanceof Error ? error.message : 'Unknown error',
         status: 500,
@@ -400,11 +434,11 @@ class SupabaseClaudeAPIService {
     const messages = this.prepareMessages(context, systemPrompt);
     messages.push({
       role: 'user',
-      content: message
+      content: message.trim()
     });
 
     const requestData = {
-      model: 'claude-3-sonnet-20240229',
+      model: 'claude-3-5-sonnet-20241022',
       max_tokens: this.getMaxTokensForMode(context.mode),
       messages,
       temperature: this.getTemperatureForMode(context.mode),
@@ -426,7 +460,8 @@ class SupabaseClaudeAPIService {
         if (response.status === 401) {
           throw new Error('Unauthorized. Please check your Supabase configuration.');
         }
-        throw new Error(`API Error: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`API Error: ${response.status} - ${errorText}`);
       }
 
       const reader = response.body?.getReader();
@@ -466,6 +501,7 @@ class SupabaseClaudeAPIService {
       });
 
     } catch (error) {
+      console.error('Streaming error:', error);
       onChunk({
         content: '',
         isComplete: true,
@@ -493,12 +529,12 @@ class SupabaseClaudeAPIService {
       });
     }
 
-    // Add recent messages
+    // Add recent messages, ensuring proper format
     recentMessages.forEach(msg => {
-      if (msg.role !== 'system') {
+      if (msg.role !== 'system' && msg.content.trim()) {
         messages.push({
           role: msg.role,
-          content: msg.content
+          content: msg.content.trim()
         });
       }
     });
