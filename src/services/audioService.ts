@@ -84,31 +84,30 @@ class AudioService {
   }
 
   async initializeAudio(): Promise<void> {
-  if (this.isInitialized) return;
+    if (this.isInitialized) return;
 
-  try {
-    if (Platform.OS === 'web') {
-      this.isInitialized = true;
-      return; 
+    try {
+      if (Platform.OS === 'web') {
+        this.isInitialized = true;
+        return; 
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+        staysActiveInBackground: false,
+        interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+        interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+      });                
+
+      this.isInitialized = true;   
+    } catch (error) {
+      console.error('Audio initialization failed:', error);
+      throw new Error('Failed to initialize audio system');
     }
-
-   
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: true,
-      playsInSilentModeIOS: true,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
-      staysActiveInBackground: false,
-      interruptionModeIOS: InterruptionModeIOS.DoNotMix,
-      interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
-    });                
-
-    this.isInitialized = true;   
-  } catch (error) {
-    console.error('Audio initialization failed:', error);
-    throw new Error('Failed to initialize audio system');
   }
-}
 
   async startRecording(
     onAudioLevel?: (level: number) => void,
