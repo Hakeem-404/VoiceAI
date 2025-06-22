@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Modal
+  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,9 +17,12 @@ import {
   Presentation,
   Globe,
   Plus,
-  Settings
+  Settings,
+  Key
 } from 'lucide-react-native';
 import { ConversationView } from '../../components/ConversationView';
+import { APIKeySetup } from '../../components/APIKeySetup';
+import { claudeAPI } from '../../services/claudeAPI';
 
 const conversationModes = [
   {
@@ -75,8 +78,27 @@ const conversationModes = [
 export default function ChatScreen() {
   const [selectedMode, setSelectedMode] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [showAPIKeySetup, setShowAPIKeySetup] = useState(false);
+  const [isAPIConfigured, setIsAPIConfigured] = useState(false);
+
+  useEffect(() => {
+    // Check if API key is configured
+    setIsAPIConfigured(claudeAPI.isConfigured());
+  }, []);
 
   const startConversation = (modeId: string) => {
+    if (!isAPIConfigured) {
+      Alert.alert(
+        'API Key Required',
+        'Please configure your Claude API key to start conversations.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Setup', onPress: () => setShowAPIKeySetup(true) }
+        ]
+      );
+      return;
+    }
+
     setSelectedMode(modeId);
     setSessionId(Date.now().toString());
   };
@@ -84,6 +106,11 @@ export default function ChatScreen() {
   const endConversation = () => {
     setSelectedMode(null);
     setSessionId(null);
+  };
+
+  const handleAPIKeySuccess = () => {
+    setIsAPIConfigured(true);
+    setShowAPIKeySetup(false);
   };
 
   if (selectedMode && sessionId) {
@@ -106,12 +133,40 @@ export default function ChatScreen() {
         <View style={styles.header}>
           <View>
             <Text style={styles.title}>AI Conversation</Text>
-            <Text style={styles.subtitle}>Choose your conversation mode</Text>
+            <Text style={styles.subtitle}>
+              {isAPIConfigured ? 'Choose your conversation mode' : 'Setup required to start'}
+            </Text>
           </View>
-          <TouchableOpacity style={styles.settingsButton}>
-            <Settings size={24} color="#6B7280" />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            {!isAPIConfigured && (
+              <TouchableOpacity
+                style={[styles.actionButton, styles.keyButton]}
+                onPress={() => setShowAPIKeySetup(true)}
+              >
+                <Key size={20} color="white" />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.settingsButton}>
+              <Settings size={24} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
         </View>
+
+        {/* API Status Banner */}
+        {!isAPIConfigured && (
+          <View style={styles.statusBanner}>
+            <Key size={20} color="#F59E0B" />
+            <Text style={styles.statusText}>
+              Claude API key required to start conversations
+            </Text>
+            <TouchableOpacity
+              style={styles.setupButton}
+              onPress={() => setShowAPIKeySetup(true)}
+            >
+              <Text style={styles.setupButtonText}>Setup</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Mode Selection */}
         <ScrollView
@@ -125,12 +180,15 @@ export default function ChatScreen() {
               return (
                 <TouchableOpacity
                   key={mode.id}
-                  style={styles.modeCard}
+                  style={[
+                    styles.modeCard,
+                    !isAPIConfigured && styles.modeCardDisabled
+                  ]}
                   onPress={() => startConversation(mode.id)}
-                  activeOpacity={0.8}
+                  activeOpacity={isAPIConfigured ? 0.8 : 0.5}
                 >
                   <LinearGradient
-                    colors={mode.color}
+                    colors={isAPIConfigured ? mode.color : ['#D1D5DB', '#9CA3AF']}
                     style={styles.modeGradient}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
@@ -147,7 +205,9 @@ export default function ChatScreen() {
                     
                     <View style={styles.startButton}>
                       <Plus size={16} color="white" />
-                      <Text style={styles.startButtonText}>Start</Text>
+                      <Text style={styles.startButtonText}>
+                        {isAPIConfigured ? 'Start' : 'Setup Required'}
+                      </Text>
                     </View>
                   </LinearGradient>
                 </TouchableOpacity>
@@ -164,6 +224,12 @@ export default function ChatScreen() {
           </View>
         </ScrollView>
       </LinearGradient>
+
+      <APIKeySetup
+        visible={showAPIKeySetup}
+        onClose={() => setShowAPIKeySetup(false)}
+        onSuccess={handleAPIKeySuccess}
+      />
     </SafeAreaView>
   );
 }
@@ -193,6 +259,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6B7280',
   },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  keyButton: {
+    backgroundColor: '#F59E0B',
+  },
   settingsButton: {
     width: 44,
     height: 44,
@@ -205,6 +290,34 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  statusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderRadius: 12,
+    gap: 12,
+  },
+  statusText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#92400E',
+    fontWeight: '500',
+  },
+  setupButton: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  setupButtonText: {
+    fontSize: 14,
+    color: 'white',
+    fontWeight: '600',
   },
   scrollView: {
     flex: 1,
@@ -227,6 +340,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 6,
+  },
+  modeCardDisabled: {
+    opacity: 0.6,
   },
   modeGradient: {
     padding: 20,

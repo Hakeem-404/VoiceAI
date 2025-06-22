@@ -13,8 +13,8 @@ import {
 } from '../types/api';
 
 class ClaudeAPIService {
-  private baseURL = 'https://api.anthropic.com/v1';
-  private apiKey: string = '';
+  private baseURL = process.env.EXPO_PUBLIC_CLAUDE_API_URL || 'https://api.anthropic.com/v1';
+  private apiKey: string = process.env.EXPO_PUBLIC_CLAUDE_API_KEY || '';
   private requestQueue: QueuedRequest[] = [];
   private cache = new Map<string, CacheEntry<any>>();
   private isOnline = true;
@@ -25,11 +25,30 @@ class ClaudeAPIService {
     this.initializeNetworkMonitoring();
     this.loadCacheFromStorage();
     this.processQueuePeriodically();
+    
+    // Validate API key on initialization
+    if (!this.apiKey) {
+      console.warn('Claude API key not found. Please set EXPO_PUBLIC_CLAUDE_API_KEY in your .env file');
+    }
   }
 
-  // Initialize API with key
+  // Initialize API with key (alternative to environment variables)
   initialize(apiKey: string) {
     this.apiKey = apiKey;
+    console.log('Claude API initialized with custom key');
+  }
+
+  // Check if API is properly configured
+  isConfigured(): boolean {
+    return !!this.apiKey;
+  }
+
+  // Get API key status for debugging
+  getAPIKeyStatus(): { configured: boolean; source: string } {
+    if (this.apiKey === process.env.EXPO_PUBLIC_CLAUDE_API_KEY) {
+      return { configured: !!this.apiKey, source: 'environment' };
+    }
+    return { configured: !!this.apiKey, source: 'manual' };
   }
 
   // Network monitoring for mobile optimization
@@ -154,6 +173,11 @@ class ClaudeAPIService {
     data: any,
     options: APIRequestOptions = {}
   ): Promise<APIResponse<T>> {
+    // Check if API is configured
+    if (!this.isConfigured()) {
+      throw new Error('Claude API key not configured. Please set your API key.');
+    }
+
     const {
       timeout = 15000,
       retries = 3,
@@ -212,6 +236,12 @@ class ClaudeAPIService {
       this.activeRequests.delete(requestId);
 
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Invalid API key. Please check your Claude API key configuration.');
+        }
+        if (response.status === 429) {
+          throw new Error('Rate limit exceeded. Please try again later.');
+        }
         throw new Error(`API Error: ${response.status} ${response.statusText}`);
       }
 
@@ -351,6 +381,15 @@ class ClaudeAPIService {
     onChunk: (chunk: StreamingResponse) => void,
     options: APIRequestOptions = {}
   ): Promise<void> {
+    if (!this.isConfigured()) {
+      onChunk({
+        content: '',
+        isComplete: true,
+        error: 'Claude API key not configured. Please set your API key.'
+      });
+      return;
+    }
+
     const systemPrompt = this.getSystemPrompt(context.mode);
     const messages = this.prepareMessages(context, systemPrompt);
     messages.push({
@@ -378,6 +417,9 @@ class ClaudeAPIService {
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Invalid API key. Please check your Claude API key configuration.');
+        }
         throw new Error(`API Error: ${response.status}`);
       }
 
@@ -618,7 +660,9 @@ class ClaudeAPIService {
       networkQuality: this.networkQuality,
       cacheSize: this.cache.size,
       queueSize: this.requestQueue.length,
-      activeRequests: this.activeRequests.size
+      activeRequests: this.activeRequests.size,
+      apiKeyConfigured: this.isConfigured(),
+      apiKeySource: this.getAPIKeyStatus().source
     };
   }
 }
