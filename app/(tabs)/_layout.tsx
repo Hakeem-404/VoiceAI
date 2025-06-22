@@ -1,12 +1,5 @@
 import { Tabs } from 'expo-router';
-import { 
-  Home, 
-  MessageCircle,
-  Target, 
-  History, 
-  BarChart3, 
-  User 
-} from 'lucide-react-native';
+import { Chrome as Home, MessageCircle, Target, History, ChartBar as BarChart3, User } from 'lucide-react-native';
 
 export default function TabLayout() {
   return (

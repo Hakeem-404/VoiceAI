@@ -10,16 +10,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-  Send,
-  RotateCcw,
-  Copy,
-  Bookmark,
-  MoreHorizontal,
-  Wifi,
-  WifiOff,
-  Zap
-} from 'lucide-react-native';
+import { Send, RotateCcw, Copy, Bookmark, MoveHorizontal as MoreHorizontal, Wifi, WifiOff, Zap } from 'lucide-react-native';
 import { useConversation } from '../hooks/useConversation';
 import { ConversationMessage } from '../types/api';
 
