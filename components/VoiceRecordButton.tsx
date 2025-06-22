@@ -22,7 +22,8 @@ interface VoiceRecordButtonProps {
   onPress: () => void;
   onLongPress?: () => void;
   state: 'idle' | 'recording' | 'processing' | 'error';
-  error?: string;
+  error?: string | null;
+  disabled?: boolean;
 }
 
 export function VoiceRecordButton({
@@ -30,6 +31,7 @@ export function VoiceRecordButton({
   onLongPress,
   state,
   error,
+  disabled = false,
 }: VoiceRecordButtonProps) {
   const { colors } = useTheme();
   const { audioLevel } = useVoiceStore();
@@ -40,82 +42,134 @@ export function VoiceRecordButton({
   const glowAnim = useRef(new Animated.Value(0)).current;
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
+  const audioVisualizationAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    // Reset all animations when state changes
+    scaleAnim.setValue(1);
+    pulseAnim.setValue(1);
+    glowAnim.setValue(0);
+    shakeAnim.setValue(0);
+    rotateAnim.setValue(0);
+
     switch (state) {
       case 'idle':
-        // Subtle glow animation
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(glowAnim, {
-              toValue: 1,
-              duration: 2000,
-              useNativeDriver: false,
-            }),
-            Animated.timing(glowAnim, {
-              toValue: 0,
-              duration: 2000,
-              useNativeDriver: false,
-            }),
-          ])
-        ).start();
+        startIdleAnimation();
         break;
-
       case 'recording':
-        // Pulsing animation based on audio level
-        Animated.loop(
-          Animated.timing(pulseAnim, {
-            toValue: 1 + audioLevel * 0.3,
-            duration: 100,
-            useNativeDriver: true,
-          })
-        ).start();
+        startRecordingAnimation();
         break;
-
       case 'processing':
-        // Rotation animation
-        Animated.loop(
-          Animated.timing(rotateAnim, {
-            toValue: 1,
-            duration: 1000,
-            useNativeDriver: true,
-          })
-        ).start();
+        startProcessingAnimation();
         break;
-
       case 'error':
-        // Shake animation
-        Animated.sequence([
-          Animated.timing(shakeAnim, {
-            toValue: 10,
-            duration: 100,
-            useNativeDriver: true,
-          }),
-          Animated.timing(shakeAnim, {
-            toValue: -10,
-            duration: 100,
-            useNativeDriver: true,
-          }),
-          Animated.timing(shakeAnim, {
-            toValue: 10,
-            duration: 100,
-            useNativeDriver: true,
-          }),
-          Animated.timing(shakeAnim, {
-            toValue: 0,
-            duration: 100,
-            useNativeDriver: true,
-          }),
-        ]).start();
+        startErrorAnimation();
         break;
     }
-  }, [state, audioLevel]);
+
+    return () => {
+      // Cleanup animations
+      scaleAnim.stopAnimation();
+      pulseAnim.stopAnimation();
+      glowAnim.stopAnimation();
+      shakeAnim.stopAnimation();
+      rotateAnim.stopAnimation();
+      audioVisualizationAnim.stopAnimation();
+    };
+  }, [state]);
+
+  useEffect(() => {
+    // Update audio visualization based on audio level
+    if (state === 'recording') {
+      Animated.timing(audioVisualizationAnim, {
+        toValue: audioLevel,
+        duration: 50,
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [audioLevel, state]);
+
+  const startIdleAnimation = () => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: false,
+        }),
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 2000,
+          useNativeDriver: false,
+        }),
+      ])
+    ).start();
+  };
+
+  const startRecordingAnimation = () => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.1,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  };
+
+  const startProcessingAnimation = () => {
+    Animated.loop(
+      Animated.timing(rotateAnim, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      })
+    ).start();
+  };
+
+  const startErrorAnimation = () => {
+    Animated.sequence([
+      Animated.timing(shakeAnim, {
+        toValue: 10,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: -10,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: 10,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: 0,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
 
   const handlePress = () => {
+    if (disabled) return;
+
     if (voiceSettings.enableHapticFeedback && Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      try {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      } catch (error) {
+        console.warn('Haptic feedback not available:', error);
+      }
     }
     
+    // Button press animation
     Animated.sequence([
       Animated.timing(scaleAnim, {
         toValue: 0.95,
@@ -132,7 +186,25 @@ export function VoiceRecordButton({
     onPress();
   };
 
+  const handleLongPress = () => {
+    if (disabled || !onLongPress) return;
+
+    if (voiceSettings.enableHapticFeedback && Platform.OS !== 'web') {
+      try {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      } catch (error) {
+        console.warn('Haptic feedback not available:', error);
+      }
+    }
+
+    onLongPress();
+  };
+
   const getButtonColors = () => {
+    if (disabled) {
+      return [colors.border, colors.textTertiary];
+    }
+
     switch (state) {
       case 'recording':
         return [colors.error, '#DC2626'];
@@ -146,9 +218,12 @@ export function VoiceRecordButton({
   };
 
   const getIcon = () => {
+    const iconColor = disabled ? colors.textTertiary : 'white';
+    const iconSize = 32;
+
     switch (state) {
       case 'recording':
-        return <Square size={32} color="white" />;
+        return <Square size={iconSize} color={iconColor} />;
       case 'processing':
         return (
           <Animated.View
@@ -163,26 +238,43 @@ export function VoiceRecordButton({
               ],
             }}
           >
-            <Loader size={32} color="white" />
+            <Loader size={iconSize} color={iconColor} />
           </Animated.View>
         );
       case 'error':
-        return <AlertCircle size={32} color="white" />;
+        return <AlertCircle size={iconSize} color={iconColor} />;
       default:
-        return <Mic size={32} color="white" />;
+        return <Mic size={iconSize} color={iconColor} />;
     }
   };
 
   const getStatusText = () => {
+    if (disabled) return 'Voice disabled';
+    
     switch (state) {
       case 'recording':
         return 'Recording...';
       case 'processing':
-        return 'Thinking...';
+        return 'Processing...';
       case 'error':
         return error || 'Error occurred';
       default:
         return 'Tap to speak';
+    }
+  };
+
+  const getAccessibilityHint = () => {
+    if (disabled) return 'Voice recording is disabled';
+    
+    switch (state) {
+      case 'recording':
+        return 'Tap to stop recording';
+      case 'processing':
+        return 'Processing your voice input';
+      case 'error':
+        return 'Tap to try recording again';
+      default:
+        return 'Tap to start voice recording, long press for continuous recording';
     }
   };
 
@@ -201,12 +293,15 @@ export function VoiceRecordButton({
         ]}
       >
         {/* Glow effect for idle state */}
-        {state === 'idle' && (
+        {state === 'idle' && !disabled && (
           <Animated.View
             style={[
               styles.glowEffect,
               {
-                opacity: glowAnim,
+                opacity: glowAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.1, 0.3],
+                }),
                 backgroundColor: colors.primary,
               },
             ]}
@@ -223,8 +318,22 @@ export function VoiceRecordButton({
                   styles.audioBar,
                   {
                     backgroundColor: colors.error,
-                    height: Math.max(4, audioLevel * 40 * Math.random()),
-                    opacity: 0.6 + audioLevel * 0.4,
+                    height: audioVisualizationAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [4, 40],
+                    }),
+                    opacity: audioVisualizationAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.3, 0.9],
+                    }),
+                    transform: [
+                      {
+                        scaleY: audioVisualizationAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0.5, 1 + Math.random() * 0.5],
+                        }),
+                      },
+                    ],
                   },
                 ]}
               />
@@ -233,14 +342,21 @@ export function VoiceRecordButton({
         )}
 
         <TouchableOpacity
-          style={styles.button}
+          style={[
+            styles.button,
+            disabled && styles.disabledButton,
+          ]}
           onPress={handlePress}
-          onLongPress={onLongPress}
-          disabled={state === 'processing'}
+          onLongPress={handleLongPress}
+          disabled={disabled || state === 'processing'}
           activeOpacity={0.8}
           accessibilityLabel={getStatusText()}
           accessibilityRole="button"
-          accessibilityHint="Double tap to record voice message"
+          accessibilityHint={getAccessibilityHint()}
+          accessibilityState={{
+            disabled: disabled || state === 'processing',
+            busy: state === 'processing',
+          }}
         >
           <LinearGradient
             colors={getButtonColors()}
@@ -256,11 +372,21 @@ export function VoiceRecordButton({
       <Text
         style={[
           styles.statusText,
-          { color: state === 'error' ? colors.error : colors.textSecondary },
+          { 
+            color: state === 'error' ? colors.error : 
+                   disabled ? colors.textTertiary : colors.textSecondary 
+          },
         ]}
+        accessibilityLiveRegion="polite"
       >
         {getStatusText()}
       </Text>
+
+      {error && state === 'error' && (
+        <Text style={[styles.errorText, { color: colors.error }]}>
+          {error}
+        </Text>
+      )}
     </View>
   );
 }
@@ -281,7 +407,6 @@ const styles = StyleSheet.create({
     width: BUTTON_SIZE + 20,
     height: BUTTON_SIZE + 20,
     borderRadius: (BUTTON_SIZE + 20) / 2,
-    opacity: 0.3,
   },
   audioVisualization: {
     position: 'absolute',
@@ -296,6 +421,7 @@ const styles = StyleSheet.create({
     width: 2,
     marginHorizontal: 1,
     borderRadius: 1,
+    minHeight: 4,
   },
   button: {
     width: BUTTON_SIZE,
@@ -310,6 +436,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4.65,
   },
+  disabledButton: {
+    elevation: 2,
+    shadowOpacity: 0.1,
+  },
   gradient: {
     width: '100%',
     height: '100%',
@@ -322,5 +452,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     textAlign: 'center',
+  },
+  errorText: {
+    marginTop: 8,
+    fontSize: 14,
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
 });

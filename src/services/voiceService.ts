@@ -2,190 +2,133 @@ import { Audio } from 'expo-av';
 import * as Speech from 'expo-speech';
 import { Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { audioService } from './audioService';
 
-export interface RecordingConfig {
-  android: {
-    extension: '.m4a';
-    outputFormat: Audio.AndroidOutputFormat.MPEG_4;
-    audioEncoder: Audio.AndroidAudioEncoder.AAC;
-    sampleRate: 44100;
-    numberOfChannels: 2;
-    bitRate: 128000;
-  };
-  ios: {
-    extension: '.m4a';
-    outputFormat: Audio.IOSOutputFormat.MPEG4AAC;
-    audioQuality: Audio.IOSAudioQuality.HIGH;
-    sampleRate: 44100;
-    numberOfChannels: 2;
-    bitRate: 128000;
-    linearPCMBitDepth: 16;
-    linearPCMIsBigEndian: false;
-    linearPCMIsFloat: false;
-  };
-  web: {
-    extension: '.webm';
-    mimeType: 'audio/webm';
-  };
+export interface VoiceActivityConfig {
+  silenceThreshold: number; // milliseconds
+  voiceThreshold: number; // 0-1 audio level
+  maxRecordingDuration: number; // milliseconds
 }
 
 class VoiceService {
-  private recording: Audio.Recording | null = null;
-  private sound: Audio.Sound | null = null;
-  private recordingConfig: RecordingConfig;
+  private voiceActivityTimer: NodeJS.Timeout | null = null;
+  private recordingStartTime: number = 0;
+  private lastVoiceActivity: number = 0;
 
-  constructor() {
-    this.recordingConfig = {
-      android: {
-        extension: '.m4a',
-        outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-        audioEncoder: Audio.AndroidAudioEncoder.AAC,
-        sampleRate: 44100,
-        numberOfChannels: 2,
-        bitRate: 128000,
-      },
-      ios: {
-        extension: '.m4a',
-        outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
-        audioQuality: Audio.IOSAudioQuality.HIGH,
-        sampleRate: 44100,
-        numberOfChannels: 2,
-        bitRate: 128000,
-        linearPCMBitDepth: 16,
-        linearPCMIsBigEndian: false,
-        linearPCMIsFloat: false,
-      },
-      web: {
-        extension: '.webm',
-        mimeType: 'audio/webm',
-      },
-    };
-  }
+  private defaultConfig: VoiceActivityConfig = {
+    silenceThreshold: 2000, // 2 seconds
+    voiceThreshold: 0.1, // 10% audio level
+    maxRecordingDuration: 300000, // 5 minutes
+  };
 
   async requestPermissions(): Promise<boolean> {
-    try {
-      if (Platform.OS === 'web') {
-        // Web permissions handled by browser
-        return true;
-      }
-
-      const { status } = await Audio.requestPermissionsAsync();
-      return status === 'granted';
-    } catch (error) {
-      console.error('Permission request failed:', error);
-      return false;
-    }
+    return await audioService.requestPermissions();
   }
 
   async initializeAudio(): Promise<void> {
-    try {
-      if (Platform.OS !== 'web') {
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
-          shouldDuckAndroid: true,
-          playThroughEarpieceAndroid: false,
-          staysActiveInBackground: false,
-        });
-      }
-    } catch (error) {
-      console.error('Audio initialization failed:', error);
-      throw error;
-    }
+    return await audioService.initializeAudio();
   }
 
   async startRecording(
     onAudioLevel?: (level: number) => void,
-    onVoiceActivity?: (detected: boolean) => void
+    onVoiceActivity?: (detected: boolean) => void,
+    config: Partial<VoiceActivityConfig> = {}
   ): Promise<Audio.Recording> {
-    try {
-      await this.initializeAudio();
+    const voiceConfig = { ...this.defaultConfig, ...config };
+    this.recordingStartTime = Date.now();
+    this.lastVoiceActivity = Date.now();
 
-      const recordingOptions = Platform.select({
-        ios: this.recordingConfig.ios,
-        android: this.recordingConfig.android,
-        web: this.recordingConfig.web,
-      });
-
-      const { recording } = await Audio.Recording.createAsync(
-        recordingOptions as any,
-        undefined,
-        100 // Update interval for metering
-      );
-
-      this.recording = recording;
-
-      // Monitor audio levels and voice activity
-      if (onAudioLevel || onVoiceActivity) {
-        recording.setOnRecordingStatusUpdate((status) => {
-          if (status.isRecording && status.metering !== undefined) {
-            const normalizedLevel = Math.max(0, Math.min(1, (status.metering + 160) / 160));
-            onAudioLevel?.(normalizedLevel);
-
-            // Voice activity detection based on audio level
-            const voiceDetected = normalizedLevel > 0.1;
-            onVoiceActivity?.(voiceDetected);
-          }
-        });
-      }
-
-      // Haptic feedback on start
-      if (Platform.OS !== 'web') {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      }
-
-      return recording;
-    } catch (error) {
-      console.error('Failed to start recording:', error);
-      throw error;
+    // Clear any existing timer
+    if (this.voiceActivityTimer) {
+      clearTimeout(this.voiceActivityTimer);
+      this.voiceActivityTimer = null;
     }
+
+    const recording = await audioService.startRecording(
+      (level) => {
+        onAudioLevel?.(level);
+        
+        // Voice activity detection
+        const voiceDetected = level > voiceConfig.voiceThreshold;
+        onVoiceActivity?.(voiceDetected);
+
+        if (voiceDetected) {
+          this.lastVoiceActivity = Date.now();
+          
+          // Clear silence timer if voice is detected
+          if (this.voiceActivityTimer) {
+            clearTimeout(this.voiceActivityTimer);
+            this.voiceActivityTimer = null;
+          }
+        } else {
+          // Start silence timer if not already running
+          if (!this.voiceActivityTimer) {
+            this.voiceActivityTimer = setTimeout(() => {
+              this.handleSilenceTimeout();
+            }, voiceConfig.silenceThreshold);
+          }
+        }
+
+        // Check max recording duration
+        const recordingDuration = Date.now() - this.recordingStartTime;
+        if (recordingDuration > voiceConfig.maxRecordingDuration) {
+          this.handleMaxDurationReached();
+        }
+      },
+      onVoiceActivity
+    );
+
+    // Haptic feedback on start
+    if (Platform.OS !== 'web') {
+      try {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      } catch (error) {
+        console.warn('Haptic feedback not available:', error);
+      }
+    }
+
+    return recording;
   }
 
   async stopRecording(): Promise<string | null> {
-    try {
-      if (!this.recording) return null;
-
-      await this.recording.stopAndUnloadAsync();
-      const uri = this.recording.getURI();
-      this.recording = null;
-
-      // Haptic feedback on stop
-      if (Platform.OS !== 'web') {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
-
-      return uri;
-    } catch (error) {
-      console.error('Failed to stop recording:', error);
-      throw error;
+    // Clear voice activity timer
+    if (this.voiceActivityTimer) {
+      clearTimeout(this.voiceActivityTimer);
+      this.voiceActivityTimer = null;
     }
+
+    const uri = await audioService.stopRecording();
+
+    // Haptic feedback on stop
+    if (Platform.OS !== 'web') {
+      try {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } catch (error) {
+        console.warn('Haptic feedback not available:', error);
+      }
+    }
+
+    return uri;
+  }
+
+  private handleSilenceTimeout(): void {
+    // This would trigger auto-stop in the calling component
+    console.log('Silence timeout reached');
+    // Emit event or call callback to stop recording
+  }
+
+  private handleMaxDurationReached(): void {
+    // This would trigger auto-stop in the calling component
+    console.log('Max recording duration reached');
+    // Emit event or call callback to stop recording
   }
 
   async playAudio(uri: string): Promise<void> {
-    try {
-      if (this.sound) {
-        await this.sound.unloadAsync();
-      }
-
-      const { sound } = await Audio.Sound.createAsync({ uri });
-      this.sound = sound;
-      await sound.playAsync();
-    } catch (error) {
-      console.error('Failed to play audio:', error);
-      throw error;
-    }
+    return await audioService.playAudio(uri);
   }
 
   async stopAudio(): Promise<void> {
-    try {
-      if (this.sound) {
-        await this.sound.stopAsync();
-        await this.sound.unloadAsync();
-        this.sound = null;
-      }
-    } catch (error) {
-      console.error('Failed to stop audio:', error);
-    }
+    return await audioService.stopAudio();
   }
 
   async speakText(
@@ -197,43 +140,84 @@ class VoiceService {
       volume?: number;
     }
   ): Promise<void> {
-    try {
-      const speechOptions: Speech.SpeechOptions = {
-        language: 'en-US',
-        pitch: options?.pitch || 1.0,
-        rate: options?.rate || 1.0,
-        volume: options?.volume || 1.0,
-        voice: options?.voice,
-      };
-
-      await Speech.speak(text, speechOptions);
-    } catch (error) {
-      console.error('Failed to speak text:', error);
-      throw error;
-    }
+    return await audioService.speakText(text, options);
   }
 
   async stopSpeaking(): Promise<void> {
-    try {
-      await Speech.stop();
-    } catch (error) {
-      console.error('Failed to stop speaking:', error);
-    }
+    return await audioService.stopSpeaking();
   }
 
   async getAvailableVoices(): Promise<Speech.Voice[]> {
-    try {
-      return await Speech.getAvailableVoicesAsync();
-    } catch (error) {
-      console.error('Failed to get available voices:', error);
-      return [];
-    }
+    return await audioService.getAvailableVoices();
+  }
+
+  async checkPermissions(): Promise<'granted' | 'denied' | 'undetermined'> {
+    return await audioService.checkAudioPermissions();
+  }
+
+  async testRecording(): Promise<boolean> {
+    return await audioService.testRecording();
   }
 
   cleanup(): void {
-    this.stopRecording();
-    this.stopAudio();
-    this.stopSpeaking();
+    if (this.voiceActivityTimer) {
+      clearTimeout(this.voiceActivityTimer);
+      this.voiceActivityTimer = null;
+    }
+    audioService.cleanup();
+  }
+
+  // Utility methods for voice processing
+  calculateAudioLevel(samples: Float32Array): number {
+    let sum = 0;
+    for (let i = 0; i < samples.length; i++) {
+      sum += Math.abs(samples[i]);
+    }
+    return sum / samples.length;
+  }
+
+  detectVoiceActivity(audioLevel: number, threshold: number = 0.1): boolean {
+    return audioLevel > threshold;
+  }
+
+  // Web-specific audio processing
+  async setupWebAudioContext(): Promise<AudioContext | null> {
+    if (Platform.OS !== 'web') return null;
+
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      const audioContext = new AudioContext();
+      
+      // Resume audio context if suspended (required by some browsers)
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+      
+      return audioContext;
+    } catch (error) {
+      console.error('Failed to setup web audio context:', error);
+      return null;
+    }
+  }
+
+  async getWebAudioStream(): Promise<MediaStream | null> {
+    if (Platform.OS !== 'web') return null;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 44100,
+        },
+      });
+      
+      return stream;
+    } catch (error) {
+      console.error('Failed to get web audio stream:', error);
+      return null;
+    }
   }
 }
 
