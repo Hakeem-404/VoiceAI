@@ -9,17 +9,7 @@ import {
   Slider,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { 
-  Volume2, 
-  Settings, 
-  Play, 
-  Pause, 
-  X,
-  Sliders,
-  Mic,
-  User,
-  Zap
-} from 'lucide-react-native';
+import { Volume2, Settings, Play, Pause, X, FileSliders as Sliders, Mic, User, Zap } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { elevenLabsService, VoicePersonality } from '@/services/elevenLabsService';
 import { audioPlayerService } from '@/services/audioPlayerService';
