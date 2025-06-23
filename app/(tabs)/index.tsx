@@ -9,6 +9,7 @@ import {
   Platform,
   Dimensions,
   RefreshControl,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,6 +24,12 @@ import {
   Trophy,
   Target,
   Calendar,
+  Send,
+  Mic,
+  Square,
+  RotateCcw,
+  X,
+  MessageSquare,
 } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useConversationStore } from '@/src/stores/conversationStore';
@@ -32,6 +39,7 @@ import { useSettingsStore } from '@/src/stores/settingsStore';
 import { useUserStore } from '@/src/stores/userStore';
 import { conversationModes } from '@/src/constants/conversationModes';
 import { voiceService } from '@/src/services/voiceService';
+import { supabaseClaudeAPI } from '@/services/supabaseClaudeAPI';
 import { ModeSelectionCard } from '@/components/ModeSelectionCard';
 import { ModeConfigurationModal } from '@/components/ModeConfigurationModal';
 import { VoiceRecordButton } from '@/components/VoiceRecordButton';
@@ -39,8 +47,9 @@ import { FloatingActionButtons } from '@/components/FloatingActionButtons';
 import { TextInputModal } from '@/components/TextInputModal';
 import { GestureHandler } from '@/components/GestureHandler';
 import { PermissionHandler } from '@/components/PermissionHandler';
-import { ConversationMode, ModeConfiguration, DailyChallenge } from '@/src/types';
+import { ConversationMode, ModeConfiguration, DailyChallenge, ConversationMessage } from '@/src/types';
 import { spacing, typography } from '@/src/constants/colors';
+import { ConversationContext } from '@/types/api';
 
 const { width } = Dimensions.get('window');
 
@@ -87,6 +96,10 @@ export default function HomeScreen() {
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [dailyChallenges, setDailyChallenges] = useState<DailyChallenge[]>([]);
+  const [isSupabaseConfigured, setIsSupabaseConfigured] = useState(false);
+  const [conversationMessages, setConversationMessages] = useState<ConversationMessage[]>([]);
+  const [isLoadingResponse, setIsLoadingResponse] = useState(false);
+  const [quickReplies, setQuickReplies] = useState<string[]>([]);
 
   // Mock user preferences for favorites and recent modes
   const [favoriteMode, setFavoriteMode] = useState<string>('general-chat');
@@ -97,6 +110,10 @@ export default function HomeScreen() {
       setShowPermissionHandler(false);
     }
     loadDailyChallenges();
+    
+    // Check Supabase configuration
+    const status = supabaseClaudeAPI.getConfigStatus();
+    setIsSupabaseConfigured(status.configured);
   }, [permissions.microphone]);
 
   const loadDailyChallenges = () => {
@@ -127,6 +144,15 @@ export default function HomeScreen() {
   };
 
   const handleModeSelect = (mode: ConversationMode) => {
+    if (!isSupabaseConfigured) {
+      Alert.alert(
+        'Configuration Required',
+        'Supabase is not properly configured. Please check your environment variables and try again.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     if (permissions.microphone === 'denied' && inputMode === 'voice') {
       setInputMode('text');
     }
@@ -143,13 +169,145 @@ export default function HomeScreen() {
     // Update recent modes
     setRecentModes(prev => [mode.id, ...prev.filter(id => id !== mode.id)].slice(0, 3));
     
+    // Start conversation with Claude API integration
     startConversation(mode);
     setShowConfigModal(false);
     setError(null);
+    setConversationMessages([]);
+    
+    // Generate initial quick replies for the mode
+    generateQuickRepliesForMode(mode.id);
+  };
+
+  const generateQuickRepliesForMode = (modeId: string) => {
+    const modeQuickReplies = {
+      'general-chat': [
+        "Tell me about yourself",
+        "What's your favorite hobby?",
+        "How was your day?",
+      ],
+      'debate-challenge': [
+        "I believe climate change is urgent",
+        "Technology will solve our problems",
+        "Education should be free for all",
+      ],
+      'idea-brainstorm': [
+        "Let's solve traffic congestion",
+        "How can we improve remote work?",
+        "What's the future of entertainment?",
+      ],
+      'interview-practice': [
+        "Tell me about yourself",
+        "What are your strengths?",
+        "Why do you want this job?",
+      ],
+      'presentation-prep': [
+        "I want to present quarterly results",
+        "Help me pitch a new product",
+        "I need to explain our strategy",
+      ],
+      'language-learning': [
+        "Let's practice basic conversation",
+        "Help me with pronunciation",
+        "Teach me common phrases",
+      ],
+    };
+
+    setQuickReplies(modeQuickReplies[modeId as keyof typeof modeQuickReplies] || []);
+  };
+
+  const createConversationContext = (): ConversationContext => {
+    return {
+      messages: conversationMessages,
+      mode: currentMode?.id || 'general-chat',
+      sessionId: currentConversation?.id || Date.now().toString(),
+      metadata: {
+        startTime: currentConversation?.createdAt || new Date(),
+        lastActivity: new Date(),
+        messageCount: conversationMessages.length,
+        totalTokens: 0,
+      },
+    };
+  };
+
+  const sendMessageToClaude = async (content: string) => {
+    if (!currentMode || !isSupabaseConfigured) return;
+
+    setIsLoadingResponse(true);
+    setError(null);
+
+    try {
+      // Add user message to conversation
+      const userMessage: ConversationMessage = {
+        id: Date.now().toString(),
+        role: 'user',
+        content,
+        timestamp: new Date(),
+      };
+
+      const updatedMessages = [...conversationMessages, userMessage];
+      setConversationMessages(updatedMessages);
+      addMessage(userMessage);
+
+      // Create conversation context
+      const context: ConversationContext = {
+        messages: updatedMessages,
+        mode: currentMode.id,
+        sessionId: currentConversation?.id || Date.now().toString(),
+        metadata: {
+          startTime: currentConversation?.createdAt || new Date(),
+          lastActivity: new Date(),
+          messageCount: updatedMessages.length,
+          totalTokens: 0,
+        },
+      };
+
+      // Send to Claude API via Supabase
+      const response = await supabaseClaudeAPI.sendMessage(content, context);
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      if (response.data) {
+        const assistantMessage = response.data;
+        setConversationMessages(prev => [...prev, assistantMessage]);
+        addMessage(assistantMessage);
+
+        // Speak the AI response if voice is enabled
+        if (permissions.microphone === 'granted' && voiceSettings.selectedVoice) {
+          voiceService.speakText(assistantMessage.content, {
+            voice: voiceSettings.selectedVoice,
+            rate: voiceSettings.speechRate,
+            pitch: voiceSettings.speechPitch,
+            volume: voiceSettings.volume,
+          });
+        }
+
+        // Generate new quick replies based on the response
+        await generateContextualQuickReplies(context, assistantMessage.content);
+      }
+    } catch (error) {
+      console.error('Error sending message to Claude:', error);
+      setError(error instanceof Error ? error.message : 'Failed to send message');
+    } finally {
+      setIsLoadingResponse(false);
+    }
+  };
+
+  const generateContextualQuickReplies = async (context: ConversationContext, lastResponse: string) => {
+    try {
+      const replies = await supabaseClaudeAPI.generateQuickReplies(context, 3);
+      setQuickReplies(replies);
+    } catch (error) {
+      console.warn('Failed to generate quick replies:', error);
+      // Fallback to mode-specific quick replies
+      generateQuickRepliesForMode(context.mode);
+    }
   };
 
   const handleVoiceRecord = async () => {
-    if (!currentConversation) return;
+    if (!currentConversation || !isSupabaseConfigured) return;
 
     try {
       if (!isRecording) {
@@ -197,37 +355,16 @@ export default function HomeScreen() {
           audioUri = await voiceService.stopRecording();
         }
 
-        // Simulate AI processing
-        setTimeout(() => {
-          addMessage({
-            role: 'user',
-            content: 'Sample recorded message',
-            audioUrl: audioUri || undefined,
-          });
+        // For now, simulate transcription with a sample message
+        // In a real app, you would transcribe the audio here
+        const transcribedText = "Hello, I'd like to practice conversation";
+        
+        // Send transcribed text to Claude
+        await sendMessageToClaude(transcribedText);
 
-          // Add AI response
-          setTimeout(() => {
-            const aiResponse = generateAIResponse(currentMode?.name || 'conversation');
-            addMessage({
-              role: 'ai',
-              content: aiResponse,
-            });
-
-            // Speak the AI response
-            if (voiceSettings.selectedVoice) {
-              voiceService.speakText(aiResponse, {
-                voice: voiceSettings.selectedVoice,
-                rate: voiceSettings.speechRate,
-                pitch: voiceSettings.speechPitch,
-                volume: voiceSettings.volume,
-              });
-            }
-
-            setRecordButtonState('idle');
-            setProcessing(false);
-            resetVoiceState();
-          }, 1000);
-        }, 2000);
+        setRecordButtonState('idle');
+        setProcessing(false);
+        resetVoiceState();
       }
     } catch (error) {
       console.error('Recording error:', error);
@@ -239,70 +376,16 @@ export default function HomeScreen() {
     }
   };
 
-  const handleTextSend = (text: string) => {
-    if (!currentConversation) return;
+  const handleTextSend = async (text: string) => {
+    if (!currentConversation || !isSupabaseConfigured) return;
 
-    addMessage({
-      role: 'user',
-      content: text,
-    });
-
-    // Simulate AI processing
-    setTimeout(() => {
-      const aiResponse = generateAIResponse(currentMode?.name || 'conversation', text);
-      addMessage({
-        role: 'ai',
-        content: aiResponse,
-      });
-
-      // Speak the AI response if voice is enabled
-      if (permissions.microphone === 'granted' && voiceSettings.selectedVoice) {
-        voiceService.speakText(aiResponse, {
-          voice: voiceSettings.selectedVoice,
-          rate: voiceSettings.speechRate,
-          pitch: voiceSettings.speechPitch,
-          volume: voiceSettings.volume,
-        });
-      }
-    }, 1000);
+    await sendMessageToClaude(text);
   };
 
-  const generateAIResponse = (mode: string, userInput?: string): string => {
-    const responses = {
-      'General Chat': [
-        "That's really interesting! Tell me more about that.",
-        "I can relate to that experience. What did you learn from it?",
-        "That's a fascinating topic. Have you always been interested in that?",
-      ],
-      'Debate Challenge': [
-        "That's a strong argument. However, have you considered the counterpoint that...",
-        "I see your perspective, but what evidence supports that claim?",
-        "Interesting stance. How would you respond to critics who say...",
-      ],
-      'Idea Brainstorm': [
-        "That's a creative idea! How could we build on that concept?",
-        "I love the innovation in that approach. What if we combined it with...",
-        "Brilliant thinking! What would be the first step to implement this?",
-      ],
-      'Interview Practice': [
-        "That's a great example. Can you tell me about a time when you faced a significant challenge?",
-        "I appreciate your honesty. What do you consider your greatest strength?",
-        "Interesting perspective. How do you handle working under pressure?",
-      ],
-      'Presentation Prep': [
-        "Your main points are clear. Try to add more enthusiasm to your delivery.",
-        "Good structure! Consider adding a compelling story to engage your audience.",
-        "Nice flow. Remember to make eye contact and use gestures to emphasize key points.",
-      ],
-      'Language Learning': [
-        "Excellent pronunciation! Let's practice some more complex sentences.",
-        "Good effort! Remember to roll your R's in that word. Try again.",
-        "Perfect! Now let's use that vocabulary in a different context.",
-      ],
-    };
+  const handleQuickReply = async (reply: string) => {
+    if (!currentConversation || !isSupabaseConfigured) return;
 
-    const modeResponses = responses[mode as keyof typeof responses] || responses['General Chat'];
-    return modeResponses[Math.floor(Math.random() * modeResponses.length)];
+    await sendMessageToClaude(reply);
   };
 
   const handleRefresh = async () => {
@@ -356,7 +439,11 @@ export default function HomeScreen() {
               'Are you sure you want to clear the current conversation?',
               [
                 { text: 'Cancel', style: 'cancel' },
-                { text: 'Clear', style: 'destructive', onPress: endConversation },
+                { text: 'Clear', style: 'destructive', onPress: () => {
+                  endConversation();
+                  setConversationMessages([]);
+                  setQuickReplies([]);
+                }},
               ]
             );
           }}
@@ -371,15 +458,28 @@ export default function HomeScreen() {
               </Text>
               <TouchableOpacity
                 style={[styles.endButton, { backgroundColor: colors.error }]}
-                onPress={endConversation}
+                onPress={() => {
+                  endConversation();
+                  setConversationMessages([]);
+                  setQuickReplies([]);
+                }}
                 accessibilityLabel="End conversation"
               >
                 <Text style={styles.endButtonText}>End</Text>
               </TouchableOpacity>
             </View>
 
+            {/* Configuration Warning */}
+            {!isSupabaseConfigured && (
+              <View style={[styles.warningBanner, { backgroundColor: colors.warning + '20' }]}>
+                <Text style={[styles.warningText, { color: colors.warning }]}>
+                  Supabase not configured. Please check your environment variables.
+                </Text>
+              </View>
+            )}
+
             <ScrollView style={styles.messagesContainer} showsVerticalScrollIndicator={false}>
-              {currentConversation.messages.map((message) => (
+              {conversationMessages.map((message) => (
                 <View
                   key={message.id}
                   style={[
@@ -400,15 +500,61 @@ export default function HomeScreen() {
                   >
                     {message.content}
                   </Text>
+                  <Text
+                    style={[
+                      styles.messageTime,
+                      {
+                        color: message.role === 'user' 
+                          ? 'rgba(255,255,255,0.7)' 
+                          : colors.textTertiary,
+                      },
+                    ]}
+                  >
+                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
                 </View>
               ))}
+
+              {isLoadingResponse && (
+                <View style={[styles.messageBubble, styles.aiMessage, { backgroundColor: colors.surface }]}>
+                  <View style={styles.typingIndicator}>
+                    <View style={[styles.typingDot, { backgroundColor: colors.primary }]} />
+                    <View style={[styles.typingDot, { backgroundColor: colors.primary }]} />
+                    <View style={[styles.typingDot, { backgroundColor: colors.primary }]} />
+                  </View>
+                </View>
+              )}
             </ScrollView>
+
+            {/* Quick Replies */}
+            {quickReplies.length > 0 && !isLoadingResponse && (
+              <View style={styles.quickRepliesContainer}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.quickRepliesScroll}
+                >
+                  {quickReplies.map((reply, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={[styles.quickReplyButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                      onPress={() => handleQuickReply(reply)}
+                      disabled={!isSupabaseConfigured}
+                    >
+                      <Zap size={14} color={colors.primary} />
+                      <Text style={[styles.quickReplyText, { color: colors.text }]}>{reply}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
 
             <View style={styles.inputArea}>
               <VoiceRecordButton
                 onPress={handleVoiceRecord}
                 state={recordButtonState}
                 error={error}
+                disabled={!isSupabaseConfigured}
               />
             </View>
 
@@ -482,6 +628,15 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
+            {/* Configuration Warning */}
+            {!isSupabaseConfigured && (
+              <View style={[styles.warningBanner, { backgroundColor: colors.warning + '20' }]}>
+                <Text style={[styles.warningText, { color: colors.warning }]}>
+                  Supabase not configured. Please check your environment variables to use AI features.
+                </Text>
+              </View>
+            )}
+
             {permissions.microphone === 'denied' && (
               <View style={[styles.warningBanner, { backgroundColor: colors.warning + '20' }]}>
                 <Text style={[styles.warningText, { color: colors.warning }]}>
@@ -514,6 +669,7 @@ export default function HomeScreen() {
                       const mode = conversationModes.find(m => m.id === challenge.modeId);
                       if (mode) handleModeSelect(mode);
                     }}
+                    disabled={!isSupabaseConfigured}
                   >
                     <View style={styles.challengeHeader}>
                       <Calendar size={16} color={colors.warning} />
@@ -831,6 +987,43 @@ const styles = StyleSheet.create({
   messageText: {
     fontSize: typography.sizes.base,
     lineHeight: typography.sizes.base * 1.4,
+    marginBottom: spacing.xs,
+  },
+  messageTime: {
+    fontSize: typography.sizes.xs,
+    alignSelf: 'flex-end',
+  },
+  typingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+  },
+  typingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    opacity: 0.6,
+  },
+  quickRepliesContainer: {
+    marginBottom: spacing.md,
+  },
+  quickRepliesScroll: {
+    paddingRight: spacing.lg,
+  },
+  quickReplyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginRight: spacing.sm,
+    gap: spacing.xs,
+  },
+  quickReplyText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.medium,
   },
   inputArea: {
     alignItems: 'center',
