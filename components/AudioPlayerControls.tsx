@@ -5,9 +5,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   Modal,
-  Slider,
   ScrollView,
 } from 'react-native';
+import Slider from '@react-native-community/slider';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Repeat, Shuffle, MoveHorizontal as MoreHorizontal, X, List, Settings, Download, Share } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
