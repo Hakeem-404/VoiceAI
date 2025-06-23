@@ -1,20 +1,20 @@
-import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
+import { Audio } from 'expo-audio';
 import * as Speech from 'expo-speech';
 import { Platform } from 'react-native';
 
 export interface PlatformRecordingOptions {
   android: {
     extension: '.m4a';
-    outputFormat: Audio.AndroidOutputFormat;
-    audioEncoder: Audio.AndroidAudioEncoder;
+    outputFormat: string;
+    audioEncoder: string;
     sampleRate: number;
     numberOfChannels: number;
     bitRate: number;
   };
   ios: {
     extension: '.m4a';
-    outputFormat: Audio.IOSOutputFormat;
-    audioQuality: Audio.IOSAudioQuality;
+    outputFormat: string;
+    audioQuality: string;
     sampleRate: number;
     numberOfChannels: number;
     bitRate: number;
@@ -38,16 +38,16 @@ class AudioService {
   private readonly recordingOptions: PlatformRecordingOptions = {
     android: {
       extension: '.m4a',
-      outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-      audioEncoder: Audio.AndroidAudioEncoder.AAC,
+      outputFormat: 'MPEG_4',
+      audioEncoder: 'AAC',
       sampleRate: 44100,
       numberOfChannels: 2,
       bitRate: 128000,
     },
     ios: {
       extension: '.m4a',
-      outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
-      audioQuality: Audio.IOSAudioQuality.HIGH,
+      outputFormat: 'MPEG4AAC',
+      audioQuality: 'HIGH',
       sampleRate: 44100,
       numberOfChannels: 2,
       bitRate: 128000,
@@ -98,8 +98,6 @@ class AudioService {
         shouldDuckAndroid: true,
         playThroughEarpieceAndroid: false,
         staysActiveInBackground: false,
-        interruptionModeIOS: InterruptionModeIOS.DoNotMix,
-        interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
       });                
 
       this.isInitialized = true;   
@@ -127,10 +125,10 @@ class AudioService {
         return await this.startWebRecording(onAudioLevel, onVoiceActivity);
       }
 
-      // Native recording implementation using expo-av
+      // Native recording implementation using expo-audio
       const options = this.getPlatformRecordingOptions();
       
-      const { recording } = await Audio.Recording.createAsync(
+      const recording = await Audio.Recording.createAsync(
         options,
         undefined,
         100 // Update interval for metering in milliseconds
@@ -217,7 +215,7 @@ class AudioService {
 
       this.webMediaRecorder.start();
 
-      // Create a mock recording object that behaves like expo-av Recording
+      // Create a mock recording object that behaves like expo-audio Recording
       const mockRecording = {
         getURI: () => {
           if (this.webAudioChunks.length > 0) {
@@ -306,8 +304,8 @@ class AudioService {
         }
       }
 
-      // Native audio playback using expo-av
-      const { sound } = await Audio.Sound.createAsync({ uri });
+      // Native audio playback using expo-audio
+      const sound = await Audio.Sound.createAsync({ uri });
       this.sound = sound;
       await sound.playAsync();
     } catch (error) {

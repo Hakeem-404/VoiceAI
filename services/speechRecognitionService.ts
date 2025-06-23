@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import * as SpeechRecognition from 'expo-speech-recognition';
 
 export interface SpeechRecognitionResult {
   transcript: string;
@@ -24,19 +25,29 @@ class SpeechRecognitionService {
   private interimTranscript = '';
 
   constructor() {
-    this.initializeWebSpeechRecognition();
+    this.initializeSpeechRecognition();
   }
 
-  private initializeWebSpeechRecognition() {
+  private async initializeSpeechRecognition() {
     if (Platform.OS === 'web') {
       // Initialize Web Speech API
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       
-      if (SpeechRecognition) {
-        this.recognition = new SpeechRecognition();
+      if (SpeechRecognitionAPI) {
+        this.recognition = new SpeechRecognitionAPI();
         this.setupWebSpeechRecognition();
       } else {
         console.warn('Web Speech API not supported in this browser');
+      }
+    } else {
+      // Use expo-speech-recognition for native platforms
+      try {
+        const isAvailable = await SpeechRecognition.getAvailableLanguagesAsync();
+        if (isAvailable.length > 0) {
+          console.log('Expo Speech Recognition available with languages:', isAvailable);
+        }
+      } catch (error) {
+        console.warn('Expo Speech Recognition not available:', error);
       }
     }
   }
@@ -148,8 +159,8 @@ class SpeechRecognitionService {
     if (Platform.OS === 'web') {
       try {
         // Check if Web Speech API is available
-        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (!SpeechRecognition) {
+        const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (!SpeechRecognitionAPI) {
           return 'denied';
         }
 
@@ -172,9 +183,15 @@ class SpeechRecognitionService {
         return 'undetermined';
       }
     } else {
-      // For native platforms, we'll need to implement native speech recognition
-      // For now, return granted to allow text fallback
-      return 'granted';
+      // For native platforms, use expo-speech-recognition
+      try {
+        const { status } = await SpeechRecognition.requestPermissionsAsync();
+        return status === 'granted' ? 'granted' : 
+               status === 'denied' ? 'denied' : 'undetermined';
+      } catch (error) {
+        console.warn('Failed to check speech recognition permissions:', error);
+        return 'undetermined';
+      }
     }
   }
 
@@ -191,9 +208,14 @@ class SpeechRecognitionService {
         return false;
       }
     } else {
-      // For native platforms, we'll implement this when we add native speech recognition
-      console.warn('Native speech recognition not implemented yet');
-      return false;
+      // For native platforms, use expo-speech-recognition
+      try {
+        const { status } = await SpeechRecognition.requestPermissionsAsync();
+        return status === 'granted';
+      } catch (error) {
+        console.error('Failed to request speech recognition permission:', error);
+        return false;
+      }
     }
   }
 
@@ -221,9 +243,7 @@ class SpeechRecognitionService {
     if (Platform.OS === 'web') {
       return this.startWebSpeechRecognition(language, continuous, interimResults, maxAlternatives, timeout);
     } else {
-      // For native platforms, show a helpful error
-      onError('Speech recognition is only available on web browsers. Please use text input instead.');
-      return false;
+      return this.startNativeSpeechRecognition(language, continuous, interimResults, timeout);
     }
   }
 
@@ -255,7 +275,7 @@ class SpeechRecognitionService {
         }
       }, timeout);
 
-      console.log('Starting speech recognition with options:', {
+      console.log('Starting web speech recognition with options:', {
         language,
         continuous,
         interimResults,
@@ -268,6 +288,80 @@ class SpeechRecognitionService {
     } catch (error) {
       console.error('Failed to start web speech recognition:', error);
       this.errorCallback?.(`Failed to start speech recognition: ${error}`);
+      return false;
+    }
+  }
+
+  private async startNativeSpeechRecognition(
+    language: string,
+    continuous: boolean,
+    interimResults: boolean,
+    timeout: number
+  ): Promise<boolean> {
+    try {
+      // Check permissions first
+      const hasPermission = await this.requestPermissions();
+      if (!hasPermission) {
+        this.errorCallback?.('Speech recognition permission denied');
+        return false;
+      }
+
+      // Set timeout
+      this.timeoutId = setTimeout(() => {
+        if (this.isListening) {
+          console.log('Speech recognition timeout');
+          this.stopListening();
+          this.errorCallback?.('Speech recognition timeout. Please try again.');
+        }
+      }, timeout);
+
+      console.log('Starting native speech recognition with options:', {
+        language,
+        continuous,
+        interimResults,
+        timeout
+      });
+
+      this.isListening = true;
+      this.finalTranscript = '';
+      this.interimTranscript = '';
+
+      // Start recognition with expo-speech-recognition
+      const result = await SpeechRecognition.startAsync({
+        language,
+        interimResults,
+        maxAlternatives: 1,
+        continuous,
+      });
+
+      if (result.transcripts && result.transcripts.length > 0) {
+        const transcript = result.transcripts[0];
+        this.finalTranscript = transcript;
+        
+        if (this.currentCallback) {
+          this.currentCallback({
+            transcript,
+            confidence: result.confidence || 0.9,
+            isFinal: true
+          });
+        }
+      }
+
+      this.isListening = false;
+      if (this.timeoutId) {
+        clearTimeout(this.timeoutId);
+        this.timeoutId = null;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Failed to start native speech recognition:', error);
+      this.errorCallback?.(`Failed to start speech recognition: ${error}`);
+      this.isListening = false;
+      if (this.timeoutId) {
+        clearTimeout(this.timeoutId);
+        this.timeoutId = null;
+      }
       return false;
     }
   }
@@ -287,6 +381,13 @@ class SpeechRecognitionService {
         this.recognition.stop();
       } catch (error) {
         console.warn('Error stopping web speech recognition:', error);
+      }
+    } else {
+      // Stop native speech recognition
+      try {
+        SpeechRecognition.stop();
+      } catch (error) {
+        console.warn('Error stopping native speech recognition:', error);
       }
     }
 
@@ -357,8 +458,8 @@ class SpeechRecognitionService {
     }
   }
 
-  // Get available languages (web only)
-  getAvailableLanguages(): string[] {
+  // Get available languages
+  async getAvailableLanguages(): Promise<string[]> {
     if (Platform.OS === 'web' && this.recognition) {
       // Common languages supported by Web Speech API
       return [
@@ -367,17 +468,26 @@ class SpeechRecognitionService {
         'pt-BR', 'ru-RU', 'ja-JP', 'ko-KR', 'zh-CN',
         'zh-TW', 'ar-SA', 'hi-IN', 'th-TH', 'vi-VN'
       ];
+    } else {
+      // For native platforms, use expo-speech-recognition
+      try {
+        return await SpeechRecognition.getAvailableLanguagesAsync();
+      } catch (error) {
+        console.warn('Failed to get available languages:', error);
+        return ['en-US']; // Default fallback
+      }
     }
-    return ['en-US']; // Default for native platforms
   }
 
   // Check if speech recognition is supported
   isSupported(): boolean {
     if (Platform.OS === 'web') {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      return !!SpeechRecognition;
+      const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      return !!SpeechRecognitionAPI;
+    } else {
+      // For native platforms, expo-speech-recognition should be available
+      return true;
     }
-    return false; // Not implemented for native platforms yet
   }
 
   // Get current status
@@ -386,7 +496,7 @@ class SpeechRecognitionService {
       isListening: this.isListening,
       isSupported: this.isSupported(),
       platform: Platform.OS,
-      availableLanguages: this.getAvailableLanguages(),
+      availableLanguages: [], // Will be populated async
       hasRecognition: !!this.recognition,
       finalTranscript: this.finalTranscript,
       interimTranscript: this.interimTranscript
