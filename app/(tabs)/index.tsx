@@ -25,12 +25,20 @@ import {
   Calendar,
 } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
+import { useConversationStore } from '@/src/stores/conversationStore';
+import { useVoiceStore } from '@/src/stores/voiceStore';
+import { useInputStore } from '@/src/stores/inputStore';
+import { useSettingsStore } from '@/src/stores/settingsStore';
 import { useUserStore } from '@/src/stores/userStore';
 import { conversationModes } from '@/src/constants/conversationModes';
+import { voiceService } from '@/src/services/voiceService';
 import { ModeSelectionCard } from '@/components/ModeSelectionCard';
 import { ModeConfigurationModal } from '@/components/ModeConfigurationModal';
-import { SupabaseConversationView } from '@/components/SupabaseConversationView';
-import { supabaseClaudeAPI } from '@/services/supabaseClaudeAPI';
+import { VoiceRecordButton } from '@/components/VoiceRecordButton';
+import { FloatingActionButtons } from '@/components/FloatingActionButtons';
+import { TextInputModal } from '@/components/TextInputModal';
+import { GestureHandler } from '@/components/GestureHandler';
+import { PermissionHandler } from '@/components/PermissionHandler';
 import { ConversationMode, ModeConfiguration, DailyChallenge } from '@/src/types';
 import { spacing, typography } from '@/src/constants/colors';
 
@@ -38,30 +46,58 @@ const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const { colors, isDark } = useTheme();
+  const {
+    currentConversation,
+    currentMode,
+    recordingState,
+    isProcessing,
+    startConversation,
+    endConversation,
+    addMessage,
+    setRecordingState,
+    setProcessing,
+  } = useConversationStore();
+
+  const {
+    isRecording,
+    audioLevel,
+    setIsRecording,
+    setAudioLevel,
+    setRecording,
+    resetVoiceState,
+  } = useVoiceStore();
+
+  const {
+    inputMode,
+    currentText,
+    isTextInputVisible,
+    setInputMode,
+    setTextInputVisible,
+    clearCurrentText,
+  } = useInputStore();
+
+  const { permissions, voiceSettings } = useSettingsStore();
   const { user, analytics } = useUserStore();
 
-  // Conversation state
+  const [recordButtonState, setRecordButtonState] = useState<'idle' | 'recording' | 'processing' | 'error'>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const [showPermissionHandler, setShowPermissionHandler] = useState(true);
   const [selectedMode, setSelectedMode] = useState<ConversationMode | null>(null);
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [showConfigModal, setShowConfigModal] = useState(false);
-  
-  // UI state
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [dailyChallenges, setDailyChallenges] = useState<DailyChallenge[]>([]);
-  const [isSupabaseConfigured, setIsSupabaseConfigured] = useState(false);
 
   // Mock user preferences for favorites and recent modes
   const [favoriteMode, setFavoriteMode] = useState<string>('general-chat');
   const [recentModes, setRecentModes] = useState<string[]>(['interview-practice', 'presentation-prep']);
 
   useEffect(() => {
-    // Check if Supabase is properly configured
-    const status = supabaseClaudeAPI.getConfigStatus();
-    setIsSupabaseConfigured(status.configured);
-    
+    if (permissions.microphone === 'granted') {
+      setShowPermissionHandler(false);
+    }
     loadDailyChallenges();
-  }, []);
+  }, [permissions.microphone]);
 
   const loadDailyChallenges = () => {
     // Mock daily challenges
@@ -91,17 +127,13 @@ export default function HomeScreen() {
   };
 
   const handleModeSelect = (mode: ConversationMode) => {
-    if (!isSupabaseConfigured) {
-      Alert.alert(
-        'Configuration Required',
-        'Supabase is not properly configured. Please check your environment variables and ensure the Claude API key is set in the Supabase Edge Function.',
-        [{ text: 'OK' }]
-      );
-      return;
+    if (permissions.microphone === 'denied' && inputMode === 'voice') {
+      setInputMode('text');
     }
     
     setSelectedMode(mode);
     setShowConfigModal(true);
+    setError(null);
   };
 
   const handleModeStart = (configuration: ModeConfiguration) => {
@@ -111,14 +143,166 @@ export default function HomeScreen() {
     // Update recent modes
     setRecentModes(prev => [mode.id, ...prev.filter(id => id !== mode.id)].slice(0, 3));
     
-    // Start conversation with real Claude API integration
-    setSessionId(Date.now().toString());
+    startConversation(mode);
     setShowConfigModal(false);
+    setError(null);
   };
 
-  const handleEndConversation = () => {
-    setSelectedMode(null);
-    setSessionId(null);
+  const handleVoiceRecord = async () => {
+    if (!currentConversation) return;
+
+    try {
+      if (!isRecording) {
+        // Start recording
+        setRecordButtonState('recording');
+        setIsRecording(true);
+        setError(null);
+
+        if (permissions.microphone === 'granted') {
+          const recording = await voiceService.startRecording(
+            (level) => setAudioLevel(level),
+            (detected) => {
+              // Voice activity detection logic
+              if (voiceSettings.enableVoiceActivityDetection) {
+                // Auto-stop after silence if enabled
+                if (!detected && voiceSettings.autoStopAfterSilence) {
+                  setTimeout(() => {
+                    if (isRecording) {
+                      handleVoiceRecord(); // Stop recording
+                    }
+                  }, voiceSettings.silenceThreshold);
+                }
+              }
+            }
+          );
+          if (recording) {
+            setRecording(recording);
+          }
+        } else {
+          // Mock recording for demo
+          setTimeout(() => {
+            if (isRecording) {
+              handleVoiceRecord();
+            }
+          }, 3000);
+        }
+      } else {
+        // Stop recording
+        setRecordButtonState('processing');
+        setIsRecording(false);
+        setProcessing(true);
+
+        let audioUri = null;
+        if (permissions.microphone === 'granted') {
+          audioUri = await voiceService.stopRecording();
+        }
+
+        // Simulate AI processing
+        setTimeout(() => {
+          addMessage({
+            role: 'user',
+            content: 'Sample recorded message',
+            audioUrl: audioUri || undefined,
+          });
+
+          // Add AI response
+          setTimeout(() => {
+            const aiResponse = generateAIResponse(currentMode?.name || 'conversation');
+            addMessage({
+              role: 'ai',
+              content: aiResponse,
+            });
+
+            // Speak the AI response
+            if (voiceSettings.selectedVoice) {
+              voiceService.speakText(aiResponse, {
+                voice: voiceSettings.selectedVoice,
+                rate: voiceSettings.speechRate,
+                pitch: voiceSettings.speechPitch,
+                volume: voiceSettings.volume,
+              });
+            }
+
+            setRecordButtonState('idle');
+            setProcessing(false);
+            resetVoiceState();
+          }, 1000);
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Recording error:', error);
+      setRecordButtonState('error');
+      setError('Failed to record audio. Please try again.');
+      setIsRecording(false);
+      setProcessing(false);
+      resetVoiceState();
+    }
+  };
+
+  const handleTextSend = (text: string) => {
+    if (!currentConversation) return;
+
+    addMessage({
+      role: 'user',
+      content: text,
+    });
+
+    // Simulate AI processing
+    setTimeout(() => {
+      const aiResponse = generateAIResponse(currentMode?.name || 'conversation', text);
+      addMessage({
+        role: 'ai',
+        content: aiResponse,
+      });
+
+      // Speak the AI response if voice is enabled
+      if (permissions.microphone === 'granted' && voiceSettings.selectedVoice) {
+        voiceService.speakText(aiResponse, {
+          voice: voiceSettings.selectedVoice,
+          rate: voiceSettings.speechRate,
+          pitch: voiceSettings.speechPitch,
+          volume: voiceSettings.volume,
+        });
+      }
+    }, 1000);
+  };
+
+  const generateAIResponse = (mode: string, userInput?: string): string => {
+    const responses = {
+      'General Chat': [
+        "That's really interesting! Tell me more about that.",
+        "I can relate to that experience. What did you learn from it?",
+        "That's a fascinating topic. Have you always been interested in that?",
+      ],
+      'Debate Challenge': [
+        "That's a strong argument. However, have you considered the counterpoint that...",
+        "I see your perspective, but what evidence supports that claim?",
+        "Interesting stance. How would you respond to critics who say...",
+      ],
+      'Idea Brainstorm': [
+        "That's a creative idea! How could we build on that concept?",
+        "I love the innovation in that approach. What if we combined it with...",
+        "Brilliant thinking! What would be the first step to implement this?",
+      ],
+      'Interview Practice': [
+        "That's a great example. Can you tell me about a time when you faced a significant challenge?",
+        "I appreciate your honesty. What do you consider your greatest strength?",
+        "Interesting perspective. How do you handle working under pressure?",
+      ],
+      'Presentation Prep': [
+        "Your main points are clear. Try to add more enthusiasm to your delivery.",
+        "Good structure! Consider adding a compelling story to engage your audience.",
+        "Nice flow. Remember to make eye contact and use gestures to emphasize key points.",
+      ],
+      'Language Learning': [
+        "Excellent pronunciation! Let's practice some more complex sentences.",
+        "Good effort! Remember to roll your R's in that word. Try again.",
+        "Perfect! Now let's use that vocabulary in a different context.",
+      ],
+    };
+
+    const modeResponses = responses[mode as keyof typeof responses] || responses['General Chat'];
+    return modeResponses[Math.floor(Math.random() * modeResponses.length)];
   };
 
   const handleRefresh = async () => {
@@ -145,14 +329,115 @@ export default function HomeScreen() {
     { id: 'creativity', name: 'Creative', icon: null },
   ];
 
-  // If a conversation is active, show the conversation interface
-  if (selectedMode && sessionId) {
+  if (showPermissionHandler) {
     return (
-      <SupabaseConversationView
-        mode={selectedMode.id}
-        sessionId={sessionId}
-        onClose={handleEndConversation}
+      <PermissionHandler
+        onPermissionGranted={() => setShowPermissionHandler(false)}
+        onPermissionDenied={() => {
+          setShowPermissionHandler(false);
+          setInputMode('text');
+        }}
       />
+    );
+  }
+
+  if (currentConversation) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <GestureHandler
+          onSwipeUp={() => setTextInputVisible(true)}
+          onSwipeLeft={() => {}}
+          onSwipeRight={() => {}}
+          onDoubleTap={handleVoiceRecord}
+          onPinch={() => {}}
+          onShake={() => {
+            Alert.alert(
+              'Clear Conversation',
+              'Are you sure you want to clear the current conversation?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Clear', style: 'destructive', onPress: endConversation },
+              ]
+            );
+          }}
+        >
+          <LinearGradient
+            colors={isDark ? ['#1E293B', '#0F172A'] : ['#F8FAFC', '#E2E8F0']}
+            style={styles.conversationContainer}
+          >
+            <View style={styles.conversationHeader}>
+              <Text style={[styles.conversationTitle, { color: colors.text }]}>
+                {currentMode?.name}
+              </Text>
+              <TouchableOpacity
+                style={[styles.endButton, { backgroundColor: colors.error }]}
+                onPress={endConversation}
+                accessibilityLabel="End conversation"
+              >
+                <Text style={styles.endButtonText}>End</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.messagesContainer} showsVerticalScrollIndicator={false}>
+              {currentConversation.messages.map((message) => (
+                <View
+                  key={message.id}
+                  style={[
+                    styles.messageBubble,
+                    message.role === 'user' ? styles.userMessage : styles.aiMessage,
+                    {
+                      backgroundColor: message.role === 'user' ? colors.primary : colors.surface,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.messageText,
+                      {
+                        color: message.role === 'user' ? 'white' : colors.text,
+                      },
+                    ]}
+                  >
+                    {message.content}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+
+            <View style={styles.inputArea}>
+              <VoiceRecordButton
+                onPress={handleVoiceRecord}
+                state={recordButtonState}
+                error={error}
+              />
+            </View>
+
+            <FloatingActionButtons
+              onTextInputToggle={() => setTextInputVisible(true)}
+              onVoiceSettings={() => {
+                // Navigate to voice settings
+              }}
+              onModeSwitch={() => {
+                // Show mode selection modal
+              }}
+              onHelp={() => {
+                // Show help modal
+              }}
+            />
+          </LinearGradient>
+        </GestureHandler>
+
+        <TextInputModal
+          visible={isTextInputVisible}
+          onClose={() => setTextInputVisible(false)}
+          onSend={handleTextSend}
+          onVoiceToggle={() => {
+            setTextInputVisible(false);
+            setInputMode('voice');
+          }}
+          placeholder="Type your message..."
+        />
+      </SafeAreaView>
     );
   }
 
@@ -184,10 +469,7 @@ export default function HomeScreen() {
                   Ready to practice?
                 </Text>
                 <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                  {isSupabaseConfigured 
-                    ? 'Choose a conversation mode to get started'
-                    : 'Configuration required to start conversations'
-                  }
+                  Choose a conversation mode to get started
                 </Text>
               </View>
               <TouchableOpacity
@@ -200,10 +482,10 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            {!isSupabaseConfigured && (
+            {permissions.microphone === 'denied' && (
               <View style={[styles.warningBanner, { backgroundColor: colors.warning + '20' }]}>
                 <Text style={[styles.warningText, { color: colors.warning }]}>
-                  Supabase configuration required. Please check your environment variables.
+                  Voice features disabled. Using text-only mode.
                 </Text>
               </View>
             )}
@@ -227,24 +509,11 @@ export default function HomeScreen() {
                 {dailyChallenges.map((challenge) => (
                   <TouchableOpacity
                     key={challenge.id}
-                    style={[
-                      styles.challengeCard, 
-                      { backgroundColor: colors.surface },
-                      !isSupabaseConfigured && styles.challengeCardDisabled
-                    ]}
+                    style={[styles.challengeCard, { backgroundColor: colors.surface }]}
                     onPress={() => {
-                      if (!isSupabaseConfigured) {
-                        Alert.alert(
-                          'Configuration Required',
-                          'Please configure Supabase to start conversations.',
-                          [{ text: 'OK' }]
-                        );
-                        return;
-                      }
                       const mode = conversationModes.find(m => m.id === challenge.modeId);
                       if (mode) handleModeSelect(mode);
                     }}
-                    disabled={!isSupabaseConfigured}
                   >
                     <View style={styles.challengeHeader}>
                       <Calendar size={16} color={colors.warning} />
@@ -357,40 +626,6 @@ export default function HomeScreen() {
               </View>
             </View>
           )}
-
-          {/* Configuration Help */}
-          {!isSupabaseConfigured && (
-            <View style={[styles.helpSection, { backgroundColor: colors.surface }]}>
-              <Text style={[styles.helpTitle, { color: colors.text }]}>
-                Setup Required
-              </Text>
-              <Text style={[styles.helpText, { color: colors.textSecondary }]}>
-                To start conversations, please configure your Supabase settings:
-              </Text>
-              <View style={styles.helpSteps}>
-                <Text style={[styles.helpStep, { color: colors.textSecondary }]}>
-                  1. Set EXPO_PUBLIC_SUPABASE_URL in your .env file
-                </Text>
-                <Text style={[styles.helpStep, { color: colors.textSecondary }]}>
-                  2. Set EXPO_PUBLIC_SUPABASE_ANON_KEY in your .env file
-                </Text>
-                <Text style={[styles.helpStep, { color: colors.textSecondary }]}>
-                  3. Deploy the Claude proxy Edge Function
-                </Text>
-                <Text style={[styles.helpStep, { color: colors.textSecondary }]}>
-                  4. Set CLAUDE_API_KEY in Supabase dashboard
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={[styles.helpButton, { backgroundColor: colors.primary }]}
-                onPress={() => {
-                  router.push('/chat');
-                }}
-              >
-                <Text style={styles.helpButtonText}>Go to Chat Tab for Setup</Text>
-              </TouchableOpacity>
-            </View>
-          )}
         </ScrollView>
       </LinearGradient>
 
@@ -484,9 +719,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
-  challengeCardDisabled: {
-    opacity: 0.5,
-  },
   challengeHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -538,7 +770,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    marginBottom: spacing.xl,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -557,42 +788,52 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.sm,
     fontWeight: typography.weights.medium,
   },
-  helpSection: {
+  conversationContainer: {
+    flex: 1,
     padding: spacing.lg,
-    borderRadius: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
   },
-  helpTitle: {
-    fontSize: typography.sizes.lg,
+  conversationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xl,
+    paddingTop: spacing.md,
+  },
+  conversationTitle: {
+    fontSize: typography.sizes['2xl'],
+    fontWeight: typography.weights.bold,
+  },
+  endButton: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: 20,
+  },
+  endButtonText: {
+    color: 'white',
     fontWeight: typography.weights.semibold,
-    marginBottom: spacing.sm,
   },
-  helpText: {
+  messagesContainer: {
+    flex: 1,
+    marginBottom: spacing.xl,
+  },
+  messageBubble: {
+    padding: spacing.md,
+    borderRadius: 16,
+    marginBottom: spacing.sm,
+    maxWidth: '80%',
+  },
+  userMessage: {
+    alignSelf: 'flex-end',
+  },
+  aiMessage: {
+    alignSelf: 'flex-start',
+  },
+  messageText: {
     fontSize: typography.sizes.base,
     lineHeight: typography.sizes.base * 1.4,
-    marginBottom: spacing.md,
   },
-  helpSteps: {
-    marginBottom: spacing.lg,
-  },
-  helpStep: {
-    fontSize: typography.sizes.sm,
-    lineHeight: typography.sizes.sm * 1.4,
-    marginBottom: spacing.xs,
-  },
-  helpButton: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: 12,
+  inputArea: {
     alignItems: 'center',
-  },
-  helpButtonText: {
-    fontSize: typography.sizes.base,
-    fontWeight: typography.weights.semibold,
-    color: 'white',
+    paddingVertical: spacing.lg,
   },
 });
