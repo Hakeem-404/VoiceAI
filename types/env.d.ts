@@ -5,6 +5,7 @@ declare global {
       EXPO_PUBLIC_SUPABASE_ANON_KEY: string;
       EXPO_PUBLIC_CLAUDE_API_KEY?: string;
       EXPO_PUBLIC_CLAUDE_API_URL?: string;
+      EXPO_PUBLIC_ELEVENLABS_API_KEY?: string;
     }
   }
 }

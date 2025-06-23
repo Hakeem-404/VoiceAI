@@ -30,6 +30,10 @@ import {
   RotateCcw,
   X,
   MessageSquare,
+  Volume2,
+  VolumeX,
+  Play,
+  Pause,
 } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useConversationStore } from '@/src/stores/conversationStore';
@@ -41,6 +45,7 @@ import { conversationModes } from '@/src/constants/conversationModes';
 import { voiceService } from '@/src/services/voiceService';
 import { speechRecognitionService } from '@/services/speechRecognitionService';
 import { supabaseClaudeAPI } from '@/services/supabaseClaudeAPI';
+import { useElevenLabsVoice } from '@/hooks/useElevenLabsVoice';
 import { ModeSelectionCard } from '@/components/ModeSelectionCard';
 import { ModeConfigurationModal } from '@/components/ModeConfigurationModal';
 import { VoiceRecordButton } from '@/components/VoiceRecordButton';
@@ -48,6 +53,8 @@ import { FloatingActionButtons } from '@/components/FloatingActionButtons';
 import { TextInputModal } from '@/components/TextInputModal';
 import { GestureHandler } from '@/components/GestureHandler';
 import { PermissionHandler } from '@/components/PermissionHandler';
+import { VoicePersonalitySelector } from '@/components/VoicePersonalitySelector';
+import { AudioPlayerControls } from '@/components/AudioPlayerControls';
 import { ConversationMode, ModeConfiguration, DailyChallenge, ConversationMessage } from '@/src/types';
 import { spacing, typography } from '@/src/constants/colors';
 import { ConversationContext } from '@/types/api';
@@ -89,6 +96,24 @@ export default function HomeScreen() {
   const { permissions, voiceSettings } = useSettingsStore();
   const { user, analytics } = useUserStore();
 
+  // ElevenLabs voice integration
+  const {
+    isGenerating: isGeneratingVoice,
+    isPlaying: isPlayingVoice,
+    error: voiceError,
+    currentPersonality,
+    generateAndPlaySpeech,
+    stopCurrentPlayback,
+    pauseCurrentPlayback,
+    resumeCurrentPlayback,
+    isConfigured: isElevenLabsConfigured,
+    checkUsageLimits,
+  } = useElevenLabsVoice({
+    conversationMode: currentMode?.id || 'general-chat',
+    autoPlay: true,
+    queueMode: 'immediate'
+  });
+
   const [recordButtonState, setRecordButtonState] = useState<'idle' | 'recording' | 'processing' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [showPermissionHandler, setShowPermissionHandler] = useState(true);
@@ -104,6 +129,9 @@ export default function HomeScreen() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcriptionText, setTranscriptionText] = useState('');
   const [speechRecognitionSupported, setSpeechRecognitionSupported] = useState(false);
+  const [showVoicePersonalitySelector, setShowVoicePersonalitySelector] = useState(false);
+  const [showAudioPlayerControls, setShowAudioPlayerControls] = useState(false);
+  const [voicePlaybackEnabled, setVoicePlaybackEnabled] = useState(true);
 
   // Mock user preferences for favorites and recent modes
   const [favoriteMode, setFavoriteMode] = useState<string>('general-chat');
@@ -122,7 +150,15 @@ export default function HomeScreen() {
     // Check speech recognition support
     setSpeechRecognitionSupported(speechRecognitionService.isSupported());
     console.log('Speech recognition supported:', speechRecognitionService.isSupported());
-  }, [permissions.microphone]);
+
+    // Check ElevenLabs usage limits
+    if (isElevenLabsConfigured) {
+      const usageLimits = checkUsageLimits();
+      if (usageLimits.isNearLimit) {
+        console.warn('Approaching ElevenLabs usage limit:', usageLimits.usagePercentage + '%');
+      }
+    }
+  }, [permissions.microphone, isElevenLabsConfigured]);
 
   const loadDailyChallenges = () => {
     // Mock daily challenges
@@ -282,14 +318,17 @@ export default function HomeScreen() {
         setConversationMessages(prev => [...prev, assistantMessage]);
         addMessage(assistantMessage);
 
-        // Speak the AI response if voice is enabled
-        if (permissions.microphone === 'granted' && voiceSettings.selectedVoice) {
-          voiceService.speakText(assistantMessage.content, {
-            voice: voiceSettings.selectedVoice,
-            rate: voiceSettings.speechRate,
-            pitch: voiceSettings.speechPitch,
-            volume: voiceSettings.volume,
-          });
+        // Generate and play voice response if enabled and configured
+        if (voicePlaybackEnabled && isElevenLabsConfigured) {
+          try {
+            await generateAndPlaySpeech(
+              assistantMessage.content,
+              `${currentMode.name} Response`
+            );
+          } catch (voiceError) {
+            console.warn('Voice generation failed:', voiceError);
+            // Continue without voice - don't break the conversation flow
+          }
         }
 
         // Generate new quick replies based on the response
@@ -490,6 +529,17 @@ export default function HomeScreen() {
     await sendMessageToClaude(reply);
   };
 
+  const handleVoicePlaybackToggle = async () => {
+    if (isPlayingVoice) {
+      if (voicePlaybackEnabled) {
+        await pauseCurrentPlayback();
+      } else {
+        await resumeCurrentPlayback();
+      }
+    }
+    setVoicePlaybackEnabled(!voicePlaybackEnabled);
+  };
+
   const handleRefresh = async () => {
     setRefreshing(true);
     // Simulate loading new challenges and data
@@ -545,6 +595,7 @@ export default function HomeScreen() {
                   endConversation();
                   setConversationMessages([]);
                   setQuickReplies([]);
+                  stopCurrentPlayback();
                 }},
               ]
             );
@@ -555,20 +606,59 @@ export default function HomeScreen() {
             style={styles.conversationContainer}
           >
             <View style={styles.conversationHeader}>
-              <Text style={[styles.conversationTitle, { color: colors.text }]}>
-                {currentMode?.name}
-              </Text>
-              <TouchableOpacity
-                style={[styles.endButton, { backgroundColor: colors.error }]}
-                onPress={() => {
-                  endConversation();
-                  setConversationMessages([]);
-                  setQuickReplies([]);
-                }}
-                accessibilityLabel="End conversation"
-              >
-                <Text style={styles.endButtonText}>End</Text>
-              </TouchableOpacity>
+              <View style={styles.conversationTitleContainer}>
+                <Text style={[styles.conversationTitle, { color: colors.text }]}>
+                  {currentMode?.name}
+                </Text>
+                {currentPersonality && (
+                  <Text style={[styles.voicePersonalityText, { color: colors.textSecondary }]}>
+                    Voice: {currentPersonality.name}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.conversationActions}>
+                <TouchableOpacity
+                  style={[styles.voiceToggleButton, { backgroundColor: colors.surface }]}
+                  onPress={handleVoicePlaybackToggle}
+                >
+                  {voicePlaybackEnabled ? (
+                    <Volume2 size={20} color={isPlayingVoice ? colors.primary : colors.textSecondary} />
+                  ) : (
+                    <VolumeX size={20} color={colors.textSecondary} />
+                  )}
+                </TouchableOpacity>
+                
+                {isElevenLabsConfigured && (
+                  <TouchableOpacity
+                    style={[styles.voiceSettingsButton, { backgroundColor: colors.surface }]}
+                    onPress={() => setShowVoicePersonalitySelector(true)}
+                  >
+                    <Settings size={20} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                )}
+
+                {isPlayingVoice && (
+                  <TouchableOpacity
+                    style={[styles.audioControlButton, { backgroundColor: colors.surface }]}
+                    onPress={() => setShowAudioPlayerControls(true)}
+                  >
+                    <Play size={20} color={colors.primary} />
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  style={[styles.endButton, { backgroundColor: colors.error }]}
+                  onPress={() => {
+                    endConversation();
+                    setConversationMessages([]);
+                    setQuickReplies([]);
+                    stopCurrentPlayback();
+                  }}
+                  accessibilityLabel="End conversation"
+                >
+                  <Text style={styles.endButtonText}>End</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Configuration Warning */}
@@ -580,11 +670,29 @@ export default function HomeScreen() {
               </View>
             )}
 
+            {/* ElevenLabs Status */}
+            {!isElevenLabsConfigured && (
+              <View style={[styles.warningBanner, { backgroundColor: colors.warning + '20' }]}>
+                <Text style={[styles.warningText, { color: colors.warning }]}>
+                  ElevenLabs not configured. Voice responses disabled.
+                </Text>
+              </View>
+            )}
+
             {/* Speech Recognition Status */}
             {!speechRecognitionSupported && (
               <View style={[styles.warningBanner, { backgroundColor: colors.warning + '20' }]}>
                 <Text style={[styles.warningText, { color: colors.warning }]}>
                   Speech recognition not supported in this browser. Voice recording available but no transcription.
+                </Text>
+              </View>
+            )}
+
+            {/* Voice Generation Status */}
+            {isGeneratingVoice && (
+              <View style={[styles.statusBanner, { backgroundColor: colors.primary + '20' }]}>
+                <Text style={[styles.statusText, { color: colors.primary }]}>
+                  Generating voice response...
                 </Text>
               </View>
             )}
@@ -640,13 +748,16 @@ export default function HomeScreen() {
                 </View>
               ))}
 
-              {isLoadingResponse && (
+              {(isLoadingResponse || isGeneratingVoice) && (
                 <View style={[styles.messageBubble, styles.aiMessage, { backgroundColor: colors.surface }]}>
                   <View style={styles.typingIndicator}>
                     <View style={[styles.typingDot, { backgroundColor: colors.primary }]} />
                     <View style={[styles.typingDot, { backgroundColor: colors.primary }]} />
                     <View style={[styles.typingDot, { backgroundColor: colors.primary }]} />
                   </View>
+                  <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+                    {isGeneratingVoice ? 'Generating voice...' : 'Thinking...'}
+                  </Text>
                 </View>
               )}
             </ScrollView>
@@ -699,9 +810,7 @@ export default function HomeScreen() {
 
             <FloatingActionButtons
               onTextInputToggle={() => setTextInputVisible(true)}
-              onVoiceSettings={() => {
-                // Navigate to voice settings
-              }}
+              onVoiceSettings={() => setShowVoicePersonalitySelector(true)}
               onModeSwitch={() => {
                 // Show mode selection modal
               }}
@@ -721,6 +830,20 @@ export default function HomeScreen() {
             setInputMode('voice');
           }}
           placeholder="Type your message..."
+        />
+
+        <VoicePersonalitySelector
+          visible={showVoicePersonalitySelector}
+          onClose={() => setShowVoicePersonalitySelector(false)}
+          selectedMode={currentMode?.id || 'general-chat'}
+          onPersonalityChange={(personality) => {
+            console.log('Voice personality changed:', personality.name);
+          }}
+        />
+
+        <AudioPlayerControls
+          visible={showAudioPlayerControls}
+          onClose={() => setShowAudioPlayerControls(false)}
         />
       </SafeAreaView>
     );
@@ -772,6 +895,15 @@ export default function HomeScreen() {
               <View style={[styles.warningBanner, { backgroundColor: colors.warning + '20' }]}>
                 <Text style={[styles.warningText, { color: colors.warning }]}>
                   Supabase not configured. Please check your environment variables to use AI features.
+                </Text>
+              </View>
+            )}
+
+            {/* ElevenLabs Status */}
+            {!isElevenLabsConfigured && (
+              <View style={[styles.warningBanner, { backgroundColor: colors.warning + '20' }]}>
+                <Text style={[styles.warningText, { color: colors.warning }]}>
+                  ElevenLabs not configured. Voice responses will be disabled.
                 </Text>
               </View>
             )}
@@ -997,6 +1129,17 @@ const styles = StyleSheet.create({
     fontWeight: typography.weights.medium,
     textAlign: 'center',
   },
+  statusBanner: {
+    padding: spacing.md,
+    borderRadius: 8,
+    marginBottom: spacing.md,
+  },
+  statusText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.medium,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
   transcriptionBanner: {
     padding: spacing.md,
     borderRadius: 8,
@@ -1118,9 +1261,42 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
     paddingTop: spacing.md,
   },
+  conversationTitleContainer: {
+    flex: 1,
+  },
   conversationTitle: {
     fontSize: typography.sizes['2xl'],
     fontWeight: typography.weights.bold,
+  },
+  voicePersonalityText: {
+    fontSize: typography.sizes.sm,
+    marginTop: spacing.xs,
+  },
+  conversationActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  voiceToggleButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voiceSettingsButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  audioControlButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   endButton: {
     paddingHorizontal: spacing.lg,
@@ -1168,6 +1344,11 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     opacity: 0.6,
   },
+  loadingText: {
+    fontSize: typography.sizes.sm,
+    fontStyle: 'italic',
+    marginTop: spacing.xs,
+  },
   quickRepliesContainer: {
     marginBottom: spacing.md,
   },
@@ -1191,11 +1372,5 @@ const styles = StyleSheet.create({
   inputArea: {
     alignItems: 'center',
     paddingVertical: spacing.lg,
-  },
-  statusText: {
-    fontSize: typography.sizes.sm,
-    fontWeight: typography.weights.medium,
-    marginTop: spacing.sm,
-    textAlign: 'center',
   },
 });
