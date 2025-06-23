@@ -39,6 +39,7 @@ import { useSettingsStore } from '@/src/stores/settingsStore';
 import { useUserStore } from '@/src/stores/userStore';
 import { conversationModes } from '@/src/constants/conversationModes';
 import { voiceService } from '@/src/services/voiceService';
+import { speechRecognitionService } from '@/services/speechRecognitionService';
 import { supabaseClaudeAPI } from '@/services/supabaseClaudeAPI';
 import { ModeSelectionCard } from '@/components/ModeSelectionCard';
 import { ModeConfigurationModal } from '@/components/ModeConfigurationModal';
@@ -100,6 +101,9 @@ export default function HomeScreen() {
   const [conversationMessages, setConversationMessages] = useState<ConversationMessage[]>([]);
   const [isLoadingResponse, setIsLoadingResponse] = useState(false);
   const [quickReplies, setQuickReplies] = useState<string[]>([]);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcriptionText, setTranscriptionText] = useState('');
+  const [speechRecognitionSupported, setSpeechRecognitionSupported] = useState(false);
 
   // Mock user preferences for favorites and recent modes
   const [favoriteMode, setFavoriteMode] = useState<string>('general-chat');
@@ -114,6 +118,10 @@ export default function HomeScreen() {
     // Check Supabase configuration
     const status = supabaseClaudeAPI.getConfigStatus();
     setIsSupabaseConfigured(status.configured);
+
+    // Check speech recognition support
+    setSpeechRecognitionSupported(speechRecognitionService.isSupported());
+    console.log('Speech recognition supported:', speechRecognitionService.isSupported());
   }, [permissions.microphone]);
 
   const loadDailyChallenges = () => {
@@ -311,11 +319,63 @@ export default function HomeScreen() {
 
     try {
       if (!isRecording) {
-        // Start recording
+        // Start recording and speech recognition
         setRecordButtonState('recording');
         setIsRecording(true);
         setError(null);
+        setTranscriptionText('');
 
+        // Check if speech recognition is supported
+        if (!speechRecognitionService.isSupported()) {
+          console.warn('Speech recognition not supported, using audio recording only');
+          // Fall back to audio recording without transcription
+          await startAudioRecordingOnly();
+          return;
+        }
+
+        // Request speech recognition permissions
+        const hasPermission = await speechRecognitionService.requestPermissions();
+        if (!hasPermission) {
+          console.warn('Speech recognition permission denied, using audio recording only');
+          await startAudioRecordingOnly();
+          return;
+        }
+
+        // Start speech recognition
+        setIsTranscribing(true);
+        speechRecognitionService.clearTranscript();
+        
+        const recognitionStarted = await speechRecognitionService.startListening(
+          (result) => {
+            console.log('Speech recognition result:', result);
+            setTranscriptionText(result.transcript);
+            
+            // Don't auto-stop on final result, let user control when to stop
+            if (result.isFinal) {
+              console.log('Final speech result received:', result.transcript);
+            }
+          },
+          (error) => {
+            console.error('Speech recognition error:', error);
+            setError(`Speech recognition failed: ${error}`);
+            setRecordButtonState('error');
+            setIsRecording(false);
+            setIsTranscribing(false);
+            resetVoiceState();
+          },
+          {
+            language: 'en-US',
+            continuous: true,
+            interimResults: true,
+            timeout: 30000 // 30 second timeout
+          }
+        );
+
+        if (!recognitionStarted) {
+          throw new Error('Failed to start speech recognition');
+        }
+
+        // Also start audio recording for visual feedback
         if (permissions.microphone === 'granted') {
           const recording = await voiceService.startRecording(
             (level) => setAudioLevel(level),
@@ -336,43 +396,85 @@ export default function HomeScreen() {
           if (recording) {
             setRecording(recording);
           }
-        } else {
-          // Mock recording for demo
-          setTimeout(() => {
-            if (isRecording) {
-              handleVoiceRecord();
-            }
-          }, 3000);
         }
+
       } else {
-        // Stop recording
+        // Stop recording and speech recognition
         setRecordButtonState('processing');
         setIsRecording(false);
-        setProcessing(true);
+        setIsTranscribing(false);
 
-        let audioUri = null;
+        // Stop speech recognition and get final transcript
+        speechRecognitionService.stopListening();
+        
+        // Get the final transcript
+        const finalTranscript = speechRecognitionService.getFinalTranscript() || 
+                               speechRecognitionService.getCurrentTranscript() ||
+                               transcriptionText.trim();
+
+        // Stop audio recording
         if (permissions.microphone === 'granted') {
-          audioUri = await voiceService.stopRecording();
+          await voiceService.stopRecording();
         }
 
-        // For now, simulate transcription with a sample message
-        // In a real app, you would transcribe the audio here
-        const transcribedText = "Hello, I'd like to practice conversation";
-        
-        // Send transcribed text to Claude
-        await sendMessageToClaude(transcribedText);
+        console.log('Final transcript captured:', finalTranscript);
+
+        if (finalTranscript) {
+          console.log('Using transcribed text:', finalTranscript);
+          await sendMessageToClaude(finalTranscript);
+        } else {
+          // No transcription was captured
+          console.warn('No transcription captured');
+          setError('No speech was detected. Please try speaking more clearly or use text input.');
+        }
 
         setRecordButtonState('idle');
         setProcessing(false);
         resetVoiceState();
+        setTranscriptionText('');
       }
     } catch (error) {
-      console.error('Recording error:', error);
+      console.error('Voice recording error:', error);
       setRecordButtonState('error');
-      setError('Failed to record audio. Please try again.');
+      setError(error instanceof Error ? error.message : 'Failed to process voice input');
       setIsRecording(false);
+      setIsTranscribing(false);
       setProcessing(false);
       resetVoiceState();
+      setTranscriptionText('');
+      
+      // Stop speech recognition on error
+      speechRecognitionService.stopListening();
+    }
+  };
+
+  const startAudioRecordingOnly = async () => {
+    // Fallback for when speech recognition is not available
+    if (permissions.microphone === 'granted') {
+      const recording = await voiceService.startRecording(
+        (level) => setAudioLevel(level),
+        (detected) => {
+          if (voiceSettings.enableVoiceActivityDetection) {
+            if (!detected && voiceSettings.autoStopAfterSilence) {
+              setTimeout(() => {
+                if (isRecording) {
+                  handleVoiceRecord();
+                }
+              }, voiceSettings.silenceThreshold);
+            }
+          }
+        }
+      );
+      if (recording) {
+        setRecording(recording);
+      }
+    } else {
+      // Mock recording for demo when no microphone access
+      setTimeout(() => {
+        if (isRecording) {
+          handleVoiceRecord();
+        }
+      }, 3000);
     }
   };
 
@@ -478,6 +580,29 @@ export default function HomeScreen() {
               </View>
             )}
 
+            {/* Speech Recognition Status */}
+            {!speechRecognitionSupported && (
+              <View style={[styles.warningBanner, { backgroundColor: colors.warning + '20' }]}>
+                <Text style={[styles.warningText, { color: colors.warning }]}>
+                  Speech recognition not supported in this browser. Voice recording available but no transcription.
+                </Text>
+              </View>
+            )}
+
+            {/* Transcription Display */}
+            {isTranscribing && (
+              <View style={[styles.transcriptionBanner, { backgroundColor: colors.primary + '20' }]}>
+                <Text style={[styles.transcriptionLabel, { color: colors.primary }]}>
+                  {transcriptionText ? 'Transcribing...' : 'Listening for speech...'}
+                </Text>
+                {transcriptionText && (
+                  <Text style={[styles.transcriptionText, { color: colors.text }]}>
+                    "{transcriptionText}"
+                  </Text>
+                )}
+              </View>
+            )}
+
             <ScrollView style={styles.messagesContainer} showsVerticalScrollIndicator={false}>
               {conversationMessages.map((message) => (
                 <View
@@ -556,6 +681,20 @@ export default function HomeScreen() {
                 error={error}
                 disabled={!isSupabaseConfigured}
               />
+              
+              {/* Speech Recognition Status */}
+              {isTranscribing && (
+                <Text style={[styles.statusText, { color: colors.primary }]}>
+                  {transcriptionText ? 'Processing speech...' : 'Listening for speech...'}
+                </Text>
+              )}
+
+              {/* Speech Recognition Support Info */}
+              {!speechRecognitionSupported && (
+                <Text style={[styles.statusText, { color: colors.textSecondary }]}>
+                  Voice recording only (no transcription available)
+                </Text>
+              )}
             </View>
 
             <FloatingActionButtons
@@ -633,6 +772,15 @@ export default function HomeScreen() {
               <View style={[styles.warningBanner, { backgroundColor: colors.warning + '20' }]}>
                 <Text style={[styles.warningText, { color: colors.warning }]}>
                   Supabase not configured. Please check your environment variables to use AI features.
+                </Text>
+              </View>
+            )}
+
+            {/* Speech Recognition Support Info */}
+            {!speechRecognitionSupported && (
+              <View style={[styles.warningBanner, { backgroundColor: colors.warning + '20' }]}>
+                <Text style={[styles.warningText, { color: colors.warning }]}>
+                  Speech recognition not supported in this browser. Voice recording available but no transcription.
                 </Text>
               </View>
             )}
@@ -842,11 +990,26 @@ const styles = StyleSheet.create({
   warningBanner: {
     padding: spacing.md,
     borderRadius: 8,
+    marginBottom: spacing.sm,
   },
   warningText: {
     fontSize: typography.sizes.sm,
     fontWeight: typography.weights.medium,
     textAlign: 'center',
+  },
+  transcriptionBanner: {
+    padding: spacing.md,
+    borderRadius: 8,
+    marginBottom: spacing.md,
+  },
+  transcriptionLabel: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.semibold,
+    marginBottom: spacing.xs,
+  },
+  transcriptionText: {
+    fontSize: typography.sizes.base,
+    fontStyle: 'italic',
   },
   challengesSection: {
     marginBottom: spacing.xl,
@@ -1028,5 +1191,11 @@ const styles = StyleSheet.create({
   inputArea: {
     alignItems: 'center',
     paddingVertical: spacing.lg,
+  },
+  statusText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.medium,
+    marginTop: spacing.sm,
+    textAlign: 'center',
   },
 });
