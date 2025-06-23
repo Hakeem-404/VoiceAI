@@ -9,6 +9,8 @@ import {
   Platform,
   Dimensions,
   RefreshControl,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,6 +25,14 @@ import {
   Trophy,
   Target,
   Calendar,
+  Send,
+  RotateCcw,
+  Copy,
+  Wifi,
+  WifiOff,
+  X,
+  Mic,
+  MessageSquare,
 } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useConversationStore } from '@/src/stores/conversationStore';
@@ -41,6 +51,8 @@ import { GestureHandler } from '@/components/GestureHandler';
 import { PermissionHandler } from '@/components/PermissionHandler';
 import { ConversationMode, ModeConfiguration, DailyChallenge } from '@/src/types';
 import { spacing, typography } from '@/src/constants/colors';
+import { supabaseClaudeAPI } from '@/services/supabaseClaudeAPI';
+import { ConversationMessage, ConversationContext } from '@/types/api';
 
 const { width } = Dimensions.get('window');
 
@@ -87,6 +99,9 @@ export default function HomeScreen() {
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [dailyChallenges, setDailyChallenges] = useState<DailyChallenge[]>([]);
+  const [isOnline, setIsOnline] = useState(true);
+  const [isSupabaseConfigured, setIsSupabaseConfigured] = useState(false);
+  const [configStatus, setConfigStatus] = useState({ hasUrl: false, hasKey: false });
 
   // Mock user preferences for favorites and recent modes
   const [favoriteMode, setFavoriteMode] = useState<string>('general-chat');
@@ -97,7 +112,34 @@ export default function HomeScreen() {
       setShowPermissionHandler(false);
     }
     loadDailyChallenges();
+    
+    // Check Supabase configuration
+    const status = supabaseClaudeAPI.getConfigStatus();
+    setIsSupabaseConfigured(status.configured);
+    setConfigStatus(status);
   }, [permissions.microphone]);
+
+  // Network status monitoring
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      import('@react-native-community/netinfo').then(({ default: NetInfo }) => {
+        const unsubscribe = NetInfo.addEventListener(state => {
+          setIsOnline(state.isConnected ?? false);
+        });
+        return unsubscribe;
+      }).catch(() => {
+        setIsOnline(true);
+      });
+    } else {
+      const updateOnlineStatus = () => setIsOnline(navigator.onLine);
+      window.addEventListener('online', updateOnlineStatus);
+      window.addEventListener('offline', updateOnlineStatus);
+      return () => {
+        window.removeEventListener('online', updateOnlineStatus);
+        window.removeEventListener('offline', updateOnlineStatus);
+      };
+    }
+  }, []);
 
   const loadDailyChallenges = () => {
     // Mock daily challenges
@@ -127,6 +169,18 @@ export default function HomeScreen() {
   };
 
   const handleModeSelect = (mode: ConversationMode) => {
+    if (!isSupabaseConfigured) {
+      Alert.alert(
+        'Configuration Required',
+        'Supabase is not properly configured. Please check your environment variables:\n\n' +
+        (!configStatus.hasUrl ? '• EXPO_PUBLIC_SUPABASE_URL\n' : '') +
+        (!configStatus.hasKey ? '• EXPO_PUBLIC_SUPABASE_ANON_KEY\n' : '') +
+        '\nAlso ensure your Claude API key is set in the Supabase Edge Function.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     if (permissions.microphone === 'denied' && inputMode === 'voice') {
       setInputMode('text');
     }
@@ -148,8 +202,36 @@ export default function HomeScreen() {
     setError(null);
   };
 
+  const createConversationContext = (): ConversationContext => {
+    if (!currentConversation || !currentMode) {
+      throw new Error('No active conversation');
+    }
+
+    return {
+      messages: currentConversation.messages.map(msg => ({
+        id: msg.id,
+        role: msg.role as 'user' | 'assistant' | 'system',
+        content: msg.content,
+        timestamp: msg.timestamp
+      })),
+      mode: currentMode.id,
+      sessionId: currentConversation.id,
+      metadata: {
+        startTime: currentConversation.createdAt,
+        lastActivity: currentConversation.updatedAt,
+        messageCount: currentConversation.messages.length,
+        totalTokens: 0
+      }
+    };
+  };
+
   const handleVoiceRecord = async () => {
-    if (!currentConversation) return;
+    if (!currentConversation || !isSupabaseConfigured) {
+      if (!isSupabaseConfigured) {
+        setError('Supabase not configured. Please check your settings.');
+      }
+      return;
+    }
 
     try {
       if (!isRecording) {
@@ -197,37 +279,57 @@ export default function HomeScreen() {
           audioUri = await voiceService.stopRecording();
         }
 
-        // Simulate AI processing
-        setTimeout(() => {
-          addMessage({
-            role: 'user',
-            content: 'Sample recorded message',
-            audioUrl: audioUri || undefined,
-          });
+        // For now, simulate transcription with a sample message
+        // In a real app, you'd transcribe the audio first
+        const transcribedText = 'Sample recorded message';
+        
+        // Add user message
+        addMessage({
+          role: 'user',
+          content: transcribedText,
+          audioUrl: audioUri || undefined,
+        });
 
-          // Add AI response
-          setTimeout(() => {
-            const aiResponse = generateAIResponse(currentMode?.name || 'conversation');
+        // Send to Claude API via Supabase
+        try {
+          const context = createConversationContext();
+          const response = await supabaseClaudeAPI.sendMessage(transcribedText, context);
+          
+          if (response.error) {
+            throw new Error(response.error);
+          }
+
+          if (response.data) {
+            // Add AI response
             addMessage({
               role: 'ai',
-              content: aiResponse,
+              content: response.data.content,
             });
 
             // Speak the AI response
             if (voiceSettings.selectedVoice) {
-              voiceService.speakText(aiResponse, {
+              voiceService.speakText(response.data.content, {
                 voice: voiceSettings.selectedVoice,
                 rate: voiceSettings.speechRate,
                 pitch: voiceSettings.speechPitch,
                 volume: voiceSettings.volume,
               });
             }
+          }
+        } catch (apiError) {
+          console.error('Claude API error:', apiError);
+          setError(apiError instanceof Error ? apiError.message : 'Failed to get AI response');
+          
+          // Add fallback response
+          addMessage({
+            role: 'ai',
+            content: 'I apologize, but I encountered an error processing your message. Please try again.',
+          });
+        }
 
-            setRecordButtonState('idle');
-            setProcessing(false);
-            resetVoiceState();
-          }, 1000);
-        }, 2000);
+        setRecordButtonState('idle');
+        setProcessing(false);
+        resetVoiceState();
       }
     } catch (error) {
       console.error('Recording error:', error);
@@ -239,70 +341,60 @@ export default function HomeScreen() {
     }
   };
 
-  const handleTextSend = (text: string) => {
-    if (!currentConversation) return;
+  const handleTextSend = async (text: string) => {
+    if (!currentConversation || !isSupabaseConfigured) {
+      if (!isSupabaseConfigured) {
+        setError('Supabase not configured. Please check your settings.');
+      }
+      return;
+    }
 
+    // Add user message
     addMessage({
       role: 'user',
       content: text,
     });
 
-    // Simulate AI processing
-    setTimeout(() => {
-      const aiResponse = generateAIResponse(currentMode?.name || 'conversation', text);
+    setProcessing(true);
+
+    try {
+      // Send to Claude API via Supabase
+      const context = createConversationContext();
+      const response = await supabaseClaudeAPI.sendMessage(text, context);
+      
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      if (response.data) {
+        // Add AI response
+        addMessage({
+          role: 'ai',
+          content: response.data.content,
+        });
+
+        // Speak the AI response if voice is enabled
+        if (permissions.microphone === 'granted' && voiceSettings.selectedVoice) {
+          voiceService.speakText(response.data.content, {
+            voice: voiceSettings.selectedVoice,
+            rate: voiceSettings.speechRate,
+            pitch: voiceSettings.speechPitch,
+            volume: voiceSettings.volume,
+          });
+        }
+      }
+    } catch (apiError) {
+      console.error('Claude API error:', apiError);
+      setError(apiError instanceof Error ? apiError.message : 'Failed to get AI response');
+      
+      // Add fallback response
       addMessage({
         role: 'ai',
-        content: aiResponse,
+        content: 'I apologize, but I encountered an error processing your message. Please try again.',
       });
-
-      // Speak the AI response if voice is enabled
-      if (permissions.microphone === 'granted' && voiceSettings.selectedVoice) {
-        voiceService.speakText(aiResponse, {
-          voice: voiceSettings.selectedVoice,
-          rate: voiceSettings.speechRate,
-          pitch: voiceSettings.speechPitch,
-          volume: voiceSettings.volume,
-        });
-      }
-    }, 1000);
-  };
-
-  const generateAIResponse = (mode: string, userInput?: string): string => {
-    const responses = {
-      'General Chat': [
-        "That's really interesting! Tell me more about that.",
-        "I can relate to that experience. What did you learn from it?",
-        "That's a fascinating topic. Have you always been interested in that?",
-      ],
-      'Debate Challenge': [
-        "That's a strong argument. However, have you considered the counterpoint that...",
-        "I see your perspective, but what evidence supports that claim?",
-        "Interesting stance. How would you respond to critics who say...",
-      ],
-      'Idea Brainstorm': [
-        "That's a creative idea! How could we build on that concept?",
-        "I love the innovation in that approach. What if we combined it with...",
-        "Brilliant thinking! What would be the first step to implement this?",
-      ],
-      'Interview Practice': [
-        "That's a great example. Can you tell me about a time when you faced a significant challenge?",
-        "I appreciate your honesty. What do you consider your greatest strength?",
-        "Interesting perspective. How do you handle working under pressure?",
-      ],
-      'Presentation Prep': [
-        "Your main points are clear. Try to add more enthusiasm to your delivery.",
-        "Good structure! Consider adding a compelling story to engage your audience.",
-        "Nice flow. Remember to make eye contact and use gestures to emphasize key points.",
-      ],
-      'Language Learning': [
-        "Excellent pronunciation! Let's practice some more complex sentences.",
-        "Good effort! Remember to roll your R's in that word. Try again.",
-        "Perfect! Now let's use that vocabulary in a different context.",
-      ],
-    };
-
-    const modeResponses = responses[mode as keyof typeof responses] || responses['General Chat'];
-    return modeResponses[Math.floor(Math.random() * modeResponses.length)];
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const handleRefresh = async () => {
@@ -310,7 +402,22 @@ export default function HomeScreen() {
     // Simulate loading new challenges and data
     await new Promise(resolve => setTimeout(resolve, 1000));
     loadDailyChallenges();
+    
+    // Re-check Supabase configuration
+    const status = supabaseClaudeAPI.getConfigStatus();
+    setIsSupabaseConfigured(status.configured);
+    setConfigStatus(status);
+    
     setRefreshing(false);
+  };
+
+  const copyMessage = async (content: string) => {
+    if (Platform.OS === 'web') {
+      await navigator.clipboard.writeText(content);
+    } else {
+      const { setStringAsync } = await import('expo-clipboard');
+      await setStringAsync(content);
+    }
   };
 
   const filteredModes = conversationModes.filter(mode => {
@@ -365,21 +472,45 @@ export default function HomeScreen() {
             colors={isDark ? ['#1E293B', '#0F172A'] : ['#F8FAFC', '#E2E8F0']}
             style={styles.conversationContainer}
           >
+            {/* Header */}
             <View style={styles.conversationHeader}>
-              <Text style={[styles.conversationTitle, { color: colors.text }]}>
-                {currentMode?.name}
-              </Text>
+              <View style={styles.conversationTitleContainer}>
+                <Text style={[styles.conversationTitle, { color: colors.text }]}>
+                  {currentMode?.name}
+                </Text>
+                <View style={[styles.networkStatus, !isOnline && styles.networkStatusOffline]}>
+                  {isOnline ? (
+                    <Wifi size={12} color="#10B981" />
+                  ) : (
+                    <WifiOff size={12} color="#EF4444" />
+                  )}
+                  <Text style={[styles.networkStatusText, !isOnline && styles.networkStatusTextOffline]}>
+                    {isOnline ? 'Connected' : 'Offline'}
+                  </Text>
+                </View>
+              </View>
               <TouchableOpacity
                 style={[styles.endButton, { backgroundColor: colors.error }]}
                 onPress={endConversation}
                 accessibilityLabel="End conversation"
               >
+                <X size={16} color="white" />
                 <Text style={styles.endButtonText}>End</Text>
               </TouchableOpacity>
             </View>
 
+            {/* Configuration Warning */}
+            {!isSupabaseConfigured && (
+              <View style={styles.configWarning}>
+                <Text style={[styles.configWarningText, { color: colors.warning }]}>
+                  ⚠️ Supabase not configured - using fallback responses
+                </Text>
+              </View>
+            )}
+
+            {/* Messages */}
             <ScrollView style={styles.messagesContainer} showsVerticalScrollIndicator={false}>
-              {currentConversation.messages.map((message) => (
+              {currentConversation.messages.map((message, index) => (
                 <View
                   key={message.id}
                   style={[
@@ -400,16 +531,80 @@ export default function HomeScreen() {
                   >
                     {message.content}
                   </Text>
+                  
+                  <View style={styles.messageFooter}>
+                    <Text
+                      style={[
+                        styles.messageTime,
+                        {
+                          color: message.role === 'user' 
+                            ? 'rgba(255,255,255,0.7)' 
+                            : colors.textTertiary,
+                        },
+                      ]}
+                    >
+                      {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                    
+                    {message.role === 'ai' && (
+                      <TouchableOpacity
+                        style={styles.copyButton}
+                        onPress={() => copyMessage(message.content)}
+                      >
+                        <Copy size={12} color={colors.textTertiary} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
               ))}
+              
+              {isProcessing && (
+                <View style={[styles.messageBubble, styles.aiMessage, { backgroundColor: colors.surface }]}>
+                  <View style={styles.typingIndicator}>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                    <Text style={[styles.typingText, { color: colors.textSecondary }]}>
+                      AI is thinking...
+                    </Text>
+                  </View>
+                </View>
+              )}
             </ScrollView>
 
+            {/* Input Area */}
             <View style={styles.inputArea}>
-              <VoiceRecordButton
-                onPress={handleVoiceRecord}
-                state={recordButtonState}
-                error={error}
-              />
+              <View style={styles.inputControls}>
+                <TouchableOpacity
+                  style={[styles.inputButton, { backgroundColor: colors.surface }]}
+                  onPress={() => setTextInputVisible(true)}
+                  disabled={!isSupabaseConfigured}
+                >
+                  <MessageSquare size={20} color={isSupabaseConfigured ? colors.primary : colors.textTertiary} />
+                </TouchableOpacity>
+
+                <VoiceRecordButton
+                  onPress={handleVoiceRecord}
+                  state={recordButtonState}
+                  error={error}
+                  disabled={!isSupabaseConfigured}
+                />
+
+                <TouchableOpacity
+                  style={[styles.inputButton, { backgroundColor: colors.surface }]}
+                  onPress={() => {
+                    // Show conversation options
+                  }}
+                >
+                  <RotateCcw size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              {error && (
+                <View style={styles.errorContainer}>
+                  <Text style={[styles.errorText, { color: colors.error }]}>
+                    {error}
+                  </Text>
+                </View>
+              )}
             </View>
 
             <FloatingActionButtons
@@ -482,6 +677,15 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
+            {/* Configuration Status */}
+            {!isSupabaseConfigured && (
+              <View style={[styles.warningBanner, { backgroundColor: colors.warning + '20' }]}>
+                <Text style={[styles.warningText, { color: colors.warning }]}>
+                  ⚠️ Supabase not configured. Please check your environment variables.
+                </Text>
+              </View>
+            )}
+
             {permissions.microphone === 'denied' && (
               <View style={[styles.warningBanner, { backgroundColor: colors.warning + '20' }]}>
                 <Text style={[styles.warningText, { color: colors.warning }]}>
@@ -514,6 +718,7 @@ export default function HomeScreen() {
                       const mode = conversationModes.find(m => m.id === challenge.modeId);
                       if (mode) handleModeSelect(mode);
                     }}
+                    disabled={!isSupabaseConfigured}
                   >
                     <View style={styles.challengeHeader}>
                       <Calendar size={16} color={colors.warning} />
@@ -686,6 +891,7 @@ const styles = StyleSheet.create({
   warningBanner: {
     padding: spacing.md,
     borderRadius: 8,
+    marginTop: spacing.md,
   },
   warningText: {
     fontSize: typography.sizes.sm,
@@ -796,21 +1002,53 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
     paddingTop: spacing.md,
+  },
+  conversationTitleContainer: {
+    flex: 1,
   },
   conversationTitle: {
     fontSize: typography.sizes['2xl'],
     fontWeight: typography.weights.bold,
+    marginBottom: spacing.xs,
+  },
+  networkStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  networkStatusOffline: {
+    opacity: 0.7,
+  },
+  networkStatusText: {
+    fontSize: typography.sizes.xs,
+    fontWeight: typography.weights.medium,
+  },
+  networkStatusTextOffline: {
+    color: '#EF4444',
   },
   endButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderRadius: 20,
+    gap: spacing.xs,
   },
   endButtonText: {
     color: 'white',
     fontWeight: typography.weights.semibold,
+  },
+  configWarning: {
+    padding: spacing.sm,
+    borderRadius: 8,
+    marginBottom: spacing.md,
+    backgroundColor: 'rgba(251, 191, 36, 0.1)',
+  },
+  configWarningText: {
+    fontSize: typography.sizes.sm,
+    textAlign: 'center',
   },
   messagesContainer: {
     flex: 1,
@@ -821,19 +1059,76 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginBottom: spacing.sm,
     maxWidth: '80%',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
   userMessage: {
     alignSelf: 'flex-end',
+    borderBottomRightRadius: 4,
   },
   aiMessage: {
     alignSelf: 'flex-start',
+    borderBottomLeftRadius: 4,
   },
   messageText: {
     fontSize: typography.sizes.base,
     lineHeight: typography.sizes.base * 1.4,
+    marginBottom: spacing.xs,
+  },
+  messageFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  messageTime: {
+    fontSize: typography.sizes.xs,
+  },
+  copyButton: {
+    padding: spacing.xs,
+  },
+  typingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  typingText: {
+    fontSize: typography.sizes.sm,
+    fontStyle: 'italic',
   },
   inputArea: {
     alignItems: 'center',
     paddingVertical: spacing.lg,
+  },
+  inputControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  inputButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  errorContainer: {
+    padding: spacing.md,
+    borderRadius: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  errorText: {
+    fontSize: typography.sizes.sm,
+    textAlign: 'center',
   },
 });
