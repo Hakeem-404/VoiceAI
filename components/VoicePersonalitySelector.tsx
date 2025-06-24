@@ -6,8 +6,8 @@ import {
   StyleSheet,
   ScrollView,
   Modal,
-  Slider,
 } from 'react-native';
+import Slider from '@react-native-community/slider';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Volume2, Settings, Play, Pause, X, FileSliders as Sliders, Mic, User, Zap } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
