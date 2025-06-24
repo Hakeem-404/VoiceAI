@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ScrollView,
   Modal,
+  Platform,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -238,7 +239,6 @@ export function VoicePersonalitySelector({
                   onValueChange={(value) => handleSettingsUpdate('stability', value)}
                   minimumTrackTintColor={colors.primary}
                   maximumTrackTintColor={colors.border}
-                  thumbStyle={{ backgroundColor: colors.primary }}
                 />
                 <Text style={[styles.settingDescription, { color: colors.textSecondary }]}>
                   Higher values make the voice more consistent
@@ -257,7 +257,6 @@ export function VoicePersonalitySelector({
                   onValueChange={(value) => handleSettingsUpdate('similarity_boost', value)}
                   minimumTrackTintColor={colors.primary}
                   maximumTrackTintColor={colors.border}
-                  thumbStyle={{ backgroundColor: colors.primary }}
                 />
                 <Text style={[styles.settingDescription, { color: colors.textSecondary }]}>
                   How closely the voice matches the original
@@ -276,7 +275,6 @@ export function VoicePersonalitySelector({
                   onValueChange={(value) => handleSettingsUpdate('style', value)}
                   minimumTrackTintColor={colors.primary}
                   maximumTrackTintColor={colors.border}
-                  thumbStyle={{ backgroundColor: colors.primary }}
                 />
                 <Text style={[styles.settingDescription, { color: colors.textSecondary }]}>
                   Expressiveness and emotion in the voice
@@ -301,7 +299,6 @@ export function VoicePersonalitySelector({
                   onValueChange={(value) => handleSettingsUpdate('audio.speed', value)}
                   minimumTrackTintColor={colors.primary}
                   maximumTrackTintColor={colors.border}
-                  thumbStyle={{ backgroundColor: colors.primary }}
                 />
               </View>
 
@@ -317,7 +314,6 @@ export function VoicePersonalitySelector({
                   onValueChange={(value) => handleSettingsUpdate('audio.pitch', value)}
                   minimumTrackTintColor={colors.primary}
                   maximumTrackTintColor={colors.border}
-                  thumbStyle={{ backgroundColor: colors.primary }}
                 />
               </View>
 
@@ -333,7 +329,6 @@ export function VoicePersonalitySelector({
                   onValueChange={(value) => handleSettingsUpdate('audio.volume', value)}
                   minimumTrackTintColor={colors.primary}
                   maximumTrackTintColor={colors.border}
-                  thumbStyle={{ backgroundColor: colors.primary }}
                 />
               </View>
             </View>
@@ -626,5 +621,16 @@ const styles = StyleSheet.create({
   settingDescription: {
     fontSize: typography.sizes.sm,
     lineHeight: typography.sizes.sm * 1.3,
+  },
+  settingToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: 12,
+    gap: spacing.md,
+  },
+  settingToggleText: {
+    fontSize: typography.sizes.base,
+    fontWeight: typography.weights.medium,
   },
 });

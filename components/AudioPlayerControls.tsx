@@ -218,7 +218,6 @@ export function AudioPlayerControls({ visible, onClose }: AudioPlayerControlsPro
               onValueChange={handleVolumeChange}
               minimumTrackTintColor={colors.primary}
               maximumTrackTintColor={colors.border}
-              thumbStyle={{ backgroundColor: colors.primary }}
             />
           </View>
 
@@ -235,7 +234,6 @@ export function AudioPlayerControls({ visible, onClose }: AudioPlayerControlsPro
               onValueChange={handlePlaybackRateChange}
               minimumTrackTintColor={colors.primary}
               maximumTrackTintColor={colors.border}
-              thumbStyle={{ backgroundColor: colors.primary }}
             />
           </View>
 
@@ -323,7 +321,6 @@ export function AudioPlayerControls({ visible, onClose }: AudioPlayerControlsPro
                 onSlidingComplete={handleSeekEnd}
                 minimumTrackTintColor={colors.primary}
                 maximumTrackTintColor={colors.border}
-                thumbStyle={{ backgroundColor: colors.primary }}
               />
               <View style={styles.timeContainer}>
                 <Text style={[styles.timeText, { color: colors.textSecondary }]}>

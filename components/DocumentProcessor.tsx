@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FileText, User, Briefcase, Zap, CircleCheck as CheckCircle, CircleAlert as AlertCircle, TrendingUp, Target, Award, Clock, Brain, MessageSquare } from 'lucide-react-native';
