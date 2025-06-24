@@ -10,20 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-  FileText,
-  User,
-  Briefcase,
-  Brain,
-  MessageSquare,
-  Target,
-  Zap,
-  Settings,
-  TrendingUp,
-  Play,
-  ArrowRight,
-  CheckCircle,
-} from 'lucide-react-native';
+import { FileText, User, Briefcase, Brain, MessageSquare, Target, Zap, Settings, TrendingUp, Play, ArrowRight, CircleCheck as CheckCircle } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useConversationStore } from '@/src/stores/conversationStore';
 import { useInputStore } from '@/src/stores/inputStore';
