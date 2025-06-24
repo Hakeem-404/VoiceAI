@@ -22,6 +22,7 @@ import {
   TrendingUp,
   Play,
   ArrowRight,
+  CheckCircle,
 } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useConversationStore } from '@/src/stores/conversationStore';
