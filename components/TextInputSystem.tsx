@@ -30,13 +30,6 @@ interface TextInputSystemProps {
   initialText?: string;
 }
 
-interface DocumentData {
-  jobDescription: string;
-  cvContent: string;
-  lastModified: Date;
-  isValid: boolean;
-}
-
 export function TextInputSystem({
   visible,
   onClose,
@@ -51,32 +44,20 @@ export function TextInputSystem({
     currentText,
     inputHistory,
     quickActions,
+    documentData,
     setCurrentText,
     addToHistory,
     getRecentSuggestions,
+    updateDocumentData
   } = useInputStore();
   const { voiceSettings } = useSettingsStore();
   
   const [localText, setLocalText] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [showDocuments, setShowDocuments] = useState(false);
-  const [documentData, setDocumentData] = useState<DocumentData>({
-    jobDescription: '',
-    cvContent: '',
-    lastModified: new Date(),
-    isValid: false,
-  });
-  const [activeDocument, setActiveDocument] = useState<'job' | 'cv' | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisResults, setAnalysisResults] = useState<any>(null);
-  const [showAnalysis, setShowAnalysis] = useState(false);
   const [characterCount, setCharacterCount] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
-  const [savedDrafts, setSavedDrafts] = useState<any[]>([]);
   
   const textInputRef = useRef<TextInput>(null);
-  const jobDescriptionRef = useRef<TextInput>(null);
-  const cvContentRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (visible) {
@@ -94,8 +75,19 @@ export function TextInputSystem({
 
   const handleSend = () => {
     if (localText.trim()) {
-      addToHistory(localText.trim());
-      onSend(localText.trim());
+      if (mode === 'interview-prep') {
+        // For interview prep, update the document data
+        if (placeholder.includes('job')) {
+          updateDocumentData({ jobDescription: localText });
+        } else if (placeholder.includes('CV') || placeholder.includes('resume')) {
+          updateDocumentData({ cvContent: localText });
+        }
+      } else {
+        // For general mode, send as a message
+        addToHistory(localText.trim());
+        onSend(localText.trim());
+      }
+      
       setLocalText('');
       setCurrentText('');
       onClose();
@@ -121,301 +113,262 @@ export function TextInputSystem({
     }
   };
 
-  const handleDocumentSave = () => {
-    const updatedData = {
-      ...documentData,
-      lastModified: new Date(),
-      isValid: documentData.jobDescription.length > 50 && documentData.cvContent.length > 100,
-    };
-    setDocumentData(updatedData);
-    setIsEditing(false);
-    
-    // Save to storage
-    saveDraft(updatedData);
+  const handleClear = () => {
+    setLocalText('');
+    setCurrentText('');
   };
 
-  const saveDraft = (data: DocumentData) => {
-    const draft = {
-      id: Date.now().toString(),
-      ...data,
-      name: `Draft ${new Date().toLocaleDateString()}`,
-    };
-    setSavedDrafts(prev => [draft, ...prev.slice(0, 4)]); // Keep last 5 drafts
-  };
-
-  const analyzeDocuments = async () => {
-    if (!documentData.jobDescription.trim() || !documentData.cvContent.trim()) {
-      Alert.alert('Missing Documents', 'Please provide both job description and CV content for analysis.');
-      return;
-    }
-
-    setIsAnalyzing(true);
-    
-    try {
-      // Simulate document analysis - in real app, this would call Claude API
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const mockAnalysis = {
-        jobRequirements: {
-          technicalSkills: ['React', 'TypeScript', 'Node.js', 'AWS'],
-          softSkills: ['Communication', 'Leadership', 'Problem Solving'],
-          experienceLevel: 'Senior (5+ years)',
-          education: 'Bachelor\'s degree in Computer Science or related field',
-          certifications: ['AWS Certified', 'Scrum Master'],
-        },
-        candidateProfile: {
-          strengths: ['Strong React experience', 'Leadership background', 'Full-stack capabilities'],
-          gaps: ['Limited AWS experience', 'No Scrum certification'],
-          experienceLevel: 'Mid-level (3-4 years)',
-          uniqueQualifications: ['Mobile development', 'UI/UX design background'],
-        },
-        matchScore: 78,
-        recommendations: [
-          'Emphasize your React and TypeScript experience',
-          'Prepare examples of leadership situations',
-          'Research AWS basics for technical questions',
-          'Highlight your mobile development as a differentiator',
-        ],
-        suggestedQuestions: [
-          'Tell me about a challenging React project you\'ve worked on',
-          'How do you approach leading a development team?',
-          'Describe your experience with cloud platforms',
-          'How would you handle a tight deadline with competing priorities?',
-        ],
-      };
-      
-      setAnalysisResults(mockAnalysis);
-      setShowAnalysis(true);
-    } catch (error) {
-      Alert.alert('Analysis Failed', 'Unable to analyze documents. Please try again.');
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  const generatePersonalizedQuestions = () => {
-    if (!analysisResults) return [];
-    
-    return analysisResults.suggestedQuestions.map((question: string, index: number) => ({
-      id: index.toString(),
-      question,
-      category: index < 2 ? 'Technical' : 'Behavioral',
-      difficulty: 'Medium',
-      relevance: 'High',
-    }));
+  const handleFormat = () => {
+    // Simple formatting - remove extra spaces and normalize line breaks
+    const formatted = localText
+      .replace(/\s+/g, ' ')
+      .replace(/\n\s*\n\s*\n/g, '\n\n')
+      .trim();
+    setLocalText(formatted);
+    setCurrentText(formatted);
   };
 
   const recentSuggestions = getRecentSuggestions();
 
-  const DocumentEditor = () => (
+  return (
     <Modal
-      visible={showDocuments}
+      visible={visible}
       animationType="slide"
       presentationStyle="pageSheet"
-      onRequestClose={() => setShowDocuments(false)}
+      onRequestClose={onClose}
     >
       <KeyboardAvoidingView
-        style={[styles.documentContainer, { backgroundColor: colors.background }]}
+        style={[styles.container, { backgroundColor: colors.background }]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.documentHeader}>
+        <View style={styles.header}>
           <TouchableOpacity
             style={styles.closeButton}
-            onPress={() => setShowDocuments(false)}
+            onPress={onClose}
           >
-            <X size={24} color={colors.text} />
+            <X size={24} color={colors.textSecondary} />
           </TouchableOpacity>
           
-          <Text style={[styles.documentTitle, { color: colors.text }]}>
-            Interview Preparation
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
+            {mode === 'interview-prep' 
+              ? placeholder.includes('job') 
+                ? 'Job Description' 
+                : 'CV/Resume'
+              : 'Text Input'}
           </Text>
           
           <TouchableOpacity
-            style={[styles.saveButton, { backgroundColor: colors.primary }]}
-            onPress={handleDocumentSave}
+            style={styles.voiceToggleButton}
+            onPress={onVoiceToggle}
           >
-            <Save size={20} color="white" />
+            <Mic size={24} color={colors.primary} />
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.documentContent} showsVerticalScrollIndicator={false}>
-          {/* Job Description Section */}
-          <View style={[styles.documentSection, { backgroundColor: colors.surface }]}>
-            <View style={styles.sectionHeader}>
-              <Briefcase size={20} color={colors.primary} />
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                Job Description
-              </Text>
-              <Text style={[styles.characterCount, { color: colors.textSecondary }]}>
-                {documentData.jobDescription.length} chars
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentContainer}
+          keyboardShouldPersistTaps="handled"
+        >
+          {mode === 'interview-prep' && (
+            <View style={[styles.documentInfo, { backgroundColor: colors.surface }]}>
+              <View style={styles.documentInfoIcon}>
+                {placeholder.includes('job') ? (
+                  <Briefcase size={20} color={colors.primary} />
+                ) : (
+                  <User size={20} color={colors.secondary} />
+                )}
+              </View>
+              <Text style={[styles.documentInfoText, { color: colors.textSecondary }]}>
+                {placeholder.includes('job')
+                  ? 'Paste the full job description to get personalized interview questions and analysis.'
+                  : 'Paste your CV/resume content to get tailored feedback and question preparation.'}
               </Text>
             </View>
-            
+          )}
+
+          <View style={styles.inputContainer}>
             <TextInput
-              ref={jobDescriptionRef}
+              ref={textInputRef}
               style={[
-                styles.documentTextInput,
+                styles.textInput,
                 {
-                  backgroundColor: colors.background,
+                  backgroundColor: colors.surface,
                   color: colors.text,
                   borderColor: colors.border,
                 },
               ]}
-              value={documentData.jobDescription}
-              onChangeText={(text) => 
-                setDocumentData(prev => ({ ...prev, jobDescription: text }))
-              }
-              placeholder="Paste the job description here..."
+              value={localText}
+              onChangeText={(text) => {
+                setLocalText(text);
+                setCurrentText(text);
+              }}
+              placeholder={placeholder}
               placeholderTextColor={colors.textTertiary}
               multiline
-              numberOfLines={8}
+              numberOfLines={mode === 'interview-prep' ? 12 : 6}
+              maxLength={mode === 'interview-prep' ? 10000 : 2000}
               textAlignVertical="top"
             />
             
-            <View style={styles.documentActions}>
-              <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: colors.secondary }]}
-                onPress={() => {
-                  // Clear job description
-                  setDocumentData(prev => ({ ...prev, jobDescription: '' }));
-                }}
-              >
-                <RotateCcw size={16} color="white" />
-                <Text style={styles.actionButtonText}>Clear</Text>
-              </TouchableOpacity>
+            <View style={styles.inputMeta}>
+              <Text style={[styles.characterCounter, { color: colors.textSecondary }]}>
+                {characterCount}/{mode === 'interview-prep' ? 10000 : 2000}
+              </Text>
               
-              <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: colors.accent }]}
-                onPress={() => {
-                  // Format text
-                  const formatted = documentData.jobDescription
-                    .replace(/\s+/g, ' ')
-                    .trim();
-                  setDocumentData(prev => ({ ...prev, jobDescription: formatted }));
-                }}
-              >
-                <Edit3 size={16} color="white" />
-                <Text style={styles.actionButtonText}>Format</Text>
-              </TouchableOpacity>
+              <View style={styles.inputActions}>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={handleClear}
+                >
+                  <RotateCcw size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={handleFormat}
+                >
+                  <Edit3 size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.sendButton,
+                    { backgroundColor: localText.trim() ? colors.primary : colors.border },
+                  ]}
+                  onPress={handleSend}
+                  disabled={!localText.trim()}
+                >
+                  {mode === 'interview-prep' ? (
+                    <Save
+                      size={20}
+                      color={localText.trim() ? 'white' : colors.textTertiary}
+                    />
+                  ) : (
+                    <Send
+                      size={20}
+                      color={localText.trim() ? 'white' : colors.textTertiary}
+                    />
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
 
-          {/* CV Content Section */}
-          <View style={[styles.documentSection, { backgroundColor: colors.surface }]}>
-            <View style={styles.sectionHeader}>
-              <User size={20} color={colors.primary} />
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                CV / Resume
-              </Text>
-              <Text style={[styles.characterCount, { color: colors.textSecondary }]}>
-                {documentData.cvContent.length} chars
-              </Text>
-            </View>
-            
-            <TextInput
-              ref={cvContentRef}
-              style={[
-                styles.documentTextInput,
-                {
-                  backgroundColor: colors.background,
-                  color: colors.text,
-                  borderColor: colors.border,
-                },
-              ]}
-              value={documentData.cvContent}
-              onChangeText={(text) => 
-                setDocumentData(prev => ({ ...prev, cvContent: text }))
-              }
-              placeholder="Paste your CV/resume content here..."
-              placeholderTextColor={colors.textTertiary}
-              multiline
-              numberOfLines={8}
-              textAlignVertical="top"
-            />
-            
-            <View style={styles.documentActions}>
-              <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: colors.secondary }]}
-                onPress={() => {
-                  setDocumentData(prev => ({ ...prev, cvContent: '' }));
-                }}
-              >
-                <RotateCcw size={16} color="white" />
-                <Text style={styles.actionButtonText}>Clear</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: colors.accent }]}
-                onPress={() => {
-                  const formatted = documentData.cvContent
-                    .replace(/\s+/g, ' ')
-                    .trim();
-                  setDocumentData(prev => ({ ...prev, cvContent: formatted }));
-                }}
-              >
-                <Edit3 size={16} color="white" />
-                <Text style={styles.actionButtonText}>Format</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Analysis Section */}
-          <View style={[styles.analysisSection, { backgroundColor: colors.surface }]}>
-            <TouchableOpacity
-              style={[
-                styles.analyzeButton,
-                { backgroundColor: isAnalyzing ? colors.border : colors.primary },
-              ]}
-              onPress={analyzeDocuments}
-              disabled={isAnalyzing}
-            >
-              {isAnalyzing ? (
-                <View style={styles.loadingContainer}>
-                  <Text style={styles.analyzeButtonText}>Analyzing...</Text>
-                </View>
-              ) : (
-                <>
-                  <Zap size={20} color="white" />
-                  <Text style={styles.analyzeButtonText}>Analyze Documents</Text>
-                </>
-              )}
-            </TouchableOpacity>
-            
-            {documentData.isValid && (
-              <View style={styles.validationStatus}>
-                <CheckCircle size={16} color={colors.success} />
-                <Text style={[styles.validationText, { color: colors.success }]}>
-                  Documents ready for analysis
+          {/* Quick Suggestions - only show for general mode */}
+          {mode !== 'interview-prep' && recentSuggestions.length > 0 && (
+            <View style={styles.suggestionsContainer}>
+              <View style={styles.suggestionHeader}>
+                <Zap size={16} color={colors.primary} />
+                <Text style={[styles.suggestionTitle, { color: colors.text }]}>
+                  Quick Actions
                 </Text>
               </View>
-            )}
-          </View>
+              
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.suggestionsScroll}
+              >
+                {recentSuggestions.map((suggestion, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.suggestionChip,
+                      { backgroundColor: colors.surface, borderColor: colors.border },
+                    ]}
+                    onPress={() => handleSuggestionPress(suggestion)}
+                  >
+                    <Text
+                      style={[styles.suggestionText, { color: colors.text }]}
+                      numberOfLines={2}
+                    >
+                      {suggestion}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
 
-          {/* Saved Drafts */}
-          {savedDrafts.length > 0 && (
-            <View style={[styles.draftsSection, { backgroundColor: colors.surface }]}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                Saved Drafts
+          {/* Document Tips - only show for interview prep mode */}
+          {mode === 'interview-prep' && (
+            <View style={[styles.tipsContainer, { backgroundColor: colors.surface }]}>
+              <Text style={[styles.tipsTitle, { color: colors.text }]}>
+                Tips for better results:
               </Text>
-              {savedDrafts.map((draft) => (
+              <View style={styles.tipsList}>
+                {placeholder.includes('job') ? (
+                  <>
+                    <View style={styles.tipItem}>
+                      <CheckCircle size={16} color={colors.success} />
+                      <Text style={[styles.tipText, { color: colors.textSecondary }]}>
+                        Include the full job description, not just requirements
+                      </Text>
+                    </View>
+                    <View style={styles.tipItem}>
+                      <CheckCircle size={16} color={colors.success} />
+                      <Text style={[styles.tipText, { color: colors.textSecondary }]}>
+                        Keep formatting like bullet points for better parsing
+                      </Text>
+                    </View>
+                    <View style={styles.tipItem}>
+                      <CheckCircle size={16} color={colors.success} />
+                      <Text style={[styles.tipText, { color: colors.textSecondary }]}>
+                        Include company information if available
+                      </Text>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.tipItem}>
+                      <CheckCircle size={16} color={colors.success} />
+                      <Text style={[styles.tipText, { color: colors.textSecondary }]}>
+                        Include your skills, experience, and education
+                      </Text>
+                    </View>
+                    <View style={styles.tipItem}>
+                      <CheckCircle size={16} color={colors.success} />
+                      <Text style={[styles.tipText, { color: colors.textSecondary }]}>
+                        Quantify achievements where possible
+                      </Text>
+                    </View>
+                    <View style={styles.tipItem}>
+                      <CheckCircle size={16} color={colors.success} />
+                      <Text style={[styles.tipText, { color: colors.textSecondary }]}>
+                        Keep formatting like bullet points for better parsing
+                      </Text>
+                    </View>
+                  </>
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* Input History - only show for general mode */}
+          {mode !== 'interview-prep' && inputHistory.length > 0 && (
+            <View style={styles.historyContainer}>
+              <View style={styles.historyHeader}>
+                <Clock size={16} color={colors.textSecondary} />
+                <Text style={[styles.historyTitle, { color: colors.textSecondary }]}>
+                  Recent
+                </Text>
+              </View>
+              
+              {inputHistory.slice(0, 5).map((item, index) => (
                 <TouchableOpacity
-                  key={draft.id}
-                  style={[styles.draftItem, { backgroundColor: colors.background }]}
-                  onPress={() => {
-                    setDocumentData({
-                      jobDescription: draft.jobDescription,
-                      cvContent: draft.cvContent,
-                      lastModified: draft.lastModified,
-                      isValid: draft.isValid,
-                    });
-                  }}
+                  key={index}
+                  style={[
+                    styles.historyItem,
+                    { backgroundColor: colors.surface },
+                  ]}
+                  onPress={() => handleSuggestionPress(item)}
                 >
-                  <FileText size={16} color={colors.textSecondary} />
-                  <Text style={[styles.draftName, { color: colors.text }]}>
-                    {draft.name}
-                  </Text>
-                  <Text style={[styles.draftDate, { color: colors.textSecondary }]}>
-                    {draft.lastModified.toLocaleDateString()}
+                  <Text
+                    style={[styles.historyText, { color: colors.textSecondary }]}
+                    numberOfLines={1}
+                  >
+                    {item}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -424,306 +377,6 @@ export function TextInputSystem({
         </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
-  );
-
-  const AnalysisModal = () => (
-    <Modal
-      visible={showAnalysis}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={() => setShowAnalysis(false)}
-    >
-      <View style={[styles.analysisContainer, { backgroundColor: colors.background }]}>
-        <View style={styles.analysisHeader}>
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={() => setShowAnalysis(false)}
-          >
-            <X size={24} color={colors.text} />
-          </TouchableOpacity>
-          
-          <Text style={[styles.analysisTitle, { color: colors.text }]}>
-            Interview Analysis
-          </Text>
-          
-          <View style={styles.matchScore}>
-            <Text style={[styles.matchScoreText, { color: colors.primary }]}>
-              {analysisResults?.matchScore}%
-            </Text>
-          </View>
-        </View>
-
-        <ScrollView style={styles.analysisContent}>
-          {analysisResults && (
-            <>
-              {/* Strengths */}
-              <View style={[styles.analysisSection, { backgroundColor: colors.surface }]}>
-                <Text style={[styles.analysisSectionTitle, { color: colors.text }]}>
-                  Your Strengths
-                </Text>
-                {analysisResults.candidateProfile.strengths.map((strength: string, index: number) => (
-                  <View key={index} style={styles.analysisItem}>
-                    <CheckCircle size={16} color={colors.success} />
-                    <Text style={[styles.analysisItemText, { color: colors.text }]}>
-                      {strength}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-
-              {/* Areas to Address */}
-              <View style={[styles.analysisSection, { backgroundColor: colors.surface }]}>
-                <Text style={[styles.analysisSectionTitle, { color: colors.text }]}>
-                  Areas to Address
-                </Text>
-                {analysisResults.candidateProfile.gaps.map((gap: string, index: number) => (
-                  <View key={index} style={styles.analysisItem}>
-                    <AlertCircle size={16} color={colors.warning} />
-                    <Text style={[styles.analysisItemText, { color: colors.text }]}>
-                      {gap}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-
-              {/* Recommendations */}
-              <View style={[styles.analysisSection, { backgroundColor: colors.surface }]}>
-                <Text style={[styles.analysisSectionTitle, { color: colors.text }]}>
-                  Interview Recommendations
-                </Text>
-                {analysisResults.recommendations.map((rec: string, index: number) => (
-                  <View key={index} style={styles.analysisItem}>
-                    <Zap size={16} color={colors.primary} />
-                    <Text style={[styles.analysisItemText, { color: colors.text }]}>
-                      {rec}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-
-              {/* Suggested Questions */}
-              <View style={[styles.analysisSection, { backgroundColor: colors.surface }]}>
-                <Text style={[styles.analysisSectionTitle, { color: colors.text }]}>
-                  Practice These Questions
-                </Text>
-                {generatePersonalizedQuestions().map((item: any) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={[styles.questionItem, { backgroundColor: colors.background }]}
-                    onPress={() => {
-                      setLocalText(item.question);
-                      setShowAnalysis(false);
-                      setShowDocuments(false);
-                    }}
-                  >
-                    <Text style={[styles.questionText, { color: colors.text }]}>
-                      {item.question}
-                    </Text>
-                    <View style={styles.questionMeta}>
-                      <Text style={[styles.questionCategory, { color: colors.textSecondary }]}>
-                        {item.category}
-                      </Text>
-                      <Text style={[styles.questionDifficulty, { color: colors.textSecondary }]}>
-                        {item.difficulty}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </>
-          )}
-        </ScrollView>
-      </View>
-    </Modal>
-  );
-
-  return (
-    <>
-      <Modal
-        visible={visible}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={onClose}
-      >
-        <KeyboardAvoidingView
-          style={[styles.container, { backgroundColor: colors.background }]}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <View style={styles.header}>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={onClose}
-            >
-              <X size={24} color={colors.textSecondary} />
-            </TouchableOpacity>
-            
-            <Text style={[styles.headerTitle, { color: colors.text }]}>
-              {mode === 'interview-prep' ? 'Interview Preparation' : 'Text Input'}
-            </Text>
-            
-            <TouchableOpacity
-              style={styles.voiceToggleButton}
-              onPress={onVoiceToggle}
-            >
-              <Mic size={24} color={colors.primary} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView
-            style={styles.content}
-            contentContainerStyle={styles.contentContainer}
-            keyboardShouldPersistTaps="handled"
-          >
-            {/* Interview Prep Mode */}
-            {mode === 'interview-prep' && (
-              <View style={styles.interviewPrepSection}>
-                <TouchableOpacity
-                  style={[styles.documentButton, { backgroundColor: colors.primary }]}
-                  onPress={() => setShowDocuments(true)}
-                >
-                  <FileText size={20} color="white" />
-                  <Text style={styles.documentButtonText}>
-                    {documentData.isValid ? 'Edit Documents' : 'Add Job Description & CV'}
-                  </Text>
-                </TouchableOpacity>
-                
-                {documentData.isValid && (
-                  <View style={styles.documentStatus}>
-                    <CheckCircle size={16} color={colors.success} />
-                    <Text style={[styles.documentStatusText, { color: colors.success }]}>
-                      Documents loaded and ready
-                    </Text>
-                  </View>
-                )}
-              </View>
-            )}
-
-            <View style={styles.inputContainer}>
-              <TextInput
-                ref={textInputRef}
-                style={[
-                  styles.textInput,
-                  {
-                    backgroundColor: colors.surface,
-                    color: colors.text,
-                    borderColor: colors.border,
-                  },
-                ]}
-                value={localText}
-                onChangeText={(text) => {
-                  setLocalText(text);
-                  setCurrentText(text);
-                }}
-                placeholder={placeholder}
-                placeholderTextColor={colors.textTertiary}
-                multiline
-                numberOfLines={6}
-                maxLength={2000}
-                textAlignVertical="top"
-              />
-              
-              <View style={styles.inputMeta}>
-                <Text style={[styles.characterCounter, { color: colors.textSecondary }]}>
-                  {characterCount}/2000
-                </Text>
-                
-                <View style={styles.inputActions}>
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={handleCopy}
-                  >
-                    <Copy size={20} color={colors.textSecondary} />
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity
-                    style={[
-                      styles.sendButton,
-                      { backgroundColor: localText.trim() ? colors.primary : colors.border },
-                    ]}
-                    onPress={handleSend}
-                    disabled={!localText.trim()}
-                  >
-                    <Send
-                      size={20}
-                      color={localText.trim() ? 'white' : colors.textTertiary}
-                    />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-
-            {/* Quick Suggestions */}
-            {recentSuggestions.length > 0 && (
-              <View style={styles.suggestionsContainer}>
-                <View style={styles.suggestionHeader}>
-                  <Zap size={16} color={colors.primary} />
-                  <Text style={[styles.suggestionTitle, { color: colors.text }]}>
-                    Quick Actions
-                  </Text>
-                </View>
-                
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.suggestionsScroll}
-                >
-                  {recentSuggestions.map((suggestion, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={[
-                        styles.suggestionChip,
-                        { backgroundColor: colors.surface, borderColor: colors.border },
-                      ]}
-                      onPress={() => handleSuggestionPress(suggestion)}
-                    >
-                      <Text
-                        style={[styles.suggestionText, { color: colors.text }]}
-                        numberOfLines={2}
-                      >
-                        {suggestion}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
-
-            {/* Input History */}
-            {inputHistory.length > 0 && (
-              <View style={styles.historyContainer}>
-                <View style={styles.historyHeader}>
-                  <Clock size={16} color={colors.textSecondary} />
-                  <Text style={[styles.historyTitle, { color: colors.textSecondary }]}>
-                    Recent
-                  </Text>
-                </View>
-                
-                {inputHistory.slice(0, 5).map((item, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.historyItem,
-                      { backgroundColor: colors.surface },
-                    ]}
-                    onPress={() => handleSuggestionPress(item)}
-                  >
-                    <Text
-                      style={[styles.historyText, { color: colors.textSecondary }]}
-                      numberOfLines={1}
-                    >
-                      {item}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      <DocumentEditor />
-      <AnalysisModal />
-    </>
   );
 }
 
@@ -755,32 +408,20 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: 20,
   },
-  interviewPrepSection: {
-    marginBottom: 24,
-  },
-  documentButton: {
+  documentInfo: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
+    padding: 16,
     borderRadius: 12,
-    gap: 8,
-  },
-  documentButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  documentStatus: {
-    flexDirection: 'row',
+    marginBottom: 20,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-    gap: 8,
   },
-  documentStatusText: {
+  documentInfoIcon: {
+    marginRight: 12,
+  },
+  documentInfoText: {
+    flex: 1,
     fontSize: 14,
-    fontWeight: '500',
+    lineHeight: 20,
   },
   inputContainer: {
     marginBottom: 24,
@@ -846,6 +487,29 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
   },
+  tipsContainer: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 24,
+  },
+  tipsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  tipsList: {
+    gap: 8,
+  },
+  tipItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  tipText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+  },
   historyContainer: {
     marginBottom: 24,
   },
@@ -866,191 +530,5 @@ const styles = StyleSheet.create({
   },
   historyText: {
     fontSize: 14,
-  },
-  
-  // Document Editor Styles
-  documentContainer: {
-    flex: 1,
-  },
-  documentHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    paddingTop: Platform.OS === 'ios' ? 60 : 20,
-  },
-  documentTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  saveButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  documentContent: {
-    flex: 1,
-    padding: 20,
-  },
-  documentSection: {
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-    flex: 1,
-  },
-  characterCount: {
-    fontSize: 12,
-  },
-  documentTextInput: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    minHeight: 150,
-    textAlignVertical: 'top',
-    marginBottom: 16,
-  },
-  documentActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  actionButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '500',
-    marginLeft: 4,
-  },
-  analysisSection: {
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-  },
-  analyzeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 12,
-    gap: 8,
-  },
-  analyzeButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  loadingContainer: {
-    alignItems: 'center',
-  },
-  validationStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-    gap: 8,
-  },
-  validationText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  draftsSection: {
-    borderRadius: 16,
-    padding: 20,
-  },
-  draftItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    gap: 12,
-  },
-  draftName: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  draftDate: {
-    fontSize: 12,
-  },
-  
-  // Analysis Modal Styles
-  analysisContainer: {
-    flex: 1,
-  },
-  analysisHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    paddingTop: Platform.OS === 'ios' ? 60 : 20,
-  },
-  analysisTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  matchScore: {
-    backgroundColor: '#E0F2FE',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  matchScoreText: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  analysisContent: {
-    flex: 1,
-    padding: 20,
-  },
-  analysisSectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
-  analysisItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-    gap: 12,
-  },
-  analysisItemText: {
-    flex: 1,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  questionItem: {
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  questionText: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 8,
-  },
-  questionMeta: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  questionCategory: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  questionDifficulty: {
-    fontSize: 12,
   },
 });

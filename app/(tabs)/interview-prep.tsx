@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,9 +20,12 @@ import {
   Zap,
   Settings,
   TrendingUp,
+  Play,
+  ArrowRight,
 } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useConversationStore } from '@/src/stores/conversationStore';
+import { useInputStore } from '@/src/stores/inputStore';
 import { TextInputSystem } from '@/components/TextInputSystem';
 import { DocumentProcessor } from '@/components/DocumentProcessor';
 import { SmartQuestionGenerator } from '@/components/SmartQuestionGenerator';
@@ -32,29 +35,41 @@ import { spacing, typography } from '@/src/constants/colors';
 export default function InterviewPrepScreen() {
   const { colors, isDark } = useTheme();
   const { startConversation } = useConversationStore();
+  const { documentData, updateDocumentData } = useInputStore();
   
-  const [currentStep, setCurrentStep] = useState<'upload' | 'analyze' | 'practice'>('upload');
-  const [documentData, setDocumentData] = useState({
-    jobDescription: '',
-    cvContent: '',
-  });
+  const [currentView, setCurrentView] = useState<'setup' | 'analysis' | 'questions'>('setup');
   const [analysisResults, setAnalysisResults] = useState<any>(null);
   const [generatedQuestions, setGeneratedQuestions] = useState<any[]>([]);
   const [showTextInput, setShowTextInput] = useState(false);
+  const [activeDocument, setActiveDocument] = useState<'job' | 'cv' | null>(null);
 
   const interviewMode = conversationModes.find(mode => mode.id === 'interview-practice');
 
-  const handleDocumentUpload = (jobDesc: string, cv: string) => {
-    setDocumentData({
-      jobDescription: jobDesc,
-      cvContent: cv,
-    });
-    setCurrentStep('analyze');
+  useEffect(() => {
+    // Check if we have valid documents to enable analysis
+    if (documentData.isValid && currentView === 'setup') {
+      setCurrentView('analysis');
+    }
+  }, [documentData.isValid, currentView]);
+
+  const handleTextInputClose = () => {
+    setShowTextInput(false);
+    setActiveDocument(null);
+  };
+
+  const handleTextInputSave = (text: string) => {
+    if (activeDocument === 'job') {
+      updateDocumentData({ jobDescription: text });
+    } else if (activeDocument === 'cv') {
+      updateDocumentData({ cvContent: text });
+    }
+    setShowTextInput(false);
+    setActiveDocument(null);
   };
 
   const handleAnalysisComplete = (analysis: any) => {
     setAnalysisResults(analysis);
-    setCurrentStep('practice');
+    setCurrentView('questions');
   };
 
   const handleQuestionsGenerated = (questions: any[]) => {
@@ -82,163 +97,187 @@ export default function InterviewPrepScreen() {
   const handleStartPractice = (selectedQuestions: any[]) => {
     if (!interviewMode) return;
     
-    Alert.alert(
-      'Start Practice Session',
-      `Ready to practice with ${selectedQuestions.length} questions?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Start',
-          onPress: () => {
-            startConversation(interviewMode, {
-              modeId: 'interview-practice',
-              difficulty: 'intermediate',
-              sessionType: 'extended',
-              selectedTopics: ['Interview Questions'],
-              aiPersonality: 'Professional',
-              customSettings: {
-                practiceQuestions: selectedQuestions,
-                analysisContext: analysisResults,
-                sessionType: 'multi-question',
-              },
-            });
-          },
-        },
-      ]
-    );
+    startConversation(interviewMode, {
+      modeId: 'interview-practice',
+      difficulty: 'intermediate',
+      sessionType: 'extended',
+      selectedTopics: ['Interview Questions'],
+      aiPersonality: 'Professional',
+      customSettings: {
+        practiceQuestions: selectedQuestions,
+        analysisContext: analysisResults,
+        sessionType: 'multi-question',
+      },
+    });
   };
 
-  const StepIndicator = () => (
-    <View style={styles.stepIndicator}>
-      {['upload', 'analyze', 'practice'].map((step, index) => {
-        const isActive = currentStep === step;
-        const isCompleted = ['upload', 'analyze', 'practice'].indexOf(currentStep) > index;
-        
-        return (
-          <View key={step} style={styles.stepItem}>
-            <View
-              style={[
-                styles.stepCircle,
-                {
-                  backgroundColor: isActive || isCompleted ? colors.primary : colors.border,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.stepNumber,
-                  { color: isActive || isCompleted ? 'white' : colors.textSecondary },
-                ]}
-              >
-                {index + 1}
+  const handleQuickStart = () => {
+    if (!interviewMode) return;
+    
+    startConversation(interviewMode, {
+      modeId: 'interview-practice',
+      difficulty: 'intermediate',
+      sessionType: 'standard',
+      selectedTopics: ['General Interview'],
+      aiPersonality: 'Professional',
+    });
+  };
+
+  const SetupView = () => (
+    <View style={styles.viewContainer}>
+      <View style={styles.viewHeader}>
+        <MessageSquare size={32} color={colors.primary} />
+        <Text style={[styles.viewTitle, { color: colors.text }]}>
+          Interview Setup
+        </Text>
+        <Text style={[styles.viewDescription, { color: colors.textSecondary }]}>
+          Choose how you want to practice for your interview
+        </Text>
+      </View>
+
+      {/* Quick Start Option */}
+      <TouchableOpacity
+        style={[styles.quickStartCard, { backgroundColor: colors.primary }]}
+        onPress={handleQuickStart}
+      >
+        <LinearGradient
+          colors={[colors.primary, colors.secondary]}
+          style={styles.quickStartGradient}
+        >
+          <View style={styles.quickStartContent}>
+            <Play size={32} color="white" />
+            <View style={styles.quickStartTextContainer}>
+              <Text style={styles.quickStartTitle}>Quick Interview</Text>
+              <Text style={styles.quickStartDescription}>
+                Start a general interview practice session immediately
               </Text>
             </View>
-            <Text
-              style={[
-                styles.stepLabel,
-                { color: isActive ? colors.primary : colors.textSecondary },
-              ]}
-            >
-              {step.charAt(0).toUpperCase() + step.slice(1)}
-            </Text>
-            {index < 2 && (
-              <View
-                style={[
-                  styles.stepConnector,
-                  { backgroundColor: isCompleted ? colors.primary : colors.border },
-                ]}
-              />
-            )}
           </View>
-        );
-      })}
+          <ArrowRight size={24} color="white" />
+        </LinearGradient>
+      </TouchableOpacity>
+
+      {/* Personalized Option */}
+      <View style={[styles.personalizedSection, { backgroundColor: colors.surface }]}>
+        <Text style={[styles.personalizedTitle, { color: colors.text }]}>
+          Personalized Interview
+        </Text>
+        <Text style={[styles.personalizedDescription, { color: colors.textSecondary }]}>
+          Get tailored questions based on your documents (optional)
+        </Text>
+
+        <View style={styles.documentCards}>
+          {/* Job Description Card */}
+          <TouchableOpacity
+            style={[
+              styles.documentCard, 
+              { backgroundColor: colors.background },
+              documentData.jobDescription ? { borderColor: colors.success, borderWidth: 1 } : null
+            ]}
+            onPress={() => {
+              setActiveDocument('job');
+              setShowTextInput(true);
+            }}
+          >
+            <Briefcase size={24} color={colors.primary} />
+            <Text style={[styles.documentCardTitle, { color: colors.text }]}>
+              Job Description
+            </Text>
+            <Text style={[styles.documentCardDescription, { color: colors.textSecondary }]}>
+              {documentData.jobDescription 
+                ? `${documentData.jobDescription.length} characters added` 
+                : "Optional - Add for better results"}
+            </Text>
+            {documentData.jobDescription && (
+              <View style={styles.documentStatus}>
+                <CheckCircle size={16} color={colors.success} />
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* CV Card */}
+          <TouchableOpacity
+            style={[
+              styles.documentCard, 
+              { backgroundColor: colors.background },
+              documentData.cvContent ? { borderColor: colors.success, borderWidth: 1 } : null
+            ]}
+            onPress={() => {
+              setActiveDocument('cv');
+              setShowTextInput(true);
+            }}
+          >
+            <User size={24} color={colors.secondary} />
+            <Text style={[styles.documentCardTitle, { color: colors.text }]}>
+              Your CV/Resume
+            </Text>
+            <Text style={[styles.documentCardDescription, { color: colors.textSecondary }]}>
+              {documentData.cvContent 
+                ? `${documentData.cvContent.length} characters added` 
+                : "Optional - Add for better results"}
+            </Text>
+            {documentData.cvContent && (
+              <View style={styles.documentStatus}>
+                <CheckCircle size={16} color={colors.success} />
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity
+          style={[
+            styles.analyzeButton,
+            {
+              backgroundColor: (documentData.jobDescription || documentData.cvContent) 
+                ? colors.primary 
+                : colors.border
+            }
+          ]}
+          onPress={() => {
+            if (documentData.jobDescription || documentData.cvContent) {
+              setCurrentView('analysis');
+            } else {
+              Alert.alert(
+                'No Documents Added',
+                'Would you like to add documents for personalized questions or start with general questions?',
+                [
+                  {
+                    text: 'Add Documents',
+                    onPress: () => {
+                      setActiveDocument('job');
+                      setShowTextInput(true);
+                    }
+                  },
+                  {
+                    text: 'General Questions',
+                    onPress: handleQuickStart
+                  }
+                ]
+              );
+            }
+          }}
+        >
+          <Zap size={20} color="white" />
+          <Text style={styles.analyzeButtonText}>
+            {documentData.isValid 
+              ? 'Analyze & Start Practice' 
+              : (documentData.jobDescription || documentData.cvContent)
+                ? 'Continue with Documents'
+                : 'Skip Documents'}
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
-  const UploadStep = () => (
-    <View style={styles.stepContent}>
-      <View style={styles.stepHeader}>
-        <FileText size={32} color={colors.primary} />
-        <Text style={[styles.stepTitle, { color: colors.text }]}>
-          Upload Documents
-        </Text>
-        <Text style={[styles.stepDescription, { color: colors.textSecondary }]}>
-          Provide your job description and CV for personalized interview preparation
-        </Text>
-      </View>
-
-      <View style={styles.uploadCards}>
-        <TouchableOpacity
-          style={[styles.uploadCard, { backgroundColor: colors.surface }]}
-          onPress={() => setShowTextInput(true)}
-        >
-          <LinearGradient
-            colors={[colors.primary, colors.secondary]}
-            style={styles.uploadIcon}
-          >
-            <Briefcase size={24} color="white" />
-          </LinearGradient>
-          <Text style={[styles.uploadTitle, { color: colors.text }]}>
-            Job Description
-          </Text>
-          <Text style={[styles.uploadDescription, { color: colors.textSecondary }]}>
-            Paste the job posting or description
-          </Text>
-          {documentData.jobDescription && (
-            <View style={styles.uploadStatus}>
-              <Text style={[styles.uploadStatusText, { color: colors.success }]}>
-                ✓ Added ({documentData.jobDescription.length} chars)
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.uploadCard, { backgroundColor: colors.surface }]}
-          onPress={() => setShowTextInput(true)}
-        >
-          <LinearGradient
-            colors={[colors.accent, colors.secondary]}
-            style={styles.uploadIcon}
-          >
-            <User size={24} color="white" />
-          </LinearGradient>
-          <Text style={[styles.uploadTitle, { color: colors.text }]}>
-            CV / Resume
-          </Text>
-          <Text style={[styles.uploadDescription, { color: colors.textSecondary }]}>
-            Paste your resume or CV content
-          </Text>
-          {documentData.cvContent && (
-            <View style={styles.uploadStatus}>
-              <Text style={[styles.uploadStatusText, { color: colors.success }]}>
-                ✓ Added ({documentData.cvContent.length} chars)
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {documentData.jobDescription && documentData.cvContent && (
-        <TouchableOpacity
-          style={[styles.continueButton, { backgroundColor: colors.primary }]}
-          onPress={() => setCurrentStep('analyze')}
-        >
-          <Brain size={20} color="white" />
-          <Text style={styles.continueButtonText}>Analyze Documents</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-
-  const AnalyzeStep = () => (
-    <View style={styles.stepContent}>
-      <View style={styles.stepHeader}>
+  const AnalysisView = () => (
+    <View style={styles.viewContainer}>
+      <View style={styles.viewHeader}>
         <Brain size={32} color={colors.primary} />
-        <Text style={[styles.stepTitle, { color: colors.text }]}>
+        <Text style={[styles.viewTitle, { color: colors.text }]}>
           Document Analysis
         </Text>
-        <Text style={[styles.stepDescription, { color: colors.textSecondary }]}>
+        <Text style={[styles.viewDescription, { color: colors.textSecondary }]}>
           AI analysis of your profile against job requirements
         </Text>
       </View>
@@ -252,14 +291,14 @@ export default function InterviewPrepScreen() {
     </View>
   );
 
-  const PracticeStep = () => (
-    <View style={styles.stepContent}>
-      <View style={styles.stepHeader}>
+  const QuestionsView = () => (
+    <View style={styles.viewContainer}>
+      <View style={styles.viewHeader}>
         <Target size={32} color={colors.primary} />
-        <Text style={[styles.stepTitle, { color: colors.text }]}>
+        <Text style={[styles.viewTitle, { color: colors.text }]}>
           Practice Questions
         </Text>
-        <Text style={[styles.stepDescription, { color: colors.textSecondary }]}>
+        <Text style={[styles.viewDescription, { color: colors.textSecondary }]}>
           Personalized questions based on your analysis
         </Text>
       </View>
@@ -289,30 +328,102 @@ export default function InterviewPrepScreen() {
           </Text>
         </View>
 
-        <StepIndicator />
+        {/* View Navigation */}
+        {(currentView === 'analysis' || currentView === 'questions') && (
+          <View style={styles.navigation}>
+            <TouchableOpacity
+              style={[
+                styles.navButton,
+                currentView === 'setup' && { backgroundColor: colors.primary }
+              ]}
+              onPress={() => setCurrentView('setup')}
+            >
+              <Text style={[
+                styles.navButtonText,
+                { color: currentView === 'setup' ? 'white' : colors.textSecondary }
+              ]}>
+                Setup
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.navButton,
+                currentView === 'analysis' && { backgroundColor: colors.primary }
+              ]}
+              onPress={() => {
+                if (documentData.jobDescription || documentData.cvContent) {
+                  setCurrentView('analysis');
+                }
+              }}
+              disabled={!documentData.jobDescription && !documentData.cvContent}
+            >
+              <Text style={[
+                styles.navButtonText,
+                { 
+                  color: currentView === 'analysis' 
+                    ? 'white' 
+                    : (!documentData.jobDescription && !documentData.cvContent)
+                      ? colors.textTertiary
+                      : colors.textSecondary 
+                }
+              ]}>
+                Analysis
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.navButton,
+                currentView === 'questions' && { backgroundColor: colors.primary }
+              ]}
+              onPress={() => {
+                if (analysisResults) {
+                  setCurrentView('questions');
+                }
+              }}
+              disabled={!analysisResults}
+            >
+              <Text style={[
+                styles.navButtonText,
+                { 
+                  color: currentView === 'questions' 
+                    ? 'white' 
+                    : !analysisResults
+                      ? colors.textTertiary
+                      : colors.textSecondary 
+                }
+              ]}>
+                Questions
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <ScrollView
           style={styles.content}
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
         >
-          {currentStep === 'upload' && <UploadStep />}
-          {currentStep === 'analyze' && <AnalyzeStep />}
-          {currentStep === 'practice' && <PracticeStep />}
+          {currentView === 'setup' && <SetupView />}
+          {currentView === 'analysis' && <AnalysisView />}
+          {currentView === 'questions' && <QuestionsView />}
         </ScrollView>
 
         <TextInputSystem
           visible={showTextInput}
-          onClose={() => setShowTextInput(false)}
-          onSend={(text) => {
-            // Handle document upload
-            setShowTextInput(false);
-          }}
+          onClose={handleTextInputClose}
+          onSend={handleTextInputSave}
           onVoiceToggle={() => {
             setShowTextInput(false);
           }}
           mode="interview-prep"
-          placeholder="Paste your document content here..."
+          placeholder={activeDocument === 'job' 
+            ? "Paste the job description here..." 
+            : "Paste your CV/resume content here..."}
+          initialText={activeDocument === 'job' 
+            ? documentData.jobDescription 
+            : documentData.cvContent}
         />
       </LinearGradient>
     </SafeAreaView>
@@ -339,39 +450,20 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.lg,
     lineHeight: typography.sizes.lg * 1.4,
   },
-  stepIndicator: {
+  navigation: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: spacing.lg,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
-  stepItem: {
-    alignItems: 'center',
-    position: 'relative',
+  navButton: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: 20,
+    marginRight: spacing.sm,
   },
-  stepCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-  },
-  stepNumber: {
-    fontSize: typography.sizes.sm,
-    font: typography.weights.bold,
-  },
-  stepLabel: {
+  navButtonText: {
     fontSize: typography.sizes.sm,
     fontWeight: typography.weights.medium,
-  },
-  stepConnector: {
-    position: 'absolute',
-    top: 16,
-    right: -40,
-    width: 80,
-    height: 2,
   },
   content: {
     flex: 1,
@@ -380,66 +472,100 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingBottom: spacing.xxl,
   },
-  stepContent: {
+  viewContainer: {
     flex: 1,
   },
-  stepHeader: {
+  viewHeader: {
     alignItems: 'center',
     marginBottom: spacing.xl,
   },
-  stepTitle: {
+  viewTitle: {
     fontSize: typography.sizes.xl,
     fontWeight: typography.weights.bold,
     marginTop: spacing.md,
     marginBottom: spacing.xs,
   },
-  stepDescription: {
+  viewDescription: {
     fontSize: typography.sizes.base,
     textAlign: 'center',
     maxWidth: '80%',
   },
-  uploadCards: {
-    flexDirection: 'row',
-    gap: spacing.md,
+  quickStartCard: {
+    borderRadius: 16,
     marginBottom: spacing.xl,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
-  uploadCard: {
+  quickStartGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing.lg,
+  },
+  quickStartContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  quickStartTextContainer: {
     flex: 1,
+  },
+  quickStartTitle: {
+    color: 'white',
+    fontSize: typography.sizes.lg,
+    fontWeight: typography.weights.bold,
+    marginBottom: spacing.xs,
+  },
+  quickStartDescription: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: typography.sizes.sm,
+  },
+  personalizedSection: {
     padding: spacing.lg,
     borderRadius: 16,
-    alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    marginBottom: spacing.lg,
   },
-  uploadIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  uploadTitle: {
+  personalizedTitle: {
     fontSize: typography.sizes.lg,
     fontWeight: typography.weights.semibold,
     marginBottom: spacing.xs,
   },
-  uploadDescription: {
+  personalizedDescription: {
     fontSize: typography.sizes.sm,
-    textAlign: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
-  uploadStatus: {
+  documentCards: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  documentCard: {
+    flex: 1,
+    padding: spacing.md,
+    borderRadius: 12,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  documentCardTitle: {
+    fontSize: typography.sizes.base,
+    fontWeight: typography.weights.semibold,
     marginTop: spacing.sm,
+    marginBottom: spacing.xs,
   },
-  uploadStatusText: {
+  documentCardDescription: {
     fontSize: typography.sizes.xs,
-    fontWeight: typography.weights.medium,
+    textAlign: 'center',
   },
-  continueButton: {
+  documentStatus: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+  },
+  analyzeButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -447,7 +573,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: spacing.sm,
   },
-  continueButtonText: {
+  analyzeButtonText: {
     color: 'white',
     fontSize: typography.sizes.base,
     fontWeight: typography.weights.semibold,
