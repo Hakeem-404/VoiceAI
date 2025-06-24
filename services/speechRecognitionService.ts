@@ -24,10 +24,10 @@ class SpeechRecognitionService {
   private interimTranscript = '';
 
   constructor() {
-    this.initializeSpeechRecognition();
+    this.initializeWebSpeechRecognition();
   }
 
-  private initializeSpeechRecognition() {
+  private initializeWebSpeechRecognition() {
     if (Platform.OS === 'web') {
       // Initialize Web Speech API
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -35,14 +35,9 @@ class SpeechRecognitionService {
       if (SpeechRecognition) {
         this.recognition = new SpeechRecognition();
         this.setupWebSpeechRecognition();
-        console.log('Web Speech API initialized successfully');
       } else {
         console.warn('Web Speech API not supported in this browser');
       }
-    } else {
-      // For native platforms, we'll use a simplified mock implementation
-      // This can be replaced with actual native speech recognition later
-      console.log('Native speech recognition initialized (mock implementation)');
     }
   }
 
@@ -177,7 +172,8 @@ class SpeechRecognitionService {
         return 'undetermined';
       }
     } else {
-      // For native platforms, return granted for now (mock implementation)
+      // For native platforms, we'll need to implement native speech recognition
+      // For now, return granted to allow text fallback
       return 'granted';
     }
   }
@@ -195,9 +191,9 @@ class SpeechRecognitionService {
         return false;
       }
     } else {
-      // For native platforms, return true for now (mock implementation)
-      console.log('Native microphone permission granted (mock)');
-      return true;
+      // For native platforms, we'll implement this when we add native speech recognition
+      console.warn('Native speech recognition not implemented yet');
+      return false;
     }
   }
 
@@ -225,7 +221,9 @@ class SpeechRecognitionService {
     if (Platform.OS === 'web') {
       return this.startWebSpeechRecognition(language, continuous, interimResults, maxAlternatives, timeout);
     } else {
-      return this.startNativeSpeechRecognition(language, continuous, interimResults, timeout);
+      // For native platforms, show a helpful error
+      onError('Speech recognition is only available on web browsers. Please use text input instead.');
+      return false;
     }
   }
 
@@ -257,7 +255,7 @@ class SpeechRecognitionService {
         }
       }, timeout);
 
-      console.log('Starting web speech recognition with options:', {
+      console.log('Starting speech recognition with options:', {
         language,
         continuous,
         interimResults,
@@ -270,69 +268,6 @@ class SpeechRecognitionService {
     } catch (error) {
       console.error('Failed to start web speech recognition:', error);
       this.errorCallback?.(`Failed to start speech recognition: ${error}`);
-      return false;
-    }
-  }
-
-  private async startNativeSpeechRecognition(
-    language: string,
-    continuous: boolean,
-    interimResults: boolean,
-    timeout: number
-  ): Promise<boolean> {
-    try {
-      // Check permissions first
-      const hasPermission = await this.requestPermissions();
-      if (!hasPermission) {
-        this.errorCallback?.('Speech recognition permission denied');
-        return false;
-      }
-
-      // Set timeout
-      this.timeoutId = setTimeout(() => {
-        if (this.isListening) {
-          console.log('Speech recognition timeout');
-          this.stopListening();
-          this.errorCallback?.('Speech recognition timeout. Please try again.');
-        }
-      }, timeout);
-
-      console.log('Starting native speech recognition (mock implementation)');
-
-      this.isListening = true;
-      this.finalTranscript = '';
-      this.interimTranscript = '';
-
-      // Mock implementation - simulate speech recognition
-      // In a real implementation, this would use native speech recognition APIs
-      setTimeout(() => {
-        if (this.isListening && this.currentCallback) {
-          const mockTranscript = "Speech recognition is not yet fully implemented on native platforms. Please use text input instead.";
-          this.finalTranscript = mockTranscript;
-          
-          this.currentCallback({
-            transcript: mockTranscript,
-            confidence: 0.9,
-            isFinal: true
-          });
-        }
-        
-        this.isListening = false;
-        if (this.timeoutId) {
-          clearTimeout(this.timeoutId);
-          this.timeoutId = null;
-        }
-      }, 2000);
-
-      return true;
-    } catch (error) {
-      console.error('Failed to start native speech recognition:', error);
-      this.errorCallback?.(`Failed to start speech recognition: ${error}`);
-      this.isListening = false;
-      if (this.timeoutId) {
-        clearTimeout(this.timeoutId);
-        this.timeoutId = null;
-      }
       return false;
     }
   }
@@ -422,9 +357,9 @@ class SpeechRecognitionService {
     }
   }
 
-  // Get available languages
+  // Get available languages (web only)
   getAvailableLanguages(): string[] {
-    if (Platform.OS === 'web') {
+    if (Platform.OS === 'web' && this.recognition) {
       // Common languages supported by Web Speech API
       return [
         'en-US', 'en-GB', 'en-AU', 'en-CA', 'en-IN',
@@ -432,13 +367,8 @@ class SpeechRecognitionService {
         'pt-BR', 'ru-RU', 'ja-JP', 'ko-KR', 'zh-CN',
         'zh-TW', 'ar-SA', 'hi-IN', 'th-TH', 'vi-VN'
       ];
-    } else {
-      // For native platforms, return common languages
-      return [
-        'en-US', 'en-GB', 'es-ES', 'fr-FR', 'de-DE', 
-        'it-IT', 'pt-BR', 'ja-JP', 'ko-KR', 'zh-CN'
-      ];
     }
+    return ['en-US']; // Default for native platforms
   }
 
   // Check if speech recognition is supported
@@ -446,10 +376,8 @@ class SpeechRecognitionService {
     if (Platform.OS === 'web') {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       return !!SpeechRecognition;
-    } else {
-      // For native platforms, return true (mock implementation)
-      return true;
     }
+    return false; // Not implemented for native platforms yet
   }
 
   // Get current status
