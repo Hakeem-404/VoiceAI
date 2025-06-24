@@ -13,24 +13,7 @@ import {
   Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-  Send,
-  X,
-  Mic,
-  Copy,
-  Clock,
-  Zap,
-  FileText,
-  User,
-  Briefcase,
-  Edit3,
-  Save,
-  RotateCcw,
-  CheckCircle,
-  AlertCircle,
-  Eye,
-  EyeOff,
-} from 'lucide-react-native';
+import { Send, X, Mic, Copy, Clock, Zap, FileText, User, Briefcase, CreditCard as Edit3, Save, RotateCcw, CircleCheck as CheckCircle, CircleAlert as AlertCircle, Eye, EyeOff } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useInputStore } from '@/src/stores/inputStore';
 import { useSettingsStore } from '@/src/stores/settingsStore';

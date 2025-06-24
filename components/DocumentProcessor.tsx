@@ -8,20 +8,7 @@ import {
   Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-  FileText,
-  User,
-  Briefcase,
-  Zap,
-  CheckCircle,
-  AlertCircle,
-  TrendingUp,
-  Target,
-  Award,
-  Clock,
-  Brain,
-  MessageSquare,
-} from 'lucide-react-native';
+import { FileText, User, Briefcase, Zap, CircleCheck as CheckCircle, CircleAlert as AlertCircle, TrendingUp, Target, Award, Clock, Brain, MessageSquare } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 
 interface DocumentProcessorProps {

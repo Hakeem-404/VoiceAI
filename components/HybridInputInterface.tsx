@@ -8,16 +8,7 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-  Mic,
-  MicOff,
-  Type,
-  Send,
-  RotateCcw,
-  Edit3,
-  Volume2,
-  VolumeX,
-} from 'lucide-react-native';
+import { Mic, MicOff, Type, Send, RotateCcw, CreditCard as Edit3, Volume2, VolumeX } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useInputStore } from '@/src/stores/inputStore';
 import { useVoiceStore } from '@/src/stores/voiceStore';

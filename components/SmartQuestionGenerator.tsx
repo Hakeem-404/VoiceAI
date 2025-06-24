@@ -8,20 +8,7 @@ import {
   Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-  MessageSquare,
-  Brain,
-  Target,
-  Clock,
-  Star,
-  Play,
-  Shuffle,
-  Filter,
-  X,
-  CheckCircle,
-  AlertCircle,
-  TrendingUp,
-} from 'lucide-react-native';
+import { MessageSquare, Brain, Target, Clock, Star, Play, Shuffle, Filter, X, CircleCheck as CheckCircle, CircleAlert as AlertCircle, TrendingUp } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 
 interface Question {
