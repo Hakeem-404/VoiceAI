@@ -10,6 +10,7 @@ import {
   Dimensions,
   RefreshControl,
   TextInput,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -247,7 +248,7 @@ export default function HomeScreen() {
 
   const handleInterviewDocumentSelect = (type: 'job' | 'cv') => {
     setActiveDocument(type);
-    setShowTextInput(true);
+    setTextInputVisible(true);
   };
 
   const handleInterviewContinue = () => {
@@ -1138,9 +1139,9 @@ export default function HomeScreen() {
       )}
 
       <TextInputSystem
-        visible={showTextInput && activeDocument !== null}
+        visible={isTextInputVisible && activeDocument !== null}
         onClose={() => {
-          setShowTextInput(false);
+          setTextInputVisible(false);
           setActiveDocument(null);
         }}
         onSend={(text) => {
@@ -1149,11 +1150,11 @@ export default function HomeScreen() {
           } else if (activeDocument === 'cv') {
             updateDocumentData({ cvContent: text });
           }
-          setShowTextInput(false);
+          setTextInputVisible(false);
           setActiveDocument(null);
         }}
         onVoiceToggle={() => {
-          setShowTextInput(false);
+          setTextInputVisible(false);
           setActiveDocument(null);
         }}
         mode="interview-prep"
