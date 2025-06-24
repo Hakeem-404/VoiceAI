@@ -34,7 +34,14 @@
           "icon": "./assets/images/icon.png",
           "color": "#6366F1"
         }
-      ]
+      ],
+      [
+       "expo-speech-recognition",
+       {
+         "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone.",
+         "speechRecognitionPermission": "Allow $(PRODUCT_NAME) to convert speech to     text."
+       }
+     ]
     ],
     "experiments": {
       "typedRoutes": true
