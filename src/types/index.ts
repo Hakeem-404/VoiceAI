@@ -14,6 +14,16 @@ export interface UserPreferences {
   language: string;
   favoriteMode?: string;
   recentModes: string[];
+  textInputPreferences?: TextInputPreferences;
+}
+
+export interface TextInputPreferences {
+  defaultMode: 'voice' | 'text' | 'hybrid';
+  autoSaveDrafts: boolean;
+  spellCheckEnabled: boolean;
+  suggestionsEnabled: boolean;
+  formatOnPaste: boolean;
+  maxHistoryItems: number;
 }
 
 export interface VoiceSettings {
@@ -46,6 +56,14 @@ export interface Conversation {
   updatedAt: Date;
   bookmarks?: ConversationBookmark[];
   highlights?: ConversationHighlight[];
+  documents?: DocumentData;
+}
+
+export interface DocumentData {
+  jobDescription?: string;
+  cvContent?: string;
+  analysisResults?: any;
+  generatedQuestions?: any[];
 }
 
 export interface ConversationBookmark {
@@ -70,6 +88,12 @@ export interface Message {
   audioUrl?: string;
   duration?: number;
   timestamp: Date;
+  inputMode?: 'voice' | 'text' | 'hybrid';
+  documentContext?: {
+    jobDescription?: boolean;
+    cvContent?: boolean;
+    analysisResults?: boolean;
+  };
 }
 
 export interface ConversationMode {
@@ -185,7 +209,7 @@ export interface DailyChallenge {
   completed: boolean;
 }
 
-export type RecordingState = 'idle' | 'recording' | 'processing' | 'playing';
+export type RecordingState = 'idle' | 'recording' | 'processing' | 'playing' | 'error';
 
 export interface AudioVisualizationData {
   levels: number[];
@@ -205,4 +229,48 @@ export interface ConversationSession {
   messages: Message[];
   bookmarks: ConversationBookmark[];
   highlights: ConversationHighlight[];
+  documents?: DocumentData;
+}
+
+export interface InterviewQuestion {
+  id: string;
+  question: string;
+  category: 'Technical' | 'Behavioral' | 'Situational' | 'Cultural' | 'Experience';
+  difficulty: 'Easy' | 'Medium' | 'Hard';
+  relevance: 'High' | 'Medium' | 'Low';
+  reasoning: string;
+  preparationTip?: string;
+  followUpQuestions?: string[];
+  expectedDuration?: number;
+}
+
+export interface DocumentAnalysisResult {
+  jobRequirements: {
+    technicalSkills: string[];
+    softSkills: string[];
+    experienceLevel: string;
+    education: string;
+    certifications: string[];
+    responsibilities: string[];
+  };
+  candidateProfile: {
+    strengths: string[];
+    gaps: string[];
+    experienceLevel: string;
+    uniqueQualifications: string[];
+    relevantExperience: string[];
+  };
+  matchAnalysis: {
+    overallScore: number;
+    technicalMatch: number;
+    experienceMatch: number;
+    skillsMatch: number;
+    culturalFit: number;
+  };
+  recommendations: string[];
+  interviewStrategy: {
+    focusAreas: string[];
+    questionsToExpect: string[];
+    preparationTips: string[];
+  };
 }
