@@ -232,7 +232,7 @@ export function VoicePersonalitySelector({
                   Stability: {tempSettings.settings.stability.toFixed(2)}
                 </Text>
                 <Slider
-                  style={styles.slider}
+                  style={styles.settingSlider}
                   minimumValue={0}
                   maximumValue={1}
                   value={tempSettings.settings.stability}
@@ -250,7 +250,7 @@ export function VoicePersonalitySelector({
                   Similarity: {tempSettings.settings.similarity_boost.toFixed(2)}
                 </Text>
                 <Slider
-                  style={styles.slider}
+                  style={styles.settingSlider}
                   minimumValue={0}
                   maximumValue={1}
                   value={tempSettings.settings.similarity_boost}
@@ -268,7 +268,7 @@ export function VoicePersonalitySelector({
                   Style: {tempSettings.settings.style.toFixed(2)}
                 </Text>
                 <Slider
-                  style={styles.slider}
+                  style={styles.settingSlider}
                   minimumValue={0}
                   maximumValue={1}
                   value={tempSettings.settings.style}
@@ -292,7 +292,7 @@ export function VoicePersonalitySelector({
                   Speed: {tempSettings.audioSettings.speed.toFixed(2)}x
                 </Text>
                 <Slider
-                  style={styles.slider}
+                  style={styles.settingSlider}
                   minimumValue={0.5}
                   maximumValue={2.0}
                   value={tempSettings.audioSettings.speed}
@@ -307,7 +307,7 @@ export function VoicePersonalitySelector({
                   Pitch: {tempSettings.audioSettings.pitch.toFixed(2)}
                 </Text>
                 <Slider
-                  style={styles.slider}
+                  style={styles.settingSlider}
                   minimumValue={0.5}
                   maximumValue={2.0}
                   value={tempSettings.audioSettings.pitch}
@@ -322,7 +322,7 @@ export function VoicePersonalitySelector({
                   Volume: {tempSettings.audioSettings.volume.toFixed(2)}
                 </Text>
                 <Slider
-                  style={styles.slider}
+                  style={styles.settingSlider}
                   minimumValue={0}
                   maximumValue={1}
                   value={tempSettings.audioSettings.volume}
@@ -613,7 +613,7 @@ const styles = StyleSheet.create({
     fontWeight: typography.weights.medium,
     marginBottom: spacing.sm,
   },
-  slider: {
+  settingSlider: {
     width: '100%',
     height: 40,
     marginBottom: spacing.sm,
