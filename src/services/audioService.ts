@@ -1,4 +1,4 @@
-import { Audio } from 'expo-audio';
+import { Audio } from 'expo-av';
 import * as Speech from 'expo-speech';
 import { Platform } from 'react-native';
 
@@ -125,7 +125,7 @@ class AudioService {
         return await this.startWebRecording(onAudioLevel, onVoiceActivity);
       }
 
-      // Native recording implementation using expo-audio
+      // Native recording implementation using expo-av
       const options = this.getPlatformRecordingOptions();
       
       const recording = await Audio.Recording.createAsync(
@@ -215,7 +215,7 @@ class AudioService {
 
       this.webMediaRecorder.start();
 
-      // Create a mock recording object that behaves like expo-audio Recording
+      // Create a mock recording object that behaves like expo-av Recording
       const mockRecording = {
         getURI: () => {
           if (this.webAudioChunks.length > 0) {
@@ -304,7 +304,7 @@ class AudioService {
         }
       }
 
-      // Native audio playback using expo-audio
+      // Native audio playback using expo-av
       const sound = await Audio.Sound.createAsync({ uri });
       this.sound = sound;
       await sound.playAsync();
