@@ -10,18 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import {
-  Briefcase,
-  User,
-  Brain,
-  ArrowLeft,
-  MessageSquare,
-  Play,
-  Settings,
-  FileText,
-  CheckCircle,
-  AlertTriangle,
-} from 'lucide-react-native';
+import { Briefcase, User, Brain, ArrowLeft, MessageSquare, Play, Settings, FileText, CircleCheck as CheckCircle, TriangleAlert as AlertTriangle } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useInputStore } from '@/src/stores/inputStore';
 import { useConversationStore } from '@/src/stores/conversationStore';

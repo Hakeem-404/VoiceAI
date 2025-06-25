@@ -10,17 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-  Send,
-  Mic,
-  Copy,
-  Trash2,
-  FileText,
-  Zap,
-  RotateCcw,
-  Check,
-  AlertCircle,
-} from 'lucide-react-native';
+import { Send, Mic, Copy, Trash2, FileText, Zap, RotateCcw, Check, CircleAlert as AlertCircle } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { spacing, typography } from '@/src/constants/colors';
 

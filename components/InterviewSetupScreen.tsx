@@ -7,16 +7,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-  FileText,
-  User,
-  Briefcase,
-  Zap,
-  Play,
-  ArrowRight,
-  CheckCircle,
-  Upload,
-} from 'lucide-react-native';
+import { FileText, User, Briefcase, Zap, Play, ArrowRight, CircleCheck as CheckCircle, Upload } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useInputStore } from '@/src/stores/inputStore';
 import { spacing, typography } from '@/src/constants/colors';

@@ -8,18 +8,7 @@ import {
   Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-  FileText,
-  User,
-  Brain,
-  Target,
-  Zap,
-  CheckCircle,
-  AlertTriangle,
-  Settings,
-  Play,
-  X,
-} from 'lucide-react-native';
+import { FileText, User, Brain, Target, Zap, CircleCheck as CheckCircle, TriangleAlert as AlertTriangle, Settings, Play, X } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { DocumentAnalyzer } from '@/components/DocumentAnalyzer';
 import { ModeConfiguration, ConversationMode, DocumentAnalysis } from '@/src/types';

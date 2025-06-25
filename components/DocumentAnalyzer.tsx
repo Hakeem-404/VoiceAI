@@ -8,16 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-  FileText,
-  User,
-  Brain,
-  CheckCircle,
-  AlertTriangle,
-  Target,
-  Award,
-  ArrowRight,
-} from 'lucide-react-native';
+import { FileText, User, Brain, CircleCheck as CheckCircle, TriangleAlert as AlertTriangle, Target, Award, ArrowRight } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { DocumentAnalysis } from '@/src/types';
 import { spacing, typography } from '@/src/constants/colors';
@@ -129,7 +120,7 @@ export function DocumentAnalyzer({
           interviewQuestions: {
             technical: [
               'How would you handle state management in a React Native app?',
-              'What's your experience with TypeScript interfaces and types?',
+              'What\'s your experience with TypeScript interfaces and types?',
               'How would you implement API calls in a React Native application?',
               'Explain the difference between React Native and React for web',
             ],
