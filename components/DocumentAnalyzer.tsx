@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FileText, User, Brain, CircleCheck as CheckCircle, TriangleAlert as AlertTriangle, Target, Award, ArrowRight, Briefcase } from 'lucide-react-native';
-import { FileText, User, Brain, CircleCheck as CheckCircle, TriangleAlert as AlertTriangle, Target, Award, ArrowRight } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { DocumentAnalysis } from '@/src/types';
 import { spacing, typography } from '@/src/constants/colors';
