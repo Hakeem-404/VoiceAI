@@ -10,7 +10,6 @@ import {
   Dimensions,
   RefreshControl,
   TextInput,
-  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -51,12 +50,11 @@ import { ModeSelectionCard } from '@/components/ModeSelectionCard';
 import { ModeConfigurationModal } from '@/components/ModeConfigurationModal';
 import { VoiceRecordButton } from '@/components/VoiceRecordButton';
 import { FloatingActionButtons } from '@/components/FloatingActionButtons';
-import { TextInputSystem } from '@/components/TextInputSystem';
+import { TextInputModal } from '@/components/TextInputModal';
 import { GestureHandler } from '@/components/GestureHandler';
 import { PermissionHandler } from '@/components/PermissionHandler';
 import { VoicePersonalitySelector } from '@/components/VoicePersonalitySelector';
 import { AudioPlayerControls } from '@/components/AudioPlayerControls';
-import { InterviewSetupScreen } from '@/components/InterviewSetupScreen';
 import { ConversationMode, ModeConfiguration, DailyChallenge, ConversationMessage } from '@/src/types';
 import { spacing, typography } from '@/src/constants/colors';
 import { ConversationContext } from '@/types/api';
@@ -90,11 +88,9 @@ export default function HomeScreen() {
     inputMode,
     currentText,
     isTextInputVisible,
-    documentData,
     setInputMode,
     setTextInputVisible,
     clearCurrentText,
-    updateDocumentData,
   } = useInputStore();
 
   const { permissions, voiceSettings } = useSettingsStore();
@@ -136,7 +132,6 @@ export default function HomeScreen() {
   const [showVoicePersonalitySelector, setShowVoicePersonalitySelector] = useState(false);
   const [showAudioPlayerControls, setShowAudioPlayerControls] = useState(false);
   const [voicePlaybackEnabled, setVoicePlaybackEnabled] = useState(true);
-  const [showInterviewSetup, setShowInterviewSetup] = useState(false);
 
   // Mock user preferences for favorites and recent modes
   const [favoriteMode, setFavoriteMode] = useState<string>('general-chat');
@@ -206,13 +201,6 @@ export default function HomeScreen() {
       setInputMode('text');
     }
     
-    // Special handling for interview practice mode
-    if (mode.id === 'interview-practice') {
-      setSelectedMode(mode);
-      setShowInterviewSetup(true);
-      return;
-    }
-    
     setSelectedMode(mode);
     setShowConfigModal(true);
     setError(null);
@@ -234,30 +222,6 @@ export default function HomeScreen() {
     // Generate initial quick replies for the mode
     generateQuickRepliesForMode(mode.id);
   };
-
-  const handleInterviewQuickStart = () => {
-    const mode = conversationModes.find(m => m.id === 'interview-practice');
-    if (!mode) return;
-    
-    startConversation(mode);
-    setShowInterviewSetup(false);
-    setError(null);
-    setConversationMessages([]);
-    generateQuickRepliesForMode(mode.id);
-  };
-
-  const handleInterviewDocumentSelect = (type: 'job' | 'cv') => {
-    setActiveDocument(type);
-    setTextInputVisible(true);
-  };
-
-  const handleInterviewContinue = () => {
-    // Navigate to the interview-prep screen with the documents
-    router.push('/interview-prep');
-    setShowInterviewSetup(false);
-  };
-
-  const [activeDocument, setActiveDocument] = useState<'job' | 'cv' | null>(null);
 
   const generateQuickRepliesForMode = (modeId: string) => {
     const modeQuickReplies = {
@@ -857,7 +821,7 @@ export default function HomeScreen() {
           </LinearGradient>
         </GestureHandler>
 
-        <TextInputSystem
+        <TextInputModal
           visible={isTextInputVisible}
           onClose={() => setTextInputVisible(false)}
           onSend={handleTextSend}
@@ -1106,64 +1070,6 @@ export default function HomeScreen() {
         mode={selectedMode}
         onClose={() => setShowConfigModal(false)}
         onStart={handleModeStart}
-      />
-
-      {/* Interview Setup Modal */}
-      {showInterviewSetup && (
-        <Modal
-          visible={showInterviewSetup}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={() => setShowInterviewSetup(false)}
-        >
-          <View style={[styles.interviewSetupContainer, { backgroundColor: colors.background }]}>
-            <View style={styles.interviewSetupHeader}>
-              <TouchableOpacity
-                style={styles.interviewSetupCloseButton}
-                onPress={() => setShowInterviewSetup(false)}
-              >
-                <X size={24} color={colors.text} />
-              </TouchableOpacity>
-              <Text style={[styles.interviewSetupTitle, { color: colors.text }]}>
-                Interview Setup
-              </Text>
-            </View>
-            
-            <InterviewSetupScreen
-              onQuickStart={handleInterviewQuickStart}
-              onDocumentSelect={handleInterviewDocumentSelect}
-              onContinue={handleInterviewContinue}
-            />
-          </View>
-        </Modal>
-      )}
-
-      <TextInputSystem
-        visible={isTextInputVisible && activeDocument !== null}
-        onClose={() => {
-          setTextInputVisible(false);
-          setActiveDocument(null);
-        }}
-        onSend={(text) => {
-          if (activeDocument === 'job') {
-            updateDocumentData({ jobDescription: text });
-          } else if (activeDocument === 'cv') {
-            updateDocumentData({ cvContent: text });
-          }
-          setTextInputVisible(false);
-          setActiveDocument(null);
-        }}
-        onVoiceToggle={() => {
-          setTextInputVisible(false);
-          setActiveDocument(null);
-        }}
-        mode="interview-prep"
-        placeholder={activeDocument === 'job' 
-          ? "Paste the job description here..." 
-          : "Paste your CV/resume content here..."}
-        initialText={activeDocument === 'job' 
-          ? documentData.jobDescription 
-          : documentData.cvContent}
       />
     </SafeAreaView>
   );
@@ -1466,27 +1372,5 @@ const styles = StyleSheet.create({
   inputArea: {
     alignItems: 'center',
     paddingVertical: spacing.lg,
-  },
-  interviewSetupContainer: {
-    flex: 1,
-  },
-  interviewSetupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    paddingTop: Platform.OS === 'ios' ? 60 : 20,
-    position: 'relative',
-  },
-  interviewSetupCloseButton: {
-    position: 'absolute',
-    left: 20,
-    top: Platform.OS === 'ios' ? 60 : 20,
-    padding: 8,
-  },
-  interviewSetupTitle: {
-    fontSize: 18,
-    fontWeight: '600',
   },
 });
