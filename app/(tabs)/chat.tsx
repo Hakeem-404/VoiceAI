@@ -469,6 +469,7 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   modeName: {
     fontSize: 18,

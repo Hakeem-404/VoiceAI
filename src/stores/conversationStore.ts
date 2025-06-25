@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Conversation, Message, ConversationMode, RecordingState, ConversationSession, ModeConfiguration, ConversationBookmark, ConversationHighlight } from '../types';
+import { Conversation, Message, ConversationMode, RecordingState, ConversationSession, ModeConfiguration, ConversationBookmark, ConversationHighlight, DocumentAnalysis } from '../types';
 
 interface ConversationState {
   currentConversation: Conversation | null;

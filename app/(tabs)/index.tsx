@@ -57,7 +57,7 @@ import { PermissionHandler } from '@/components/PermissionHandler';
 import { VoicePersonalitySelector } from '@/components/VoicePersonalitySelector';
 import { AudioPlayerControls } from '@/components/AudioPlayerControls';
 import { InterviewSetupScreen } from '@/components/InterviewSetupScreen';
-import { ConversationMode, ModeConfiguration, DailyChallenge, ConversationMessage } from '@/src/types';
+import { ConversationMode, ModeConfiguration, DailyChallenge, ConversationMessage, DocumentAnalysis } from '@/src/types';
 import { spacing, typography } from '@/src/constants/colors';
 import { ConversationContext } from '@/types/api';
 
@@ -226,7 +226,7 @@ export default function HomeScreen() {
     setRecentModes(prev => [mode.id, ...prev.filter(id => id !== mode.id)].slice(0, 3));
     
     // Start conversation with Claude API integration
-    startConversation(mode);
+    startConversation(mode, configuration);
     setShowConfigModal(false);
     setError(null);
     setConversationMessages([]);
@@ -769,6 +769,7 @@ export default function HomeScreen() {
                   >
                     {message.content}
                   </Text>
+                  
                   <Text
                     style={[
                       styles.messageTime,
@@ -1157,7 +1158,7 @@ export default function HomeScreen() {
           setTextInputVisible(false);
           setActiveDocument(null);
         }}
-        mode="interview-prep"
+        mode="document"
         placeholder={activeDocument === 'job' 
           ? "Paste the job description here..." 
           : "Paste your CV/resume content here..."}
