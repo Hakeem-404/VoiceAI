@@ -206,3 +206,41 @@ export interface ConversationSession {
   bookmarks: ConversationBookmark[];
   highlights: ConversationHighlight[];
 }
+
+export interface DocumentData {
+  jobDescription: string;
+  cvContent: string;
+  analysisResult?: DocumentAnalysis;
+}
+
+export interface DocumentAnalysis {
+  jobDescription: {
+    requirements: string[];
+    skills: string[];
+    experience: string;
+    responsibilities: string[];
+    companyInfo: string;
+    culture: string[];
+  };
+  cv: {
+    skills: string[];
+    experience: string[];
+    achievements: string[];
+    education: string[];
+    technologies: string[];
+  };
+  analysis: {
+    matchScore: number;
+    strengths: string[];
+    gaps: string[];
+    focusAreas: string[];
+    difficulty: 'junior' | 'mid' | 'senior' | 'executive';
+    recommendations: string[];
+    interviewQuestions?: {
+      technical: string[];
+      behavioral: string[];
+      situational: string[];
+      gapFocused: string[];
+    };
+  };
+}

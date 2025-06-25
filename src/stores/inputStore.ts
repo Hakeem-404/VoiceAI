@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { DocumentData } from '../types';
 
 export type InputMode = 'voice' | 'text' | 'hybrid';
 
@@ -9,6 +10,7 @@ export interface InputState {
   inputHistory: string[];
   isTextInputVisible: boolean;
   quickActions: string[];
+  documentData: DocumentData;
   
   // Actions
   setInputMode: (mode: InputMode) => void;
@@ -18,6 +20,8 @@ export interface InputState {
   setTextInputVisible: (visible: boolean) => void;
   clearCurrentText: () => void;
   getRecentSuggestions: () => string[];
+  updateDocumentData: (data: Partial<DocumentData>) => void;
+  clearDocumentData: () => void;
 }
 
 export const useInputStore = create<InputState>((set, get) => ({
@@ -33,6 +37,11 @@ export const useInputStore = create<InputState>((set, get) => ({
     'Why do you want this job?',
     'Where do you see yourself in 5 years?',
   ],
+  documentData: {
+    jobDescription: '',
+    cvContent: '',
+    analysisResult: undefined,
+  },
 
   setInputMode: (inputMode) => set({ inputMode }),
   setCurrentText: (currentText) => set({ currentText }),
@@ -47,5 +56,22 @@ export const useInputStore = create<InputState>((set, get) => ({
   getRecentSuggestions: () => {
     const { inputHistory, quickActions } = get();
     return [...inputHistory.slice(0, 3), ...quickActions.slice(0, 2)];
+  },
+  updateDocumentData: (data) => {
+    set((state) => ({
+      documentData: {
+        ...state.documentData,
+        ...data,
+      },
+    }));
+  },
+  clearDocumentData: () => {
+    set({
+      documentData: {
+        jobDescription: '',
+        cvContent: '',
+        analysisResult: undefined,
+      },
+    });
   },
 }));

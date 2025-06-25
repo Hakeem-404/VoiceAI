@@ -21,8 +21,8 @@ import {
   X,
 } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
-import { DocumentProcessor, DocumentAnalysis } from './DocumentProcessor';
-import { ModeConfiguration, ConversationMode } from '@/src/types';
+import { DocumentAnalyzer } from '@/components/DocumentAnalyzer';
+import { ModeConfiguration, ConversationMode, DocumentAnalysis } from '@/src/types';
 import { spacing, typography } from '@/src/constants/colors';
 
 interface InterviewModeEnhancementProps {
@@ -39,7 +39,7 @@ export function InterviewModeEnhancement({
   onStart,
 }: InterviewModeEnhancementProps) {
   const { colors, isDark } = useTheme();
-  const [showDocumentProcessor, setShowDocumentProcessor] = useState(false);
+  const [showDocumentAnalyzer, setShowDocumentAnalyzer] = useState(false);
   const [analysis, setAnalysis] = useState<DocumentAnalysis | null>(null);
   const [configuration, setConfiguration] = useState<ModeConfiguration>({
     modeId: mode.id,
@@ -64,18 +64,18 @@ export function InterviewModeEnhancement({
 
   const handleAnalysisComplete = (documentAnalysis: DocumentAnalysis) => {
     setAnalysis(documentAnalysis);
-    setShowDocumentProcessor(false);
+    setShowDocumentAnalyzer(false);
     
     // Update configuration based on analysis
     setConfiguration(prev => ({
       ...prev,
-      difficulty: documentAnalysis.analysis.difficulty,
+      difficulty: documentAnalysis.analysis.difficulty === 'junior' ? 'beginner' :
+                 documentAnalysis.analysis.difficulty === 'executive' ? 'advanced' : 'intermediate',
       customSettings: {
         ...prev.customSettings,
         hasDocumentAnalysis: true,
         matchScore: documentAnalysis.analysis.matchScore,
         focusAreas: documentAnalysis.analysis.focusAreas,
-        interviewQuestions: documentAnalysis.analysis.interviewQuestions,
       },
     }));
   };
@@ -151,7 +151,7 @@ export function InterviewModeEnhancement({
                   </Text>
                   <TouchableOpacity
                     style={styles.editButton}
-                    onPress={() => setShowDocumentProcessor(true)}
+                    onPress={() => setShowDocumentAnalyzer(true)}
                   >
                     <Settings size={16} color={colors.primary} />
                   </TouchableOpacity>
@@ -212,7 +212,7 @@ export function InterviewModeEnhancement({
             ) : (
               <TouchableOpacity
                 style={[styles.uploadButton, { backgroundColor: colors.primary }]}
-                onPress={() => setShowDocumentProcessor(true)}
+                onPress={() => setShowDocumentAnalyzer(true)}
               >
                 <FileText size={20} color="white" />
                 <Text style={styles.uploadButtonText}>
@@ -342,11 +342,30 @@ export function InterviewModeEnhancement({
         </View>
       </View>
 
-      <DocumentProcessor
-        visible={showDocumentProcessor}
-        onClose={() => setShowDocumentProcessor(false)}
-        onAnalysisComplete={handleAnalysisComplete}
-      />
+      {showDocumentAnalyzer && (
+        <View style={[styles.analyzerOverlay, { backgroundColor: colors.background }]}>
+          <View style={styles.analyzerHeader}>
+            <TouchableOpacity
+              style={styles.analyzerCloseButton}
+              onPress={() => setShowDocumentAnalyzer(false)}
+            >
+              <X size={24} color={colors.text} />
+            </TouchableOpacity>
+            
+            <Text style={[styles.analyzerTitle, { color: colors.text }]}>
+              Document Analysis
+            </Text>
+            
+            <View style={styles.analyzerPlaceholder} />
+          </View>
+          
+          <DocumentAnalyzer
+            jobDescription=""
+            cvContent=""
+            onAnalysisComplete={handleAnalysisComplete}
+          />
+        </View>
+      )}
     </>
   );
 }
@@ -574,5 +593,31 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.lg,
     fontWeight: typography.weights.bold,
     color: 'white',
+  },
+  analyzerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 10,
+  },
+  analyzerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    paddingTop: 60,
+  },
+  analyzerCloseButton: {
+    padding: spacing.sm,
+  },
+  analyzerTitle: {
+    fontSize: typography.sizes.xl,
+    fontWeight: typography.weights.bold,
+  },
+  analyzerPlaceholder: {
+    width: 40,
   },
 });
