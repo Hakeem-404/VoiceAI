@@ -5,14 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
-import { 
-  BarChart3, 
-  Clock, 
-  MessageSquare, 
-  Volume2, 
-  Zap,
-  ChevronRight
-} from 'lucide-react-native';
+import { ChartBar as BarChart3, Clock, MessageSquare, Volume2, Zap, ChevronRight } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { FeedbackMetrics } from '@/src/types';
 import { spacing, typography } from '@/src/constants/colors';

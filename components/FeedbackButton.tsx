@@ -5,7 +5,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { BarChart3 } from 'lucide-react-native';
+import { ChartBar as BarChart3 } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { spacing, typography } from '@/src/constants/colors';
 
