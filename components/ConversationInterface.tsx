@@ -10,11 +10,26 @@ import {
   Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Pause, Play, Square, RotateCcw, Bookmark, Highlighter, Volume2, VolumeX, MessageSquare, Settings, MoveHorizontal as MoreHorizontal } from 'lucide-react-native';
+import {
+  Pause,
+  Play,
+  Square,
+  RotateCcw,
+  Bookmark,
+  Highlighter,
+  Volume2,
+  VolumeX,
+  MessageSquare,
+  Settings,
+  MoveHorizontal as MoreHorizontal,
+  BarChart3
+} from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { ConversationSession, Message } from '@/src/types';
 import { VoiceRecordButton } from './VoiceRecordButton';
 import { TextInputModal } from './TextInputModal';
+import { ConversationFeedbackSystem } from './ConversationFeedbackSystem';
+import { useConversationStore } from '@/src/stores/conversationStore';
 import { spacing, typography } from '@/src/constants/colors';
 
 const { width, height } = Dimensions.get('window');
@@ -53,12 +68,14 @@ export function ConversationInterface({
   error,
 }: ConversationInterfaceProps) {
   const { colors, isDark } = useTheme();
+  const { currentConversation } = useConversationStore();
   
   const [showTextInput, setShowTextInput] = useState(false);
   const [isVolumeOn, setIsVolumeOn] = useState(true);
   const [sessionDuration, setSessionDuration] = useState(0);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [showControls, setShowControls] = useState(true);
+  const [showFeedback, setShowFeedback] = useState(false);
   
   const scrollViewRef = useRef<ScrollView>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout>();
@@ -139,6 +156,10 @@ export function ConversationInterface({
     }
   };
 
+  const toggleFeedback = () => {
+    setShowFeedback(!showFeedback);
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <LinearGradient
@@ -150,7 +171,7 @@ export function ConversationInterface({
           <View style={[styles.header, { backgroundColor: colors.surface + 'E6' }]}>
             <View style={styles.sessionInfo}>
               <Text style={[styles.sessionTitle, { color: colors.text }]}>
-                {session.configuration.modeId.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                {session.modeId.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
               </Text>
               <View style={styles.sessionMeta}>
                 <View style={[
@@ -182,6 +203,16 @@ export function ConversationInterface({
                 style={[styles.headerButton, { backgroundColor: colors.surface }]}
                 onPress={() => {
                   triggerHaptic();
+                  toggleFeedback();
+                }}
+              >
+                <BarChart3 size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.headerButton, { backgroundColor: colors.surface }]}
+                onPress={() => {
+                  triggerHaptic();
                   onModeSwitch();
                 }}
               >
@@ -199,6 +230,15 @@ export function ConversationInterface({
               </TouchableOpacity>
             </View>
           </View>
+        )}
+
+        {/* Feedback System */}
+        {showFeedback && currentConversation && (
+          <ConversationFeedbackSystem
+            conversation={currentConversation}
+            isActive={true}
+            showMetrics={true}
+          />
         )}
 
         {/* Messages */}

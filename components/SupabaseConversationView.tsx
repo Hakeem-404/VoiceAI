@@ -11,9 +11,23 @@ import {
   TextInput
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Send, RotateCcw, Copy, Bookmark, MoveHorizontal as MoreHorizontal, Wifi, WifiOff, Zap, CircleAlert as AlertCircle } from 'lucide-react-native';
+import {
+  Send,
+  RotateCcw,
+  Copy,
+  Bookmark,
+  MoveHorizontal as MoreHorizontal,
+  Wifi,
+  WifiOff,
+  Zap,
+  CircleAlert as AlertCircle,
+  BarChart3
+} from 'lucide-react-native';
 import { useSupabaseConversation } from '../hooks/useSupabaseConversation';
 import { ConversationMessage } from '../types/api';
+import { ConversationFeedbackSystem } from './ConversationFeedbackSystem';
+import { Conversation } from '@/src/types';
+import { useConversationStore } from '@/src/stores/conversationStore';
 
 const { width, height } = Dimensions.get('window');
 
@@ -50,8 +64,10 @@ export function SupabaseConversationView({
     autoSave: true
   });
 
+  const { currentConversation } = useConversationStore();
   const [inputText, setInputText] = useState('');
   const [isOnline, setIsOnline] = useState(true);
+  const [showFeedback, setShowFeedback] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
   // Auto-scroll to bottom when new messages arrive
@@ -111,6 +127,10 @@ export function SupabaseConversationView({
       const { setStringAsync } = await import('expo-clipboard');
       await setStringAsync(content);
     }
+  };
+
+  const toggleFeedback = () => {
+    setShowFeedback(!showFeedback);
   };
 
   const MessageBubble = ({ message, index }: { message: ConversationMessage; index: number }) => {
@@ -202,6 +222,12 @@ export function SupabaseConversationView({
             )}
             <TouchableOpacity
               style={styles.headerButton}
+              onPress={toggleFeedback}
+            >
+              <BarChart3 size={20} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.headerButton}
               onPress={() => {/* Show options menu */}}
             >
               <MoreHorizontal size={20} color="white" />
@@ -214,6 +240,15 @@ export function SupabaseConversationView({
 
       {/* Configuration Status */}
       <ConfigurationStatus />
+
+      {/* Feedback System */}
+      {showFeedback && currentConversation && (
+        <ConversationFeedbackSystem
+          conversation={currentConversation}
+          isActive={true}
+          showMetrics={true}
+        />
+      )}
 
       {/* Messages */}
       <ScrollView
