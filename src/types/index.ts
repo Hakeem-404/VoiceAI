@@ -48,6 +48,44 @@ export interface Conversation {
   highlights?: ConversationHighlight[];
 }
 
+export interface DocumentData {
+  jobDescription: string;
+  cvContent: string;
+  analysisResult?: DocumentAnalysis;
+}
+
+export interface DocumentAnalysis {
+  jobDescription: {
+    requirements: string[];
+    skills: string[];
+    experience: string;
+    responsibilities: string[];
+    companyInfo: string;
+    culture: string[];
+  };
+  cv: {
+    skills: string[];
+    experience: string[];
+    achievements: string[];
+    education: string[];
+    technologies: string[];
+  };
+  analysis: {
+    matchScore: number;
+    strengths: string[];
+    gaps: string[];
+    focusAreas: string[];
+    difficulty: 'junior' | 'mid' | 'senior' | 'executive';
+    recommendations: string[];
+    interviewQuestions?: {
+      technical: string[];
+      behavioral: string[];
+      situational: string[];
+      gapFocused: string[];
+    };
+  };
+}
+
 export interface ConversationBookmark {
   id: string;
   messageId: string;
@@ -112,6 +150,17 @@ export interface FeedbackData {
     confidence: number;
     pace: number;
     overall: number;
+    engagement?: number;
+    relevance?: number;
+    structure?: number;
+    persuasiveness?: number;
+    creativity?: number;
+    criticalThinking?: number;
+    emotionalIntelligence?: number;
+    vocabularyUsage?: number;
+    grammarAccuracy?: number;
+    culturalAwareness?: number;
+    professionalCommunication?: number;
   };
   strengths: string[];
   improvements: string[];
@@ -119,6 +168,60 @@ export interface FeedbackData {
     wordsPerMinute: number;
     pauseCount: number;
     fillerWords: number;
+    questionCount?: number;
+    topicChanges?: number;
+    responseTime?: number;
+    complexSentences?: number;
+    technicalTerms?: number;
+    emotionalTone?: 'positive' | 'neutral' | 'negative';
+    speakingTime?: number;
+    listeningTime?: number;
+  };
+  modeSpecific?: {
+    generalChat?: {
+      conversationFlow: number;
+      topicExploration: number;
+      empathyScore: number;
+      curiosityLevel: number;
+    };
+    debate?: {
+      argumentStrength: number;
+      evidenceUsage: number;
+      counterArgumentHandling: number;
+      logicalConsistency: number;
+    };
+    brainstorm?: {
+      ideaCount: number;
+      uniqueIdeas: number;
+      ideaQuality: number;
+      buildingOnIdeas: number;
+    };
+    interview?: {
+      questionRelevance: number;
+      answerCompleteness: number;
+      professionalDemeanor: number;
+      technicalAccuracy: number;
+    };
+    presentation?: {
+      structureQuality: number;
+      audienceEngagement: number;
+      messageClarity: number;
+      deliveryStyle: number;
+    };
+    languageLearning?: {
+      grammarAccuracy: number;
+      vocabularyRange: number;
+      pronunciationScore: number;
+      fluencyProgress: number;
+    };
+  };
+  tips: string[];
+  nextSteps: string[];
+  progressTracking?: {
+    previousScore?: number;
+    improvement?: number;
+    consistentStrengths: string[];
+    persistentChallenges: string[];
   };
 }
 
@@ -207,40 +310,36 @@ export interface ConversationSession {
   highlights: ConversationHighlight[];
 }
 
-export interface DocumentData {
-  jobDescription: string;
-  cvContent: string;
-  analysisResult?: DocumentAnalysis;
+export interface FeedbackMetrics {
+  speakingPace: number; // words per minute
+  pauseFrequency: number; // pauses per minute
+  fillerWordFrequency: number; // filler words per minute
+  responseTime: number; // average time to respond in seconds
+  questionFrequency: number; // questions asked per minute
+  sentenceComplexity: number; // average words per sentence
+  vocabularyDiversity: number; // unique words / total words
+  topicRelevance: number; // 0-100 score
+  emotionalTone: number; // -100 to 100 (negative to positive)
+  engagementLevel: number; // 0-100 score
+  speakingListeningRatio: number; // ratio of speaking time to listening time
 }
 
-export interface DocumentAnalysis {
-  jobDescription: {
-    requirements: string[];
-    skills: string[];
-    experience: string;
-    responsibilities: string[];
-    companyInfo: string;
-    culture: string[];
+export interface RealTimeFeedback {
+  type: 'pace' | 'volume' | 'filler' | 'engagement' | 'question' | 'clarity';
+  message: string;
+  severity: 'info' | 'suggestion' | 'warning';
+  timestamp: Date;
+}
+
+export interface FeedbackSummary {
+  overallScore: number;
+  keyStrengths: string[];
+  improvementAreas: string[];
+  modeSpecificInsights: string[];
+  compareToPrevious?: {
+    overallChange: number;
+    improvedAreas: string[];
+    declinedAreas: string[];
   };
-  cv: {
-    skills: string[];
-    experience: string[];
-    achievements: string[];
-    education: string[];
-    technologies: string[];
-  };
-  analysis: {
-    matchScore: number;
-    strengths: string[];
-    gaps: string[];
-    focusAreas: string[];
-    difficulty: 'junior' | 'mid' | 'senior' | 'executive';
-    recommendations: string[];
-    interviewQuestions?: {
-      technical: string[];
-      behavioral: string[];
-      situational: string[];
-      gapFocused: string[];
-    };
-  };
+  nextStepSuggestions: string[];
 }
