@@ -35,6 +35,7 @@ import {
   VolumeX,
   Play,
   Pause,
+  BarChart3,
 } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useConversationStore } from '@/src/stores/conversationStore';
@@ -60,6 +61,7 @@ import { InterviewSetupScreen } from '@/components/InterviewSetupScreen';
 import { ConversationMode, ModeConfiguration, DailyChallenge, ConversationMessage, DocumentAnalysis } from '@/src/types';
 import { spacing, typography } from '@/src/constants/colors';
 import { ConversationContext } from '@/types/api';
+import { FeedbackModal } from '@/components/FeedbackModal';
 
 const { width } = Dimensions.get('window');
 
@@ -75,6 +77,9 @@ export default function HomeScreen() {
     addMessage,
     setRecordingState,
     setProcessing,
+    lastFeedback,
+    clearLastFeedback,
+    generateFeedback,
   } = useConversationStore();
 
   const {
@@ -137,6 +142,8 @@ export default function HomeScreen() {
   const [showAudioPlayerControls, setShowAudioPlayerControls] = useState(false);
   const [voicePlaybackEnabled, setVoicePlaybackEnabled] = useState(true);
   const [showInterviewSetup, setShowInterviewSetup] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [isGeneratingFeedback, setIsGeneratingFeedback] = useState(false);
 
   // Mock user preferences for favorites and recent modes
   const [favoriteMode, setFavoriteMode] = useState<string>('general-chat');
@@ -600,6 +607,48 @@ export default function HomeScreen() {
     { id: 'creativity', name: 'Creative', icon: null },
   ];
 
+  const handleEndConversation = async () => {
+    try {
+      setIsGeneratingFeedback(true);
+      // End conversation and generate feedback
+      const feedback = await endConversation();
+      
+      // Clear conversation state
+      setConversationMessages([]);
+      setQuickReplies([]);
+      stopCurrentPlayback();
+      
+      // Show feedback modal if feedback was generated
+      if (feedback) {
+        setShowFeedbackModal(true);
+      }
+    } catch (error) {
+      console.error('Error ending conversation:', error);
+      // Still clear the conversation state even if feedback generation failed
+      setConversationMessages([]);
+      setQuickReplies([]);
+      stopCurrentPlayback();
+    } finally {
+      setIsGeneratingFeedback(false);
+    }
+  };
+
+  const handleGenerateFeedback = async () => {
+    if (!currentConversation) return;
+    
+    try {
+      setIsGeneratingFeedback(true);
+      const feedback = await generateFeedback(currentConversation);
+      if (feedback) {
+        setShowFeedbackModal(true);
+      }
+    } catch (error) {
+      console.error('Error generating feedback:', error);
+    } finally {
+      setIsGeneratingFeedback(false);
+    }
+  };
+
   if (showPermissionHandler) {
     return (
       <PermissionHandler
@@ -628,10 +677,7 @@ export default function HomeScreen() {
               [
                 { text: 'Cancel', style: 'cancel' },
                 { text: 'Clear', style: 'destructive', onPress: () => {
-                  endConversation();
-                  setConversationMessages([]);
-                  setQuickReplies([]);
-                  stopCurrentPlayback();
+                  handleEndConversation();
                 }},
               ]
             );
@@ -684,12 +730,7 @@ export default function HomeScreen() {
 
                 <TouchableOpacity
                   style={[styles.endButton, { backgroundColor: colors.error }]}
-                  onPress={() => {
-                    endConversation();
-                    setConversationMessages([]);
-                    setQuickReplies([]);
-                    stopCurrentPlayback();
-                  }}
+                  onPress={handleEndConversation}
                   accessibilityLabel="End conversation"
                 >
                   <Text style={styles.endButtonText}>End</Text>
@@ -729,6 +770,15 @@ export default function HomeScreen() {
               <View style={[styles.statusBanner, { backgroundColor: colors.primary + '20' }]}>
                 <Text style={[styles.statusText, { color: colors.primary }]}>
                   Generating voice response...
+                </Text>
+              </View>
+            )}
+
+            {/* Feedback Generation Status */}
+            {isGeneratingFeedback && (
+              <View style={[styles.statusBanner, { backgroundColor: colors.secondary + '20' }]}>
+                <Text style={[styles.statusText, { color: colors.secondary }]}>
+                  Generating conversation feedback...
                 </Text>
               </View>
             )}
@@ -855,6 +905,20 @@ export default function HomeScreen() {
                 // Show help modal
               }}
             />
+
+            {/* Manual Feedback Button for Testing */}
+            {currentConversation && conversationMessages.length > 0 && (
+              <TouchableOpacity
+                style={[styles.feedbackTestButton, { backgroundColor: colors.secondary }]}
+                onPress={handleGenerateFeedback}
+                disabled={isGeneratingFeedback}
+              >
+                <BarChart3 size={20} color="white" />
+                <Text style={styles.feedbackTestButtonText}>
+                  {isGeneratingFeedback ? 'Generating...' : 'Generate Feedback'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </LinearGradient>
         </GestureHandler>
 
@@ -882,6 +946,18 @@ export default function HomeScreen() {
           visible={showAudioPlayerControls}
           onClose={() => setShowAudioPlayerControls(false)}
         />
+
+        {/* Feedback Modal */}
+        {lastFeedback && currentConversation && (
+          <FeedbackModal
+            visible={showFeedbackModal}
+            onClose={() => {
+              setShowFeedbackModal(false);
+              clearLastFeedback();
+            }}
+            conversation={currentConversation}
+          />
+        )}
       </SafeAreaView>
     );
   }
@@ -1489,5 +1565,26 @@ const styles = StyleSheet.create({
   interviewSetupTitle: {
     fontSize: 18,
     fontWeight: '600',
+  },
+  feedbackTestButton: {
+    position: 'absolute',
+    bottom: 120,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 25,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  feedbackTestButtonText: {
+    color: 'white',
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.semibold,
+    marginLeft: spacing.xs,
   },
 });
