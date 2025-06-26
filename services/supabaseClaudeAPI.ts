@@ -191,6 +191,11 @@ class SupabaseClaudeAPIService {
         };
       }
     }
+    
+    // Add system prompt if provided
+    if (options.system) {
+      data.system = options.system;
+    }
 
     // If offline, add to queue
     if (!this.isOnline) {
@@ -225,14 +230,9 @@ class SupabaseClaudeAPIService {
           max_tokens: data.max_tokens,
           messages_count: data.messages?.length,
           temperature: data.temperature,
-          has_system: !!options.system
+          has_system: !!data.system
         }
       });
-
-      // Add system prompt if provided
-      if (options.system) {
-        data.system = options.system;
-      }
 
       const response = await fetch(`${this.supabaseUrl}/functions/v1/claude-proxy`, {
         method: 'POST',
@@ -377,8 +377,7 @@ class SupabaseClaudeAPIService {
   }
 
   // Main conversation method
-  // Fixed sendMessage method in SupabaseClaudeAPIService
-async sendMessage(
+  async sendMessage(
   message: string,
   context: ConversationContext,
   options: APIRequestOptions = {}
@@ -406,6 +405,7 @@ async sendMessage(
   // Prepare messages - this should NOT include the system prompt
   const messages = this.prepareMessages(context, systemPrompt);
   
+  // CRITICAL FIX: For interview practice initialization with empty message,
   // send a starter message to begin the interview
   if (context.mode === 'interview-practice' && 
       !message.trim() && 
@@ -490,45 +490,6 @@ async sendMessage(
   }
 }
 
-// Also update the sendSystemMessage function in your React component
-const sendSystemMessage = async (systemMessage: string) => {
-  console.log('Sending system message to start interview...');
-  
-  try {
-    // Create a context with custom settings that include the system message
-    const customContext = {
-      messages: [],
-      mode,
-      sessionId,
-      userId,
-      metadata: {
-        startTime: new Date(),
-        lastActivity: new Date(),
-        messageCount: 0,
-        totalTokens: 0,
-      },
-      customSettings: {
-        documentAnalysis: documentData.analysisResult,
-        jobDescription: documentData.jobDescription,
-        cvContent: documentData.cvContent
-      }
-    };
-    
-    // Send an empty message that will trigger the interview with system context
-    // The service will automatically add a starter message for interview mode
-    await sendMessage("", customContext);
-    console.log('Interview started successfully');
-    
-  } catch (error) {
-    console.error('Failed to send system message:', error);
-    Alert.alert(
-      'Interview Setup Failed',
-      'Failed to start the personalized interview. Please try again.',
-      [{ text: 'OK' }]
-    );
-  }
-};
-
   // Streaming conversation for real-time responses
   async sendMessageStream(
     message: string,
@@ -545,10 +506,7 @@ const sendSystemMessage = async (systemMessage: string) => {
       return;
     }
 
-    // Get custom settings from context if available
-    const customSettings = (context as any).customSettings;
-    
-    const systemPrompt = this.getSystemPrompt(context.mode, customSettings);
+    const systemPrompt = this.getSystemPrompt(context.mode);
     const messages = this.prepareMessages(context, systemPrompt);
     messages.push({
       role: 'user',
@@ -706,7 +664,7 @@ const sendSystemMessage = async (systemMessage: string) => {
       'general-chat': 150,
       'debate-challenge': 200,
       'idea-brainstorm': 180,
-      'interview-practice': 300, // Increased for interview responses
+      'interview-practice': 120,
       'presentation-prep': 160,
       'language-learning': 140,
       'document-analysis': 1000 
