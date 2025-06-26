@@ -59,60 +59,145 @@ class DocumentAnalysisService {
   }
 
   private async analyzeJobDescription(jobDescription: string): Promise<DocumentAnalysis['jobDescription']> {
-    const prompt = `You are a job analysis expert. Analyze this job description and extract key information.
+    const prompt = `Analyze this job description and extract key information:
 
 JOB DESCRIPTION:
 ${jobDescription}
 
-IMPORTANT: You must respond with ONLY a valid JSON object in exactly this format:
+Please provide analysis in this JSON format:
 {
-  "requirements": ["requirement 1", "requirement 2"],
-  "skills": ["skill 1", "skill 2"],
+  "requirements": ["requirement 1", "requirement 2", ...],
+  "skills": ["skill 1", "skill 2", ...],
   "experience": "junior/mid/senior/executive level description",
-  "responsibilities": ["responsibility 1", "responsibility 2"],
+  "responsibilities": ["responsibility 1", "responsibility 2", ...],
   "companyInfo": "company information summary",
-  "culture": ["culture value 1", "culture value 2"]
+  "culture": ["culture value 1", "culture value 2", ...]
 }
 
 Extract 5-7 key requirements, 5-7 technical and soft skills, 3-5 main responsibilities, and 2-3 company culture values.
-Respond ONLY with the JSON object, no other text.`;
+Be specific and accurate in your extraction. Focus on the most important elements that would be relevant for interview preparation.`;
 
+    // Create a context for Claude API
+    const context: ConversationContext = {
+      messages: [],
+      mode: 'document-analysis',
+      sessionId: `jd_analysis_${Date.now()}`,
+      metadata: {
+        startTime: new Date(),
+        lastActivity: new Date(),
+        messageCount: 0,
+        totalTokens: 0,
+      },
+    };
+    
+    // Send the prompt to Claude
+    const response = await supabaseClaudeAPI.sendMessage(prompt, context);
+    
+    if (response.error) {
+      console.error('Job description analysis failed:', response.error);
+      throw new Error(`Failed to analyze job description: ${response.error}`);
+    }
+    
+    if (!response.data) {
+      throw new Error('No analysis data received for job description');
+    }
+    
+    // Extract JSON from Claude's response
     try {
-      const response = await this.sendMessageToClaude(prompt, 'jd_analysis');
-      return this.parseJobDescriptionResponse(response);
+      const jsonMatch = response.data.content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No JSON found in Claude response');
+      }
+      
+      const analysisData = JSON.parse(jsonMatch[0]);
+      
+      return {
+        requirements: analysisData.requirements || [],
+        skills: analysisData.skills || [],
+        experience: analysisData.experience || 'mid',
+        responsibilities: analysisData.responsibilities || [],
+        companyInfo: analysisData.companyInfo || '',
+        culture: analysisData.culture || [],
+      };
     } catch (error) {
-      console.error('Job description analysis failed:', error);
-      // Return fallback analysis
-      return this.getFallbackJobAnalysis(jobDescription);
+      console.error('Failed to parse job description analysis:', error);
+      throw new Error('Failed to parse job description analysis');
     }
   }
 
   private async analyzeCV(cv: string): Promise<DocumentAnalysis['cv']> {
-    const prompt = `You are a CV analysis expert. Analyze this CV/Resume and extract key information.
+    const prompt = `Analyze this CV/Resume and extract key information:
 
 CV/RESUME:
 ${cv}
 
-IMPORTANT: You must respond with ONLY a valid JSON object in exactly this format:
+Please provide analysis in this JSON format:
 {
-  "skills": ["skill 1", "skill 2"],
-  "experience": ["experience 1", "experience 2"],
-  "achievements": ["achievement 1", "achievement 2"],
-  "education": ["education 1", "education 2"],
-  "technologies": ["technology 1", "technology 2"]
+  "skills": ["skill 1", "skill 2", ...],
+  "experience": ["experience 1", "experience 2", ...],
+  "achievements": ["achievement 1", "achievement 2", ...],
+  "education": ["education 1", "education 2", ...],
+  "technologies": ["technology 1", "technology 2", ...]
 }
 
 Extract 5-7 key skills, 3-5 relevant experiences, 2-3 notable achievements, education details, and 5-7 technologies/tools.
-Respond ONLY with the JSON object, no other text.`;
+Be specific and accurate in your extraction. Focus on the most important elements that would be relevant for interview preparation.`;
 
-    try {
-      const response = await this.sendMessageToClaude(prompt, 'cv_analysis');
-      return this.parseCVResponse(response);
-    } catch (error) {
-      console.error('CV analysis failed:', error);
-      // Return fallback analysis
-      return this.getFallbackCVAnalysis(cv);
+    // Create a context for Claude API
+    const context: ConversationContext = {
+      messages: [],
+      mode: 'document-analysis',
+      sessionId: `cv_analysis_${Date.now()}`,
+      metadata: {
+        startTime: new Date(),
+        lastActivity: new Date(),
+        messageCount: 0,
+        totalTokens: 0,
+      },
+    };
+    
+    // Send the prompt to Claude
+    const response = await supabaseClaudeAPI.sendMessage(prompt, context);
+    
+    if (response.error) {
+      console.error('CV analysis failed:', response.error);
+      throw new Error(`Failed to analyze CV: ${response.error}`);
     }
+    
+    if (!response.data) {
+      throw new Error('No analysis data received for CV');
+    }
+    
+    // Extract JSON from Claude's response
+    try {
+      const jsonMatch = response.data.content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No JSON found in Claude response');
+      }
+      
+      const analysisData = JSON.parse(jsonMatch[0]);
+      
+      return {
+        skills: analysisData.skills || [],
+        experience: analysisData.experience || [],
+        achievements: analysisData.achievements || [],
+        education: analysisData.education || [],
+        technologies: analysisData.technologies || [],
+      };
+    } catch (error) {
+      console.error('Failed to parse CV analysis:', error);
+      throw new Error('Failed to parse CV analysis');
+    }
+  }
+
+  private getEmptyCVAnalysis(): DocumentAnalysis['cv'] {
+    return {
+      skills: [],
+      experience: [],
+      achievements: [],
+      education: [],
+      technologies: [],
+    };
   }
 
   private async compareJDandCV(
@@ -121,7 +206,7 @@ Respond ONLY with the JSON object, no other text.`;
     jobDescription: string,
     cv: string
   ): Promise<DocumentAnalysis['analysis']> {
-    const prompt = `You are an interview preparation expert. Compare this job description with the candidate profile and provide match assessment.
+    const prompt = `Compare this job description analysis with CV analysis and provide match assessment:
 
 JOB DESCRIPTION:
 ${jobDescription}
@@ -135,42 +220,33 @@ ${cv}
 CANDIDATE PROFILE:
 ${JSON.stringify(cvAnalysis, null, 2)}` : 'CV/RESUME: Not provided'}
 
-IMPORTANT: You must respond with ONLY a valid JSON object in exactly this format:
+Provide detailed comparison analysis in this JSON format:
 {
   "matchScore": 75,
-  "strengths": ["strength 1", "strength 2"],
-  "gaps": ["gap 1", "gap 2"],
-  "focusAreas": ["focus area 1", "focus area 2"],
-  "difficulty": "junior",
-  "recommendations": ["recommendation 1", "recommendation 2"],
+  "strengths": ["strength 1", "strength 2", ...],
+  "gaps": ["gap 1", "gap 2", ...],
+  "focusAreas": ["focus area 1", "focus area 2", ...],
+  "difficulty": "junior"|"mid"|"senior"|"executive",
+  "recommendations": ["recommendation 1", "recommendation 2", ...],
   "interviewQuestions": {
-    "technical": ["question 1", "question 2"],
-    "behavioral": ["question 1", "question 2"],
-    "situational": ["question 1", "question 2"],
-    "gapFocused": ["question 1", "question 2"]
+    "technical": ["question 1", "question 2", ...],
+    "behavioral": ["question 1", "question 2", ...],
+    "situational": ["question 1", "question 2", ...],
+    "gapFocused": ["question 1", "question 2", ...]
   }
 }
 
-The matchScore should be 0-100. Difficulty should be one of: "junior", "mid", "senior", "executive".
-Generate 4-5 interview questions for each category.
-Respond ONLY with the JSON object, no other text.`;
+If no CV was provided, make reasonable assumptions and focus on job-specific preparation.
+Generate 4-5 interview questions for each category that are specifically tailored to this job and candidate.
+The matchScore should be between 0-100, with higher scores indicating better matches.
+Identify 3-5 strengths, 3-5 gaps, 3-5 focus areas, and 3-5 recommendations.
+The difficulty should reflect the seniority level required for the position.`;
 
-    try {
-      const response = await this.sendMessageToClaude(prompt, 'match_analysis');
-      return this.parseMatchResponse(response);
-    } catch (error) {
-      console.error('Match analysis failed:', error);
-      // Return fallback analysis
-      return this.getFallbackMatchAnalysis(jdAnalysis, cvAnalysis);
-    }
-  }
-
-  // Improved message sending with better error handling
-  private async sendMessageToClaude(prompt: string, analysisType: string): Promise<string> {
+    // Create a context for Claude API
     const context: ConversationContext = {
       messages: [],
       mode: 'document-analysis',
-      sessionId: `${analysisType}_${Date.now()}`,
+      sessionId: `match_analysis_${Date.now()}`,
       metadata: {
         startTime: new Date(),
         lastActivity: new Date(),
@@ -179,233 +255,45 @@ Respond ONLY with the JSON object, no other text.`;
       },
     };
     
-    console.log(`Sending ${analysisType} to Claude:`, {
-      mode: context.mode,
-      message_length: prompt.length,
-      total_messages: context.messages.length + 1,
-      model: 'claude-3-5-sonnet-20240620',
-      max_tokens: 200 // Increased for JSON responses
-    });
-    
+    // Send the prompt to Claude
     const response = await supabaseClaudeAPI.sendMessage(prompt, context);
     
     if (response.error) {
-      console.error(`${analysisType} failed:`, response.error);
-      throw new Error(`Failed to analyze: ${response.error}`);
+      console.error('Match analysis failed:', response.error);
+      throw new Error(`Failed to analyze match: ${response.error}`);
     }
     
     if (!response.data) {
-      throw new Error(`No analysis data received for ${analysisType}`);
+      throw new Error('No analysis data received for match');
     }
     
-    console.log(`Received ${analysisType} response:`, {
-      response_length: response.data.content.length
-    });
-    
-    return response.data.content;
-  }
-
-  // Improved JSON parsing with multiple fallback strategies
-  private parseJobDescriptionResponse(responseContent: string): DocumentAnalysis['jobDescription'] {
+    // Extract JSON from Claude's response
     try {
-      // Strategy 1: Look for JSON object
-      const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsedData = JSON.parse(jsonMatch[0]);
-        return {
-          requirements: Array.isArray(parsedData.requirements) ? parsedData.requirements : [],
-          skills: Array.isArray(parsedData.skills) ? parsedData.skills : [],
-          experience: typeof parsedData.experience === 'string' ? parsedData.experience : 'mid',
-          responsibilities: Array.isArray(parsedData.responsibilities) ? parsedData.responsibilities : [],
-          companyInfo: typeof parsedData.companyInfo === 'string' ? parsedData.companyInfo : '',
-          culture: Array.isArray(parsedData.culture) ? parsedData.culture : [],
-        };
+      const jsonMatch = response.data.content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No JSON found in Claude response');
       }
       
-      // Strategy 2: Try parsing the entire response as JSON
-      const parsedData = JSON.parse(responseContent.trim());
-      return {
-        requirements: Array.isArray(parsedData.requirements) ? parsedData.requirements : [],
-        skills: Array.isArray(parsedData.skills) ? parsedData.skills : [],
-        experience: typeof parsedData.experience === 'string' ? parsedData.experience : 'mid',
-        responsibilities: Array.isArray(parsedData.responsibilities) ? parsedData.responsibilities : [],
-        companyInfo: typeof parsedData.companyInfo === 'string' ? parsedData.companyInfo : '',
-        culture: Array.isArray(parsedData.culture) ? parsedData.culture : [],
-      };
-    } catch (error) {
-      console.error('Failed to parse job description analysis:', error);
-      console.log('Raw response:', responseContent);
-      throw new Error('Failed to parse job description analysis');
-    }
-  }
-
-  private parseCVResponse(responseContent: string): DocumentAnalysis['cv'] {
-    try {
-      // Strategy 1: Look for JSON object
-      const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsedData = JSON.parse(jsonMatch[0]);
-        return {
-          skills: Array.isArray(parsedData.skills) ? parsedData.skills : [],
-          experience: Array.isArray(parsedData.experience) ? parsedData.experience : [],
-          achievements: Array.isArray(parsedData.achievements) ? parsedData.achievements : [],
-          education: Array.isArray(parsedData.education) ? parsedData.education : [],
-          technologies: Array.isArray(parsedData.technologies) ? parsedData.technologies : [],
-        };
-      }
+      const analysisData = JSON.parse(jsonMatch[0]);
       
-      // Strategy 2: Try parsing the entire response as JSON
-      const parsedData = JSON.parse(responseContent.trim());
       return {
-        skills: Array.isArray(parsedData.skills) ? parsedData.skills : [],
-        experience: Array.isArray(parsedData.experience) ? parsedData.experience : [],
-        achievements: Array.isArray(parsedData.achievements) ? parsedData.achievements : [],
-        education: Array.isArray(parsedData.education) ? parsedData.education : [],
-        technologies: Array.isArray(parsedData.technologies) ? parsedData.technologies : [],
-      };
-    } catch (error) {
-      console.error('Failed to parse CV analysis:', error);
-      console.log('Raw response:', responseContent);
-      throw new Error('Failed to parse CV analysis');
-    }
-  }
-
-  private parseMatchResponse(responseContent: string): DocumentAnalysis['analysis'] {
-    try {
-      // Strategy 1: Look for JSON object
-      const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsedData = JSON.parse(jsonMatch[0]);
-        return {
-          matchScore: typeof parsedData.matchScore === 'number' ? parsedData.matchScore : 60,
-          strengths: Array.isArray(parsedData.strengths) ? parsedData.strengths : [],
-          gaps: Array.isArray(parsedData.gaps) ? parsedData.gaps : [],
-          focusAreas: Array.isArray(parsedData.focusAreas) ? parsedData.focusAreas : [],
-          difficulty: ['junior', 'mid', 'senior', 'executive'].includes(parsedData.difficulty) ? parsedData.difficulty : 'mid',
-          recommendations: Array.isArray(parsedData.recommendations) ? parsedData.recommendations : [],
-          interviewQuestions: {
-            technical: Array.isArray(parsedData.interviewQuestions?.technical) ? parsedData.interviewQuestions.technical : [],
-            behavioral: Array.isArray(parsedData.interviewQuestions?.behavioral) ? parsedData.interviewQuestions.behavioral : [],
-            situational: Array.isArray(parsedData.interviewQuestions?.situational) ? parsedData.interviewQuestions.situational : [],
-            gapFocused: Array.isArray(parsedData.interviewQuestions?.gapFocused) ? parsedData.interviewQuestions.gapFocused : [],
-          },
-        };
-      }
-      
-      // Strategy 2: Try parsing the entire response as JSON
-      const parsedData = JSON.parse(responseContent.trim());
-      return {
-        matchScore: typeof parsedData.matchScore === 'number' ? parsedData.matchScore : 60,
-        strengths: Array.isArray(parsedData.strengths) ? parsedData.strengths : [],
-        gaps: Array.isArray(parsedData.gaps) ? parsedData.gaps : [],
-        focusAreas: Array.isArray(parsedData.focusAreas) ? parsedData.focusAreas : [],
-        difficulty: ['junior', 'mid', 'senior', 'executive'].includes(parsedData.difficulty) ? parsedData.difficulty : 'mid',
-        recommendations: Array.isArray(parsedData.recommendations) ? parsedData.recommendations : [],
+        matchScore: analysisData.matchScore || 60,
+        strengths: analysisData.strengths || [],
+        gaps: analysisData.gaps || [],
+        focusAreas: analysisData.focusAreas || [],
+        difficulty: analysisData.difficulty || 'mid',
+        recommendations: analysisData.recommendations || [],
         interviewQuestions: {
-          technical: Array.isArray(parsedData.interviewQuestions?.technical) ? parsedData.interviewQuestions.technical : [],
-          behavioral: Array.isArray(parsedData.interviewQuestions?.behavioral) ? parsedData.interviewQuestions.behavioral : [],
-          situational: Array.isArray(parsedData.interviewQuestions?.situational) ? parsedData.interviewQuestions.situational : [],
-          gapFocused: Array.isArray(parsedData.interviewQuestions?.gapFocused) ? parsedData.interviewQuestions.gapFocused : [],
+          technical: analysisData.interviewQuestions?.technical || [],
+          behavioral: analysisData.interviewQuestions?.behavioral || [],
+          situational: analysisData.interviewQuestions?.situational || [],
+          gapFocused: analysisData.interviewQuestions?.gapFocused || [],
         },
       };
     } catch (error) {
       console.error('Failed to parse match analysis:', error);
-      console.log('Raw response:', responseContent);
       throw new Error('Failed to parse match analysis');
     }
-  }
-
-  // Fallback methods for when Claude parsing fails
-  private getFallbackJobAnalysis(jobDescription: string): DocumentAnalysis['jobDescription'] {
-    // Extract basic information using simple text processing as fallback
-    const text = jobDescription.toLowerCase();
-    
-    return {
-      requirements: [
-        'Review job requirements carefully',
-        'Prepare examples of relevant experience',
-        'Research company background'
-      ],
-      skills: [
-        'Communication skills',
-        'Problem-solving abilities',
-        'Team collaboration',
-        'Technical competency'
-      ],
-      experience: text.includes('senior') ? 'senior' : text.includes('junior') ? 'junior' : 'mid',
-      responsibilities: [
-        'Core job responsibilities',
-        'Team collaboration tasks',
-        'Project delivery duties'
-      ],
-      companyInfo: 'Company information to be researched',
-      culture: ['Professional environment', 'Team-oriented culture']
-    };
-  }
-
-  private getFallbackCVAnalysis(cv: string): DocumentAnalysis['cv'] {
-    return {
-      skills: ['General professional skills', 'Technical abilities', 'Communication skills'],
-      experience: ['Professional experience', 'Project involvement', 'Career progression'],
-      achievements: ['Notable accomplishments', 'Key contributions'],
-      education: ['Educational background', 'Relevant qualifications'],
-      technologies: ['Technical tools', 'Software proficiency', 'Industry knowledge']
-    };
-  }
-
-  private getFallbackMatchAnalysis(
-    jdAnalysis: DocumentAnalysis['jobDescription'],
-    cvAnalysis: DocumentAnalysis['cv']
-  ): DocumentAnalysis['analysis'] {
-    return {
-      matchScore: 70,
-      strengths: ['General professional skills', 'Communication abilities', 'Technical background'],
-      gaps: ['Specific technical skills', 'Industry experience', 'Domain knowledge'],
-      focusAreas: ['Technical preparation', 'Company research', 'Industry trends'],
-      difficulty: jdAnalysis.experience as any || 'mid',
-      recommendations: [
-        'Research the company thoroughly',
-        'Prepare specific examples',
-        'Practice technical questions',
-        'Review industry trends'
-      ],
-      interviewQuestions: {
-        technical: [
-          'Describe your technical experience',
-          'How do you approach problem-solving?',
-          'What tools and technologies are you familiar with?',
-          'Can you walk me through a technical project you worked on?'
-        ],
-        behavioral: [
-          'Tell me about a time you overcame a challenge',
-          'How do you handle working in a team?',
-          'Describe a situation where you had to learn something new quickly',
-          'How do you prioritize your work?'
-        ],
-        situational: [
-          'How would you handle conflicting priorities?',
-          'What would you do if you disagreed with a team decision?',
-          'How would you approach learning our company\'s processes?',
-          'How would you handle a tight deadline?'
-        ],
-        gapFocused: [
-          'How do you stay updated with industry trends?',
-          'What steps do you take to learn new technologies?',
-          'How would you contribute to our team?',
-          'What interests you most about this role?'
-        ]
-      }
-    };
-  }
-
-  private getEmptyCVAnalysis(): DocumentAnalysis['cv'] {
-    return {
-      skills: [],
-      experience: [],
-      achievements: [],
-      education: [],
-      technologies: [],
-    };
   }
 
   private createCacheKey(jobDescription: string, cv: string): string {
@@ -426,6 +314,146 @@ Respond ONLY with the JSON object, no other text.`;
 
   getCacheSize(): number {
     return this.cache.size;
+  }
+
+  // Advanced JSON repair for Claude responses
+  private advancedJsonRepair(jsonString: string): string {
+    let repaired = jsonString;
+
+    // Remove trailing commas before } or ]
+    repaired = repaired.replace(/,(\s*[}\]])/g, '$1');
+    // Replace single quotes with double quotes
+    repaired = repaired.replace(/'/g, '"');
+    // Fix unquoted property names (very basic, not for nested objects)
+    repaired = repaired.replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":');
+    // Remove any undefined/null trailing values
+    repaired = repaired.replace(/:\s*undefined/g, ': null');
+    repaired = repaired.replace(/:\s*null,/g, ': null,');
+    // Remove any incomplete lines at the end
+    repaired = repaired.replace(/("[^"]*":\s*".*?)(?:\n|$)/g, (m, p1) => (p1.endsWith('"') ? m : ''));
+    // Fix missing closing brackets/braces
+    const openBraces = (repaired.match(/\{/g) || []).length;
+    const closeBraces = (repaired.match(/\}/g) || []).length;
+    const openBrackets = (repaired.match(/\[/g) || []).length;
+    const closeBrackets = (repaired.match(/\]/g) || []).length;
+    for (let i = 0; i < openBraces - closeBraces; i++) repaired += '}';
+    for (let i = 0; i < openBrackets - closeBrackets; i++) repaired += ']';
+    // Remove any trailing incomplete string
+    repaired = repaired.replace(/"([^"]*)$/, '""');
+    return repaired;
+  }
+
+  private parseJobDescriptionResponse(responseContent: string): DocumentAnalysis['jobDescription'] {
+    try {
+      const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        let jsonStr = jsonMatch[0];
+        try {
+          return this.parseJobDescriptionJson(JSON.parse(jsonStr));
+        } catch (e) {
+          // Try advanced repair and parse again
+          jsonStr = this.advancedJsonRepair(jsonStr);
+          return this.parseJobDescriptionJson(JSON.parse(jsonStr));
+        }
+      }
+      // Try parsing the whole response
+      let jsonStr = responseContent.trim();
+      try {
+        return this.parseJobDescriptionJson(JSON.parse(jsonStr));
+      } catch (e) {
+        jsonStr = this.advancedJsonRepair(jsonStr);
+        return this.parseJobDescriptionJson(JSON.parse(jsonStr));
+      }
+    } catch (error) {
+      console.error('Failed to parse job description analysis:', error);
+      console.log('Raw response:', responseContent);
+      throw new Error('Failed to parse job description analysis');
+    }
+  }
+
+  private parseMatchResponse(responseContent: string): DocumentAnalysis['analysis'] {
+    try {
+      // Strategy 1: Look for JSON object
+      const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        let jsonStr = jsonMatch[0];
+        try {
+          return this.parseMatchJson(JSON.parse(jsonStr));
+        } catch (e) {
+          // Try advanced repair and parse again
+          jsonStr = this.advancedJsonRepair(jsonStr);
+          return this.parseMatchJson(JSON.parse(jsonStr));
+        }
+      }
+      // Strategy 2: Try parsing the entire response as JSON
+      let jsonStr = responseContent.trim();
+      try {
+        return this.parseMatchJson(JSON.parse(jsonStr));
+      } catch (e) {
+        jsonStr = this.advancedJsonRepair(jsonStr);
+        return this.parseMatchJson(JSON.parse(jsonStr));
+      }
+    } catch (error) {
+      console.error('Failed to parse match analysis:', error);
+      console.log('Raw response:', responseContent);
+      throw new Error('Failed to parse match analysis');
+    }
+  }
+
+  private parseMatchJson(parsedData: any): DocumentAnalysis['analysis'] {
+    return {
+      matchScore: typeof parsedData.matchScore === 'number' ? parsedData.matchScore : 60,
+      strengths: Array.isArray(parsedData.strengths) ? parsedData.strengths : [],
+      gaps: Array.isArray(parsedData.gaps) ? parsedData.gaps : [],
+      focusAreas: Array.isArray(parsedData.focusAreas) ? parsedData.focusAreas : [],
+      difficulty: ['junior', 'mid', 'senior', 'executive'].includes(parsedData.difficulty) ? parsedData.difficulty : 'mid',
+      recommendations: Array.isArray(parsedData.recommendations) ? parsedData.recommendations : [],
+      interviewQuestions: {
+        technical: Array.isArray(parsedData.interviewQuestions?.technical) ? parsedData.interviewQuestions.technical : [],
+        behavioral: Array.isArray(parsedData.interviewQuestions?.behavioral) ? parsedData.interviewQuestions.behavioral : [],
+        situational: Array.isArray(parsedData.interviewQuestions?.situational) ? parsedData.interviewQuestions.situational : [],
+        gapFocused: Array.isArray(parsedData.interviewQuestions?.gapFocused) ? parsedData.interviewQuestions.gapFocused : [],
+      },
+    };
+  }
+
+  private parseCVResponse(responseContent: string): DocumentAnalysis['cv'] {
+    try {
+      // Strategy 1: Look for JSON object
+      const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        let jsonStr = jsonMatch[0];
+        try {
+          return this.parseCVJson(JSON.parse(jsonStr));
+        } catch (e) {
+          // Try advanced repair and parse again
+          jsonStr = this.advancedJsonRepair(jsonStr);
+          return this.parseCVJson(JSON.parse(jsonStr));
+        }
+      }
+      // Strategy 2: Try parsing the entire response as JSON
+      let jsonStr = responseContent.trim();
+      try {
+        return this.parseCVJson(JSON.parse(jsonStr));
+      } catch (e) {
+        jsonStr = this.advancedJsonRepair(jsonStr);
+        return this.parseCVJson(JSON.parse(jsonStr));
+      }
+    } catch (error) {
+      console.error('Failed to parse CV analysis:', error);
+      console.log('Raw response:', responseContent);
+      throw new Error('Failed to parse CV analysis');
+    }
+  }
+
+  private parseCVJson(parsedData: any): DocumentAnalysis['cv'] {
+    return {
+      skills: Array.isArray(parsedData.skills) ? parsedData.skills : [],
+      experience: Array.isArray(parsedData.experience) ? parsedData.experience : [],
+      achievements: Array.isArray(parsedData.achievements) ? parsedData.achievements : [],
+      education: Array.isArray(parsedData.education) ? parsedData.education : [],
+      technologies: Array.isArray(parsedData.technologies) ? parsedData.technologies : [],
+    };
   }
 }
 
