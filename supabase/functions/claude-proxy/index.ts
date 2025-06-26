@@ -17,6 +17,7 @@ interface ClaudeRequest {
   messages: ClaudeMessage[];
   temperature?: number;
   stream?: boolean;
+  system?: string;
 }
 
 serve(async (req) => {
@@ -62,7 +63,8 @@ serve(async (req) => {
         max_tokens: requestBody.max_tokens,
         messages_count: requestBody.messages?.length,
         temperature: requestBody.temperature,
-        stream: requestBody.stream
+        stream: requestBody.stream,
+        has_system: !!requestBody.system
       })
     } catch (error) {
       console.error('Failed to parse request body:', error)
@@ -103,21 +105,6 @@ serve(async (req) => {
       )
     }
 
-    // Filter out system messages and prepare for Claude API
-    const userMessages = requestBody.messages.filter(msg => msg.role !== 'system')
-    
-    // Ensure we have at least one user message
-    if (userMessages.length === 0) {
-      console.error('No user messages found after filtering')
-      return new Response(
-        JSON.stringify({ error: 'At least one user message is required' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
-    }
-
     // Use a supported Claude model - updated to use Claude 3.5 Sonnet
     const supportedModels = [
       'claude-3-5-sonnet-20240620',
@@ -132,14 +119,21 @@ serve(async (req) => {
       modelToUse = 'claude-3-5-sonnet-20240620'
     }
 
+    // Handle system prompt if provided
+    let messages = [...requestBody.messages]
+    if (requestBody.system) {
+      // Add system message at the beginning
+      messages.unshift({
+        role: 'system',
+        content: requestBody.system
+      })
+    }
+
     // Prepare Claude API request with correct format
     const claudeRequest = {
       model: modelToUse,
       max_tokens: Math.min(Math.max(requestBody.max_tokens, 1), 4096), // Ensure valid range
-      messages: userMessages.map(msg => ({
-        role: msg.role,
-        content: msg.content
-      })),
+      messages: messages,
       temperature: Math.min(Math.max(requestBody.temperature || 0.7, 0), 1), // Ensure valid range
       stream: requestBody.stream || false
     }

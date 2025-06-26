@@ -7,6 +7,7 @@ import {
   StreamingResponse,
   APIRequestOptions
 } from '../types/api';
+import { useInputStore } from '@/src/stores/inputStore';
 
 interface UseSupabaseConversationOptions {
   mode: string;
@@ -33,6 +34,8 @@ export function useSupabaseConversation(options: UseSupabaseConversationOptions)
     enableStreaming = true,
     autoSave = true
   } = options;
+
+  const { documentData } = useInputStore();
 
   const [state, setState] = useState<ConversationState>({
     messages: [],
@@ -113,7 +116,7 @@ export function useSupabaseConversation(options: UseSupabaseConversationOptions)
 
   const sendMessage = useCallback(async (
     content: string,
-    options: APIRequestOptions = {}
+    customContext?: any
   ) => {
     if (!content.trim()) return;
 
@@ -140,12 +143,25 @@ export function useSupabaseConversation(options: UseSupabaseConversationOptions)
     responseStartTimeRef.current = Date.now();
 
     try {
+      // Use the context from state or the custom context if provided
+      const contextToUse = customContext || state.context;
+      
+      // For interview practice with document analysis, include the analysis in the system prompt
+      let systemPrompt;
+      if (mode === 'interview-practice' && documentData.analysisResult && !customContext?.system) {
+        systemPrompt = createInterviewSystemPrompt(
+          documentData.analysisResult,
+          documentData.jobDescription,
+          documentData.cvContent
+        );
+      }
+
       if (enableStreaming && Platform.OS !== 'web') {
         // Use streaming for better UX on mobile
-        await sendStreamingMessage(content, options);
+        await sendStreamingMessage(content, contextToUse, systemPrompt);
       } else {
         // Use regular request for web or when streaming is disabled
-        await sendRegularMessage(content, options);
+        await sendRegularMessage(content, contextToUse, systemPrompt);
       }
 
       // Generate quick replies
@@ -159,11 +175,39 @@ export function useSupabaseConversation(options: UseSupabaseConversationOptions)
         isStreaming: false
       }));
     }
-  }, [state.context, enableStreaming, addMessage]);
+  }, [state.context, enableStreaming, addMessage, mode, documentData]);
+
+  const createInterviewSystemPrompt = (
+    analysis: any,
+    jobDescription: string,
+    cvContent: string
+  ): string => {
+    return `You are a professional interviewer conducting a job interview. 
+    
+Job Description: ${jobDescription || 'Not provided'}
+
+Candidate CV: ${cvContent || 'Not provided'}
+
+Analysis:
+- Match Score: ${analysis.analysis.matchScore}%
+- Candidate Strengths: ${analysis.analysis.strengths.join(', ')}
+- Gaps to Address: ${analysis.analysis.gaps.join(', ')}
+- Focus Areas: ${analysis.analysis.focusAreas.join(', ')}
+- Experience Level: ${analysis.analysis.difficulty}
+
+Your task is to conduct a realistic interview for this position. Ask relevant questions that:
+1. Explore the candidate's strengths mentioned in the analysis
+2. Tactfully probe the identified gaps
+3. Focus on the key areas relevant to the job
+4. Include a mix of technical, behavioral, and situational questions
+
+Start with a brief introduction and your first question. Be professional, thorough, and provide constructive feedback. Ask one question at a time and wait for complete answers.`;
+  };
 
   const sendStreamingMessage = useCallback(async (
     content: string,
-    options: APIRequestOptions
+    context: ConversationContext,
+    systemPrompt?: string
   ) => {
     setState(prev => ({ ...prev, isStreaming: true }));
     streamingContentRef.current = '';
@@ -179,9 +223,15 @@ export function useSupabaseConversation(options: UseSupabaseConversationOptions)
     // Add empty assistant message that will be updated
     addMessage(assistantMessage);
 
+    // Create request options with system prompt if provided
+    const options: APIRequestOptions = {};
+    if (systemPrompt) {
+      options.system = systemPrompt;
+    }
+
     await supabaseClaudeAPI.sendMessageStream(
       content,
-      state.context,
+      context,
       (chunk: StreamingResponse) => {
         streamingContentRef.current = chunk.content;
         
@@ -207,18 +257,25 @@ export function useSupabaseConversation(options: UseSupabaseConversationOptions)
 
         if (chunk.isComplete) {
           const responseTime = Date.now() - responseStartTimeRef.current;
-          supabaseClaudeAPI.logConversationMetrics(state.context, responseTime);
+          supabaseClaudeAPI.logConversationMetrics(context, responseTime);
         }
       },
       options
     );
-  }, [state.context, addMessage]);
+  }, [addMessage]);
 
   const sendRegularMessage = useCallback(async (
     content: string,
-    options: APIRequestOptions
+    context: ConversationContext,
+    systemPrompt?: string
   ) => {
-    const response = await supabaseClaudeAPI.sendMessage(content, state.context, options);
+    // Create request options with system prompt if provided
+    const options: APIRequestOptions = {};
+    if (systemPrompt) {
+      options.system = systemPrompt;
+    }
+
+    const response = await supabaseClaudeAPI.sendMessage(content, context, options);
     
     if (response.error) {
       throw new Error(response.error);
@@ -227,11 +284,11 @@ export function useSupabaseConversation(options: UseSupabaseConversationOptions)
     if (response.data) {
       addMessage(response.data);
       const responseTime = Date.now() - responseStartTimeRef.current;
-      supabaseClaudeAPI.logConversationMetrics(state.context, responseTime);
+      supabaseClaudeAPI.logConversationMetrics(context, responseTime);
     }
 
     setState(prev => ({ ...prev, isLoading: false }));
-  }, [state.context, addMessage]);
+  }, [addMessage]);
 
   const generateQuickReplies = useCallback(async () => {
     try {
@@ -284,7 +341,7 @@ export function useSupabaseConversation(options: UseSupabaseConversationOptions)
 
   const saveConversation = useCallback(async () => {
     try {
-      // Implementation would save to Supabase database
+      // Implementation would save to local storage or backend
       console.log('Saving conversation:', state.context.sessionId);
     } catch (error) {
       console.warn('Failed to save conversation:', error);
@@ -293,7 +350,7 @@ export function useSupabaseConversation(options: UseSupabaseConversationOptions)
 
   const loadConversation = useCallback(async (sessionId: string) => {
     try {
-      // Implementation would load from Supabase database
+      // Implementation would load from local storage or backend
       console.log('Loading conversation:', sessionId);
     } catch (error) {
       console.warn('Failed to load conversation:', error);

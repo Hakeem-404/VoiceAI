@@ -11,13 +11,14 @@ import {
   TextInput
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Send, RotateCcw, Copy, Bookmark, MoveHorizontal as MoreHorizontal, Wifi, WifiOff, Zap, CircleAlert as AlertCircle, ChartBar as BarChart3 } from 'lucide-react-native';
+import { Send, RotateCcw, Copy, Bookmark, MoveHorizontal as MoreHorizontal, Wifi, WifiOff, Zap, ChartBar as BarChart3 } from 'lucide-react-native';
 import { useSupabaseConversation } from '../hooks/useSupabaseConversation';
 import { ConversationMessage } from '../types/api';
 import { RealTimeFeedbackSystem } from './RealTimeFeedbackSystem';
 import { ClaudeFeedbackModal } from './ClaudeFeedbackModal';
 import { Conversation } from '@/src/types';
 import { useConversationStore } from '@/src/stores/conversationStore';
+import { useInputStore } from '@/src/stores/inputStore';
 
 const { width, height } = Dimensions.get('window');
 
@@ -43,9 +44,7 @@ export function SupabaseConversationView({
     sendMessage,
     regenerateResponse,
     clearConversation,
-    canRegenerate,
-    isConfigured,
-    configStatus
+    canRegenerate
   } = useSupabaseConversation({
     mode,
     sessionId,
@@ -55,6 +54,7 @@ export function SupabaseConversationView({
   });
 
   const { currentConversation } = useConversationStore();
+  const { documentData } = useInputStore();
   const [inputText, setInputText] = useState('');
   const [isOnline, setIsOnline] = useState(true);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
@@ -96,16 +96,79 @@ export function SupabaseConversationView({
     }
   }, []);
 
-  const handleSendMessage = async () => {
-    if (!inputText.trim() || isLoading || !isConfigured) return;
+  // Send initial system message for interview practice with document analysis
+  useEffect(() => {
+    if (mode === 'interview-practice' && documentData.analysisResult && messages.length === 0) {
+      // Create a system message with the analysis data
+      const analysis = documentData.analysisResult;
+      const systemMessage = createInterviewSystemPrompt(analysis, documentData.jobDescription, documentData.cvContent);
+      
+      // Send the system message
+      sendSystemMessage(systemMessage);
+    }
+  }, [mode, documentData.analysisResult, messages.length]);
 
-    const message = inputText.trim();
+  const createInterviewSystemPrompt = (
+    analysis: any,
+    jobDescription: string,
+    cvContent: string
+  ): string => {
+    return `You are a professional interviewer conducting a job interview. 
+    
+Job Description: ${jobDescription || 'Not provided'}
+
+Candidate CV: ${cvContent || 'Not provided'}
+
+Analysis:
+- Match Score: ${analysis.analysis.matchScore}%
+- Candidate Strengths: ${analysis.analysis.strengths.join(', ')}
+- Gaps to Address: ${analysis.analysis.gaps.join(', ')}
+- Focus Areas: ${analysis.analysis.focusAreas.join(', ')}
+- Experience Level: ${analysis.analysis.difficulty}
+
+Your task is to conduct a realistic interview for this position. Ask relevant questions that:
+1. Explore the candidate's strengths mentioned in the analysis
+2. Tactfully probe the identified gaps
+3. Focus on the key areas relevant to the job
+4. Include a mix of technical, behavioral, and situational questions
+
+Start with a brief introduction and your first question. Be professional, thorough, and provide constructive feedback. Ask one question at a time and wait for complete answers.`;
+  };
+
+  const sendSystemMessage = async (systemMessage: string) => {
+    // We'll use a special method to send a system message
+    try {
+      // Create a context with the system message
+      const context = {
+        messages: [],
+        mode,
+        sessionId,
+        userId,
+        metadata: {
+          startTime: new Date(),
+          lastActivity: new Date(),
+          messageCount: 0,
+          totalTokens: 0,
+        },
+        system: systemMessage
+      };
+      
+      // Send a simple greeting to trigger the conversation with the system context
+      await sendMessage("Hello, I'm here for the interview.", context);
+    } catch (error) {
+      console.error('Failed to send system message:', error);
+    }
+  };
+
+  const handleSendMessage = async (text: string, customContext?: any) => {
+    if (!text.trim() || isLoading) return;
+
+    const message = text.trim();
     setInputText('');
-    await sendMessage(message);
+    await sendMessage(message, customContext);
   };
 
   const handleQuickReply = async (reply: string) => {
-    if (!isConfigured) return;
     await sendMessage(reply);
   };
 
@@ -172,7 +235,7 @@ export function SupabaseConversationView({
   );
 
   const ConfigurationStatus = () => {
-    if (isConfigured) return null;
+    if (isSupabaseConfigured()) return null;
 
     return (
       <View style={styles.configurationBanner}>
@@ -180,13 +243,22 @@ export function SupabaseConversationView({
         <View style={styles.configurationText}>
           <Text style={styles.configurationTitle}>Configuration Required</Text>
           <Text style={styles.configurationSubtitle}>
-            {!configStatus.hasUrl && 'Missing EXPO_PUBLIC_SUPABASE_URL. '}
-            {!configStatus.hasKey && 'Missing EXPO_PUBLIC_SUPABASE_ANON_KEY. '}
+            {!configStatus().hasUrl && 'Missing EXPO_PUBLIC_SUPABASE_URL. '}
+            {!configStatus().hasKey && 'Missing EXPO_PUBLIC_SUPABASE_ANON_KEY. '}
             Please check your environment variables.
           </Text>
         </View>
       </View>
     );
+  };
+
+  // Helper functions to check configuration status
+  const isSupabaseConfigured = () => {
+    return supabaseClaudeAPI.isConfigured();
+  };
+
+  const configStatus = () => {
+    return supabaseClaudeAPI.getConfigStatus();
   };
 
   return (
@@ -201,7 +273,7 @@ export function SupabaseConversationView({
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>{mode.replace('-', ' ').toUpperCase()}</Text>
           <View style={styles.headerActions}>
-            {canRegenerate && isConfigured && (
+            {canRegenerate && isSupabaseConfigured() && (
               <TouchableOpacity
                 style={styles.headerButton}
                 onPress={regenerateResponse}
@@ -218,7 +290,7 @@ export function SupabaseConversationView({
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.headerButton}
-              onPress={() => {/* Show options menu */}}
+              onPress={onClose}
             >
               <MoreHorizontal size={20} color="white" />
             </TouchableOpacity>
@@ -250,10 +322,10 @@ export function SupabaseConversationView({
         {messages.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateTitle}>
-              {isConfigured ? 'Start a conversation' : 'Configuration required'}
+              {isSupabaseConfigured() ? 'Start a conversation' : 'Configuration required'}
             </Text>
             <Text style={styles.emptyStateSubtitle}>
-              {isConfigured 
+              {isSupabaseConfigured() 
                 ? 'Ask me anything or use one of the quick replies below'
                 : 'Please configure your Supabase settings to start conversations'
               }
@@ -274,7 +346,7 @@ export function SupabaseConversationView({
       </ScrollView>
 
       {/* Quick Replies */}
-      {quickReplies.length > 0 && !isLoading && isConfigured && (
+      {quickReplies.length > 0 && !isLoading && isSupabaseConfigured() && (
         <View style={styles.quickRepliesContainer}>
           <ScrollView
             horizontal
@@ -301,23 +373,23 @@ export function SupabaseConversationView({
           <TextInput
             style={[
               styles.textInput,
-              !isConfigured && styles.textInputDisabled
+              !isSupabaseConfigured() && styles.textInputDisabled
             ]}
             value={inputText}
             onChangeText={setInputText}
-            placeholder={isConfigured ? "Type your message..." : "Configuration required"}
+            placeholder={isSupabaseConfigured() ? "Type your message..." : "Configuration required"}
             placeholderTextColor="#9CA3AF"
             multiline
             maxLength={1000}
-            editable={!isLoading && isConfigured}
+            editable={!isLoading && isSupabaseConfigured()}
           />
           <TouchableOpacity
             style={[
               styles.sendButton,
-              (!inputText.trim() || isLoading || !isConfigured) && styles.sendButtonDisabled
+              (!inputText.trim() || isLoading || !isSupabaseConfigured()) && styles.sendButtonDisabled
             ]}
-            onPress={handleSendMessage}
-            disabled={!inputText.trim() || isLoading || !isConfigured}
+            onPress={() => handleSendMessage(inputText)}
+            disabled={!inputText.trim() || isLoading || !isSupabaseConfigured()}
           >
             {isLoading ? (
               <ActivityIndicator size="small" color="white" />

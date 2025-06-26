@@ -1,16 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { FileText, User, Briefcase, Zap, Play, ArrowRight, CircleCheck as CheckCircle, Upload } from 'lucide-react-native';
+import { FileText, User, Briefcase, Zap, Play, ArrowRight, CircleCheck as CheckCircle, Upload, Brain } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useInputStore } from '@/src/stores/inputStore';
+import { TextInputSystem } from './TextInputSystem';
 import { spacing, typography } from '@/src/constants/colors';
+import { documentAnalysisService } from '@/src/services/documentAnalysisService';
+import { DocumentAnalysis } from '@/src/types';
 
 interface InterviewSetupScreenProps {
   onQuickStart: () => void;
@@ -24,13 +29,70 @@ export function InterviewSetupScreen({
   onContinue,
 }: InterviewSetupScreenProps) {
   const { colors, isDark } = useTheme();
-  const { documentData } = useInputStore();
+  const { documentData, updateDocumentData } = useInputStore();
   
   const [selectedOption, setSelectedOption] = useState<'quick' | 'personalized'>('quick');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState<DocumentAnalysis | null>(null);
+  const [activeDocument, setActiveDocument] = useState<'job' | 'cv' | null>(null);
+  const [isTextInputVisible, setIsTextInputVisible] = useState(false);
 
   const hasJobDescription = !!documentData.jobDescription?.trim();
   const hasCV = !!documentData.cvContent?.trim();
   const canContinue = hasJobDescription || selectedOption === 'quick';
+
+  useEffect(() => {
+    // If we already have analysis results, use them
+    if (documentData.analysisResult) {
+      setAnalysis(documentData.analysisResult);
+    }
+  }, [documentData.analysisResult]);
+
+  const handleDocumentSelect = (type: 'job' | 'cv') => {
+    setActiveDocument(type);
+    setIsTextInputVisible(true);
+  };
+
+  const handleTextInputClose = () => {
+    setIsTextInputVisible(false);
+    setActiveDocument(null);
+  };
+
+  const handleTextInputSave = (text: string) => {
+    if (activeDocument === 'job') {
+      updateDocumentData({ jobDescription: text });
+    } else if (activeDocument === 'cv') {
+      updateDocumentData({ cvContent: text });
+    }
+    setIsTextInputVisible(false);
+    setActiveDocument(null);
+    
+    // If both documents are provided, trigger analysis
+    if ((activeDocument === 'job' && hasCV) || 
+        (activeDocument === 'cv' && hasJobDescription)) {
+      handleAnalyzeDocuments();
+    }
+  };
+
+  const handleAnalyzeDocuments = async () => {
+    if (!hasJobDescription) return;
+    
+    setIsAnalyzing(true);
+    
+    try {
+      const analysisResult = await documentAnalysisService.analyzeDocuments(
+        documentData.jobDescription,
+        documentData.cvContent
+      );
+      
+      setAnalysis(analysisResult);
+      updateDocumentData({ analysisResult });
+    } catch (error) {
+      console.error('Document analysis failed:', error);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   return (
     <ScrollView 
@@ -170,7 +232,7 @@ export function InterviewSetupScreen({
                   borderColor: hasJobDescription ? colors.success : colors.border
                 }
               ]}
-              onPress={() => onDocumentSelect('job')}
+              onPress={() => handleDocumentSelect('job')}
             >
               <Briefcase size={20} color={hasJobDescription ? colors.success : colors.primary} />
               <View style={styles.documentButtonContent}>
@@ -196,7 +258,7 @@ export function InterviewSetupScreen({
                   borderColor: hasCV ? colors.success : colors.border
                 }
               ]}
-              onPress={() => onDocumentSelect('cv')}
+              onPress={() => handleDocumentSelect('cv')}
             >
               <FileText size={20} color={hasCV ? colors.success : colors.secondary} />
               <View style={styles.documentButtonContent}>
@@ -213,6 +275,68 @@ export function InterviewSetupScreen({
                 <Upload size={20} color={colors.secondary} />
               )}
             </TouchableOpacity>
+
+            {(hasJobDescription || hasCV) && !analysis && !isAnalyzing && (
+              <TouchableOpacity
+                style={[
+                  styles.analyzeButton,
+                  { backgroundColor: hasJobDescription ? colors.primary : colors.border }
+                ]}
+                onPress={handleAnalyzeDocuments}
+                disabled={!hasJobDescription || isAnalyzing}
+              >
+                <Brain size={20} color="white" />
+                <Text style={styles.analyzeButtonText}>
+                  Analyze with Claude AI
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {isAnalyzing && (
+              <View style={[styles.analyzingContainer, { backgroundColor: colors.primary + '20' }]}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={[styles.analyzingText, { color: colors.primary }]}>
+                  Analyzing documents with Claude AI...
+                </Text>
+              </View>
+            )}
+
+            {analysis && (
+              <View style={[styles.analysisPreview, { backgroundColor: colors.primary + '20' }]}>
+                <View style={styles.analysisHeader}>
+                  <Brain size={20} color={colors.primary} />
+                  <Text style={[styles.analysisTitle, { color: colors.primary }]}>
+                    Analysis Complete
+                  </Text>
+                </View>
+                <View style={styles.analysisStats}>
+                  <View style={styles.analysisStat}>
+                    <Text style={[styles.analysisStatValue, { color: colors.text }]}>
+                      {analysis.analysis.matchScore}%
+                    </Text>
+                    <Text style={[styles.analysisStatLabel, { color: colors.textSecondary }]}>
+                      Match
+                    </Text>
+                  </View>
+                  <View style={styles.analysisStat}>
+                    <Text style={[styles.analysisStatValue, { color: colors.text }]}>
+                      {analysis.analysis.strengths.length}
+                    </Text>
+                    <Text style={[styles.analysisStatLabel, { color: colors.textSecondary }]}>
+                      Strengths
+                    </Text>
+                  </View>
+                  <View style={styles.analysisStat}>
+                    <Text style={[styles.analysisStatValue, { color: colors.text }]}>
+                      {analysis.analysis.gaps.length}
+                    </Text>
+                    <Text style={[styles.analysisStatLabel, { color: colors.textSecondary }]}>
+                      Gaps
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )}
           </View>
         )}
       </TouchableOpacity>
@@ -236,6 +360,21 @@ export function InterviewSetupScreen({
           ? 'Quick start uses general interview questions suitable for most job types'
           : 'Personalized interviews analyze your documents to create targeted questions'}
       </Text>
+
+      {/* Text Input Modal */}
+      <TextInputSystem
+        visible={isTextInputVisible}
+        onClose={handleTextInputClose}
+        onSend={handleTextInputSave}
+        onVoiceToggle={handleTextInputClose}
+        placeholder={activeDocument === 'job' 
+          ? "Paste the job description here..." 
+          : "Paste your CV/resume content here..."}
+        mode="document"
+        initialText={activeDocument === 'job' 
+          ? documentData.jobDescription 
+          : documentData.cvContent}
+      />
     </ScrollView>
   );
 }
@@ -351,6 +490,62 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs / 2,
   },
   documentButtonSubtitle: {
+    fontSize: typography.sizes.xs,
+  },
+  analyzeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: 12,
+    gap: spacing.sm,
+    alignSelf: 'center',
+    marginTop: spacing.sm,
+  },
+  analyzeButtonText: {
+    color: 'white',
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.semibold,
+  },
+  analyzingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.md,
+    borderRadius: 12,
+    gap: spacing.sm,
+  },
+  analyzingText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.medium,
+  },
+  analysisPreview: {
+    padding: spacing.md,
+    borderRadius: 12,
+  },
+  analysisHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  analysisTitle: {
+    fontSize: typography.sizes.base,
+    fontWeight: typography.weights.semibold,
+  },
+  analysisStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  analysisStat: {
+    alignItems: 'center',
+  },
+  analysisStatValue: {
+    fontSize: typography.sizes.lg,
+    fontWeight: typography.weights.bold,
+  },
+  analysisStatLabel: {
     fontSize: typography.sizes.xs,
   },
   continueButton: {

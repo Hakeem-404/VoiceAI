@@ -11,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { FileText, User, Brain, CircleCheck as CheckCircle, TriangleAlert as AlertTriangle, Target, Award, ArrowRight, Briefcase } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { DocumentAnalysis } from '@/src/types';
+import { documentAnalysisService } from '@/src/services/documentAnalysisService';
 import { spacing, typography } from '@/src/constants/colors';
 
 interface DocumentAnalyzerProps {
@@ -39,118 +40,17 @@ export function DocumentAnalyzer({
     setError(null);
     
     try {
-      // In a real implementation, this would call an API
-      // For now, we'll simulate the analysis with a timeout
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Use Claude-powered document analysis service
+      const analysisResult = await documentAnalysisService.analyzeDocuments(
+        jobDescription,
+        cvContent || ''
+      );
       
-      // Create mock analysis result
-      const mockAnalysis: DocumentAnalysis = {
-        jobDescription: {
-          requirements: [
-            '3+ years of React Native experience',
-            'TypeScript proficiency',
-            'Experience with RESTful APIs',
-            'Knowledge of state management',
-            'Understanding of mobile app architecture',
-          ],
-          skills: ['React Native', 'TypeScript', 'JavaScript', 'Redux', 'REST APIs'],
-          experience: '3-5 years',
-          responsibilities: [
-            'Develop mobile applications using React Native',
-            'Collaborate with design and backend teams',
-            'Implement new features and maintain existing code',
-            'Troubleshoot and fix bugs',
-            'Participate in code reviews',
-          ],
-          companyInfo: 'Tech startup focused on mobile solutions',
-          culture: ['Fast-paced', 'Collaborative', 'Innovative'],
-        },
-        cv: {
-          skills: cvContent ? ['React', 'JavaScript', 'HTML/CSS', 'Node.js', 'Git'] : [],
-          experience: cvContent ? [
-            'Frontend Developer at XYZ Company (2 years)',
-            'Web Developer Intern at ABC Corp (6 months)',
-            'Freelance Web Developer (1 year)',
-          ] : [],
-          achievements: cvContent ? [
-            'Reduced load time by 40% through code optimization',
-            'Implemented responsive design across 5 web applications',
-            'Contributed to open-source projects',
-          ] : [],
-          education: cvContent ? ['Bachelor of Computer Science, University XYZ'] : [],
-          technologies: cvContent ? ['React', 'JavaScript', 'HTML/CSS', 'Node.js', 'Git'] : [],
-        },
-        analysis: {
-          matchScore: cvContent ? 75 : 60,
-          strengths: cvContent ? [
-            'Strong JavaScript foundation',
-            'React experience transferable to React Native',
-            'Experience with web development',
-          ] : [
-            'Job requirements clearly understood',
-            'Opportunity to demonstrate potential',
-          ],
-          gaps: cvContent ? [
-            'No direct React Native experience',
-            'Limited TypeScript experience',
-            'No mention of state management experience',
-          ] : [
-            'No CV provided for detailed analysis',
-            'Unable to assess technical background',
-            'Cannot identify specific experience gaps',
-          ],
-          focusAreas: [
-            'React Native fundamentals',
-            'TypeScript knowledge',
-            'State management approaches',
-            'Mobile-specific considerations',
-          ],
-          difficulty: 'mid',
-          recommendations: cvContent ? [
-            'Emphasize React experience and how it transfers to React Native',
-            'Highlight any mobile-related projects or experience',
-            'Prepare examples of complex state management',
-            'Research company\'s mobile products before interview',
-          ] : [
-            'Add your CV for personalized analysis',
-            'Research React Native fundamentals',
-            'Prepare examples of your problem-solving approach',
-            'Focus on demonstrating learning ability',
-          ],
-          interviewQuestions: {
-            technical: [
-              'How would you handle state management in a React Native app?',
-              'What\'s your experience with TypeScript interfaces and types?',
-              'How would you implement API calls in a React Native application?',
-              'Explain the difference between React Native and React for web',
-            ],
-            behavioral: [
-              'Tell me about a challenging project you worked on',
-              'How do you approach learning new technologies?',
-              'Describe a situation where you had to meet a tight deadline',
-              'How do you handle feedback on your code?',
-            ],
-            situational: [
-              'How would you debug a performance issue in a React Native app?',
-              'What would you do if you disagreed with a design decision?',
-              'How would you approach refactoring a legacy codebase?',
-              'How would you handle a feature request that seems impossible to implement?',
-            ],
-            gapFocused: [
-              'How would you transfer your React web skills to React Native?',
-              'What steps have you taken to learn TypeScript?',
-              'How would you approach learning mobile-specific concepts?',
-              'What interests you about mobile development specifically?',
-            ],
-          },
-        },
-      };
-
-      setAnalysis(mockAnalysis);
-      onAnalysisComplete(mockAnalysis);
+      setAnalysis(analysisResult);
+      onAnalysisComplete(analysisResult);
     } catch (error) {
-      console.error('Analysis failed:', error);
-      setError('Failed to analyze documents. Please try again.');
+      console.error('Document analysis failed:', error);
+      setError(error instanceof Error ? error.message : 'Failed to analyze documents. Please try again.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -165,7 +65,7 @@ export function DocumentAnalyzer({
         </Text>
         <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
         <Text style={[styles.loadingSubtext, { color: colors.textSecondary }]}>
-          Extracting requirements, skills, and generating personalized insights
+          Using Claude AI to extract requirements, skills, and generate personalized insights
         </Text>
       </View>
     );
@@ -248,14 +148,14 @@ export function DocumentAnalyzer({
         >
           <Brain size={20} color="white" />
           <Text style={styles.analyzeButtonText}>
-            Analyze Documents
+            Analyze with Claude AI
           </Text>
         </TouchableOpacity>
 
         <Text style={[styles.infoText, { color: colors.textTertiary }]}>
           {jobDescription 
-            ? 'Analysis will generate personalized interview questions and insights'
-            : 'Please add a job description to enable analysis'}
+            ? 'Claude AI will analyze your documents to generate personalized interview questions and insights'
+            : 'Please add a job description to enable AI analysis'}
         </Text>
       </View>
     );

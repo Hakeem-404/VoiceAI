@@ -24,6 +24,8 @@ import {
 } from 'lucide-react-native';
 import { SupabaseConversationView } from '../../components/SupabaseConversationView';
 import { supabaseClaudeAPI } from '../../services/supabaseClaudeAPI';
+import { InterviewSetupScreen } from '../../components/InterviewSetupScreen';
+import { useInputStore } from '@/src/stores/inputStore';
 
 const conversationModes = [
   {
@@ -82,6 +84,8 @@ export default function ChatScreen() {
   const [isSupabaseConfigured, setIsSupabaseConfigured] = useState(false);
   const [configStatus, setConfigStatus] = useState({ hasUrl: false, hasKey: false });
   const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [showInterviewSetup, setShowInterviewSetup] = useState(false);
+  const { documentData, updateDocumentData } = useInputStore();
 
   useEffect(() => {
     // Check if Supabase is properly configured
@@ -142,6 +146,12 @@ export default function ChatScreen() {
       return;
     }
 
+    // Special handling for interview practice
+    if (modeId === 'interview-practice') {
+      setShowInterviewSetup(true);
+      return;
+    }
+
     setSelectedMode(modeId);
     setSessionId(Date.now().toString());
   };
@@ -149,6 +159,20 @@ export default function ChatScreen() {
   const endConversation = () => {
     setSelectedMode(null);
     setSessionId(null);
+  };
+
+  const handleInterviewContinue = () => {
+    if (documentData.analysisResult) {
+      // Start interview with the analysis data
+      setSelectedMode('interview-practice');
+      setSessionId(Date.now().toString());
+      setShowInterviewSetup(false);
+    } else {
+      // Start regular interview if no analysis
+      setSelectedMode('interview-practice');
+      setSessionId(Date.now().toString());
+      setShowInterviewSetup(false);
+    }
   };
 
   if (selectedMode && sessionId) {
@@ -311,6 +335,40 @@ export default function ChatScreen() {
           </View>
         </ScrollView>
       </LinearGradient>
+
+      {/* Interview Setup Modal */}
+      <Modal
+        visible={showInterviewSetup}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowInterviewSetup(false)}
+      >
+        <View style={styles.interviewSetupContainer}>
+          <View style={styles.interviewSetupHeader}>
+            <TouchableOpacity
+              style={styles.interviewSetupCloseButton}
+              onPress={() => setShowInterviewSetup(false)}
+            >
+              <X size={24} color="#111827" />
+            </TouchableOpacity>
+            <Text style={styles.interviewSetupTitle}>
+              Interview Setup
+            </Text>
+          </View>
+          
+          <InterviewSetupScreen
+            onQuickStart={() => {
+              setSelectedMode('interview-practice');
+              setSessionId(Date.now().toString());
+              setShowInterviewSetup(false);
+            }}
+            onDocumentSelect={(type) => {
+              // This is now handled inside InterviewSetupScreen
+            }}
+            onContinue={handleInterviewContinue}
+          />
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -551,4 +609,32 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontStyle: 'italic',
   },
+  interviewSetupContainer: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  interviewSetupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    paddingTop: Platform.OS === 'ios' ? 60 : 20,
+    position: 'relative',
+  },
+  interviewSetupCloseButton: {
+    position: 'absolute',
+    left: 20,
+    top: Platform.OS === 'ios' ? 60 : 20,
+    padding: 8,
+  },
+  interviewSetupTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  X: {
+    fontSize: 24,
+    color: '#111827',
+  }
 });
