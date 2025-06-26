@@ -322,7 +322,7 @@ class ClaudeAPIService {
 
     return prompts[mode as keyof typeof prompts] || prompts['general-chat'];
   }
-  
+
   // Main conversation method
   async sendMessage(
     message: string,
@@ -338,23 +338,12 @@ class ClaudeAPIService {
       content: message
     });
 
-    // CRITICAL FIX: Use custom maxTokens if provided, otherwise use mode default
-    const maxTokens = (options as any).maxTokens || this.getMaxTokensForMode(context.mode);
-
-    console.log('Sending message to Claude:', {
-      mode: context.mode,
-      message_length: message.length,
-      total_messages: messages.length,
-      model: 'claude-3-5-sonnet-20240620',
-      max_tokens: maxTokens  // This should now match the log from DocumentAnalysisService
-    });
-
     const requestData = {
       model: 'claude-3-5-sonnet-20240620',
-      max_tokens: maxTokens, // Use the determined max tokens (NOT the mode default)
+      max_tokens: this.getMaxTokensForMode(context.mode),
       messages,
       temperature: this.getTemperatureForMode(context.mode),
-      stream: false
+      stream: false // We'll implement streaming separately
     };
 
     try {
@@ -549,8 +538,7 @@ class ClaudeAPIService {
       'idea-brainstorm': 180,
       'interview-practice': 120,
       'presentation-prep': 160,
-      'language-learning': 140,
-      'document-analysis': 1000
+      'language-learning': 140
     };
     return configs[mode as keyof typeof configs] || 150;
   }
