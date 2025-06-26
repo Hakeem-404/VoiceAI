@@ -538,8 +538,7 @@ class ClaudeAPIService {
       'idea-brainstorm': 180,
       'interview-practice': 120,
       'presentation-prep': 160,
-      'language-learning': 140,
-      'document-analysis': 200 
+      'language-learning': 140
     };
     return configs[mode as keyof typeof configs] || 150;
   }
