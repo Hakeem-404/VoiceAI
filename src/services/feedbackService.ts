@@ -291,7 +291,7 @@ class FeedbackService {
 
   private calculateMetricsFromConversation(conversation: Conversation): FeedbackMetrics {
     const userMessages = conversation.messages.filter(msg => msg.role === 'user');
-    const aiMessages = conversation.messages.filter(msg => msg.role === 'ai');
+    const aiMessages = conversation.messages.filter(msg => msg.role === 'assistant');
     
     // Calculate total words in user messages
     const userWords = userMessages.reduce((total, msg) => {
@@ -334,7 +334,7 @@ class FeedbackService {
       const currentMsg = conversation.messages[i];
       const prevMsg = conversation.messages[i - 1];
       
-      if (currentMsg.role === 'user' && prevMsg.role === 'ai') {
+      if (currentMsg.role === 'user' && prevMsg.role === 'assistant') {
         const responseTime = (currentMsg.timestamp.getTime() - prevMsg.timestamp.getTime()) / 1000;
         responseTimes.push(responseTime);
       }
