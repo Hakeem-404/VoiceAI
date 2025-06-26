@@ -225,7 +225,7 @@ export default function HomeScreen() {
     setError(null);
   };
 
-  const handleModeStart = (configuration: ModeConfiguration) => {
+  const handleModeStart = async (configuration: ModeConfiguration) => {
     const mode = conversationModes.find(m => m.id === configuration.modeId);
     if (!mode) return;
 
@@ -240,9 +240,19 @@ export default function HomeScreen() {
     
     // Generate initial quick replies for the mode
     generateQuickRepliesForMode(mode.id);
+
+    // For interview mode, only send initial message if there's document analysis
+    if (mode.id === 'interview-practice' && configuration.customSettings?.documentAnalysis) {
+      const initialMessage = "I'm ready to start the personalized interview based on the job description and CV analysis. Let me begin with my first question.";
+
+      // Add a small delay to ensure conversation is properly initialized
+      setTimeout(async () => {
+        await sendMessageToClaude(initialMessage);
+      }, 500);
+    }
   };
 
-  const handleInterviewQuickStart = () => {
+  const handleInterviewQuickStart = async () => {
     const mode = conversationModes.find(m => m.id === 'interview-practice');
     if (!mode) return;
     
@@ -251,6 +261,8 @@ export default function HomeScreen() {
     setError(null);
     setConversationMessages([]);
     generateQuickRepliesForMode(mode.id);
+    
+    // Don't send initial message for quick start - let user speak first
   };
 
   const handleInterviewDocumentSelect = (type: 'job' | 'cv') => {
@@ -258,10 +270,43 @@ export default function HomeScreen() {
     setTextInputVisible(true);
   };
 
-  const handleInterviewContinue = () => {
-    // Navigate to the interview-prep screen with the documents
-    router.push('/interview-prep');
+  const handleInterviewContinue = async () => {
+    // Start the interview conversation automatically
+    const interviewMode = conversationModes.find(mode => mode.id === 'interview-practice');
+    if (!interviewMode) {
+      Alert.alert('Error', 'Interview practice mode not found');
+      return;
+    }
+
+    // Start conversation with document data if available
+    const configuration = {
+      modeId: 'interview-practice',
+      difficulty: 'intermediate',
+      sessionType: 'standard',
+      selectedTopics: interviewMode.topics.slice(0, 3),
+      aiPersonality: 'Professional',
+      customSettings: {
+        jobDescription: documentData.jobDescription,
+        cvContent: documentData.cvContent,
+        analysisResult: documentData.analysisResult,
+      },
+    };
+
+    startConversation(interviewMode, configuration);
     setShowInterviewSetup(false);
+    setError(null);
+    setConversationMessages([]);
+    generateQuickRepliesForMode(interviewMode.id);
+
+    // Send initial message to make AI speak first
+    const initialMessage = documentData.analysisResult 
+      ? "I'm ready to start the personalized interview based on the job description and CV analysis. Let me begin with my first question."
+      : "I'm ready to start the interview practice session. Let me begin with my first question.";
+
+    // Add a small delay to ensure conversation is properly initialized
+    setTimeout(async () => {
+      await sendMessageToClaude(initialMessage);
+    }, 500);
   };
 
   const [activeDocument, setActiveDocument] = useState<'job' | 'cv' | null>(null);
@@ -449,7 +494,7 @@ export default function HomeScreen() {
             language: 'en-US',
             continuous: true,
             interimResults: true,
-             // 30 second timeout
+            // 30 second timeout
           }
         );
 
