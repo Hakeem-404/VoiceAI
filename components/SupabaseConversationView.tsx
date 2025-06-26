@@ -107,7 +107,7 @@ export function SupabaseConversationView({
         documentData.analysisResult && 
         messages.length === 0 && 
         !initialMessageSent && 
-        isConfigured()) {
+        isConfigured) {
       
       console.log('Starting personalized interview with analysis:', documentData.analysisResult);
       setInitialMessageSent(true);
@@ -214,7 +214,7 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
   };
 
   const handleSendMessage = async (text: string) => {
-    if ((!text.trim() && !initialMessageSent) || isLoading || !isConfigured()) return;
+    if ((!text.trim() && !initialMessageSent) || isLoading || !isConfigured) return;
 
     const message = text.trim();
     setInputText('');
@@ -222,7 +222,7 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
   };
 
   const handleQuickReply = async (reply: string) => {
-    if (!isConfigured()) return;
+    if (!isConfigured) return;
     await sendMessage(reply);
   };
 
@@ -289,7 +289,7 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
   );
 
   const ConfigurationStatus = () => {
-    if (isConfigured()) return null;
+    if (isConfigured) return null;
 
     return (
       <View style={styles.configurationBanner}>
@@ -318,7 +318,7 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>{mode.replace('-', ' ').toUpperCase()}</Text>
           <View style={styles.headerActions}>
-            {canRegenerate && isConfigured() && (
+            {canRegenerate && isConfigured && (
               <TouchableOpacity
                 style={styles.headerButton}
                 onPress={regenerateResponse}
@@ -367,10 +367,10 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
         {messages.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateTitle}>
-              {isConfigured() ? 'Starting conversation...' : 'Configuration required'}
+              {isConfigured ? 'Starting conversation...' : 'Configuration required'}
             </Text>
             <Text style={styles.emptyStateSubtitle}>
-              {isConfigured() 
+              {isConfigured 
                 ? 'Please wait while we prepare your conversation...'
                 : 'Please configure your Supabase settings to start conversations'
               }
@@ -391,7 +391,7 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
       </ScrollView>
 
       {/* Quick Replies */}
-      {quickReplies.length > 0 && !isLoading && isConfigured() && (
+      {quickReplies.length > 0 && !isLoading && isConfigured && (
         <View style={styles.quickRepliesContainer}>
           <ScrollView
             horizontal
@@ -418,23 +418,23 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
           <TextInput
             style={[
               styles.textInput,
-              !isConfigured() && styles.textInputDisabled
+              !isConfigured && styles.textInputDisabled
             ]}
             value={inputText}
             onChangeText={setInputText}
-            placeholder={isConfigured() ? "Type your message..." : "Configuration required"}
+            placeholder={isConfigured ? "Type your message..." : "Configuration required"}
             placeholderTextColor="#9CA3AF"
             multiline
             maxLength={1000}
-            editable={!isLoading && isConfigured()}
+            editable={!isLoading && isConfigured}
           />
           <TouchableOpacity
             style={[
               styles.sendButton,
-              (!inputText.trim() || isLoading || !isConfigured()) && styles.sendButtonDisabled
+              (!inputText.trim() || isLoading || !isConfigured) && styles.sendButtonDisabled
             ]}
             onPress={() => handleSendMessage(inputText)}
-            disabled={!inputText.trim() || isLoading || !isConfigured()}
+            disabled={!inputText.trim() || isLoading || !isConfigured}
           >
             {isLoading ? (
               <ActivityIndicator size="small" color="white" />
