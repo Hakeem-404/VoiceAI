@@ -345,19 +345,20 @@ The difficulty should reflect the seniority level required for the position.`;
 
   private parseJobDescriptionResponse(responseContent: string): DocumentAnalysis['jobDescription'] {
     try {
+      // Try to find a JSON object
       const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+      let jsonStr: string | null = null;
       if (jsonMatch) {
-        let jsonStr = jsonMatch[0];
-        try {
-          return this.parseJobDescriptionJson(JSON.parse(jsonStr));
-        } catch (e) {
-          // Try advanced repair and parse again
-          jsonStr = this.advancedJsonRepair(jsonStr);
-          return this.parseJobDescriptionJson(JSON.parse(jsonStr));
-        }
+        jsonStr = jsonMatch[0];
+      } else if (responseContent.trim().startsWith('{')) {
+        // If the whole response is JSON but not matched by regex
+        jsonStr = responseContent.trim();
       }
-      // Try parsing the whole response
-      let jsonStr = responseContent.trim();
+      if (!jsonStr) {
+        // Optionally, log the full response for debugging
+        console.error('No JSON found in Claude response:', responseContent);
+        throw new Error('No JSON found in Claude response');
+      }
       try {
         return this.parseJobDescriptionJson(JSON.parse(jsonStr));
       } catch (e) {
