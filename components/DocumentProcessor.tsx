@@ -284,7 +284,7 @@ export function DocumentProcessor({
                 onVoiceToggle={() => {}}
                 placeholder="Paste the job description here..."
                 mode="document"
-                maxLength={3000}
+                maxLength={10000}
                 suggestions={jobDescriptionSuggestions}
                 showSuggestions={!jobDescription.trim()}
               />
