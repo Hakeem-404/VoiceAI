@@ -224,9 +224,15 @@ class SupabaseClaudeAPIService {
           model: data.model,
           max_tokens: data.max_tokens,
           messages_count: data.messages?.length,
-          temperature: data.temperature
+          temperature: data.temperature,
+          has_system: !!options.system
         }
       });
+
+      // Add system prompt if provided
+      if (options.system) {
+        data.system = options.system;
+      }
 
       const response = await fetch(`${this.supabaseUrl}/functions/v1/claude-proxy`, {
         method: 'POST',
@@ -372,71 +378,94 @@ class SupabaseClaudeAPIService {
 
   // Main conversation method
   async sendMessage(
-  message: string,
-  context: ConversationContext,
-  options: APIRequestOptions = {}
-): Promise<APIResponse<ConversationMessage>> {
-  // Get custom settings from context if available
-  const customSettings = (context as any).customSettings;
-  
-  const systemPrompt = this.getSystemPrompt(context.mode, customSettings);
-  
-  // Prepare messages with intelligent context management
-  const messages = this.prepareMessages(context, systemPrompt);
-  messages.push({
-    role: 'user',
-    content: message
-  });
+    message: string,
+    context: ConversationContext,
+    options: APIRequestOptions = {}
+  ): Promise<APIResponse<ConversationMessage>> {
+    console.log('📨 sendMessage called:', {
+      mode: context.mode,
+      messageLength: message.length,
+      hasCustomSettings: !!(context as any).customSettings,
+      messagesCount: context.messages.length
+    });
 
-  // Use custom maxTokens if provided, otherwise use mode default
-  const maxTokens = (options as any).maxTokens || this.getMaxTokensForMode(context.mode);
-
-  const requestData = {
-    model: 'claude-3-5-sonnet-20240620',
-    max_tokens: maxTokens, // 🔥 CHANGE THIS: Use calculated maxTokens instead of mode default
-    messages,
-    temperature: this.getTemperatureForMode(context.mode),
-    stream: false
-  };
-
-  console.log('Sending message to Claude:', {
-    mode: context.mode,
-    message_length: message.length,
-    total_messages: messages.length,
-    model: requestData.model,
-    max_tokens: requestData.max_tokens
-  });
-
-  try {
-    const response = await this.makeRequest<any>(requestData, options);
+    // Get custom settings from context if available
+    const customSettings = (context as any).customSettings;
     
-    if (response.data?.content?.[0]?.text) {
-      const assistantMessage: ConversationMessage = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: response.data.content[0].text,
-        timestamp: new Date()
-      };
-      console.log('Received response from Claude:', {
-        response_length: assistantMessage.content.length
+    // Generate system prompt with custom settings for interview mode
+    const systemPrompt = this.getSystemPrompt(context.mode, customSettings);
+    
+    if (context.mode === 'interview-practice') {
+      console.log('🎯 Interview mode system prompt generated:', {
+        promptLength: systemPrompt.length,
+        hasAnalysis: !!customSettings?.documentAnalysis
       });
+    }
+
+    // Prepare messages with intelligent context management
+    const messages = this.prepareMessages(context, systemPrompt);
+    
+    // Add the current user message
+    messages.push({
+      role: 'user',
+      content: message
+    });
+
+    // Use custom maxTokens if provided, otherwise use mode default
+    const maxTokens = (options as any).maxTokens || this.getMaxTokensForMode(context.mode);
+
+    const requestData = {
+      model: 'claude-3-5-sonnet-20240620',
+      max_tokens: maxTokens,
+      messages,
+      temperature: this.getTemperatureForMode(context.mode),
+      stream: false
+    };
+
+    console.log('🚀 Sending request to Claude:', {
+      mode: context.mode,
+      message_length: message.length,
+      total_messages: messages.length,
+      model: requestData.model,
+      max_tokens: requestData.max_tokens,
+      systemPromptIncluded: messages[0]?.content?.includes('You are a professional interviewer')
+    });
+
+    try {
+      const response = await this.makeRequest<any>(requestData, options);
+      
+      if (response.data?.content?.[0]?.text) {
+        const assistantMessage: ConversationMessage = {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: response.data.content[0].text,
+          timestamp: new Date()
+        };
+        
+        console.log('✅ Received response from Claude:', {
+          response_length: assistantMessage.content.length,
+          mode: context.mode
+        });
+        
+        return {
+          data: assistantMessage,
+          status: response.status,
+          timestamp: response.timestamp
+        };
+      }
+      
+      console.error('❌ Invalid response format from Claude:', response.data);
+      throw new Error('Invalid response format');
+      
+    } catch (error) {
+      console.error('❌ Error sending message to Claude:', error);
       return {
-        data: assistantMessage,
-        status: response.status,
-        timestamp: response.timestamp
+        error: error instanceof Error ? error.message : 'Unknown error',
+        status: 500,
+        timestamp: Date.now()
       };
     }
-    console.error('Invalid response format from Claude:', response.data);
-    throw new Error('Invalid response format');
-  } catch (error) {
-    console.error('Error sending message to Claude:', error);
-    return {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      status: 500,
-      timestamp: Date.now()
-    };
   }
-}
 
   // Streaming conversation for real-time responses
   async sendMessageStream(
@@ -549,8 +578,12 @@ class SupabaseClaudeAPIService {
 
   // Context management with intelligent truncation
   private prepareMessages(context: ConversationContext, systemPrompt: string): any[] {
-    // For Claude API, we don't include system messages in the messages array
-    // Instead, we'll prepend the system prompt to the first user message
+    console.log('📝 Preparing messages:', {
+      mode: context.mode,
+      systemPromptLength: systemPrompt.length,
+      existingMessages: context.messages.length
+    });
+
     const messages: any[] = [];
     
     // Intelligent context truncation for mobile memory management
@@ -562,13 +595,7 @@ class SupabaseClaudeAPIService {
       const summary = this.generateContextSummary(
         context.messages.slice(0, context.messages.length - maxMessages)
       );
-      // Prepend summary to the first message
-      if (recentMessages.length > 0 && recentMessages[0].role === 'user') {
-        recentMessages[0] = {
-          ...recentMessages[0],
-          content: `Previous conversation summary: ${summary}\n\n${recentMessages[0].content}`
-        };
-      }
+      // We'll prepend summary to the system prompt instead
     }
 
     // Add recent messages, filtering out system messages
@@ -581,13 +608,32 @@ class SupabaseClaudeAPIService {
       }
     });
 
-    // If we have messages and the first one is a user message, prepend the system prompt
-    if (messages.length > 0 && messages[0].role === 'user') {
+    // For interview mode, we need to ensure the system prompt is properly set
+    if (context.mode === 'interview-practice' && messages.length === 0) {
+      // This is the first message, create a user message that will trigger the interview
+      messages.push({
+        role: 'user',
+        content: `${systemPrompt}\n\nPlease start the interview now with a brief introduction and your first question.`
+      });
+    } else if (messages.length > 0 && messages[0].role === 'user') {
+      // If we have existing messages, prepend the system prompt to the first user message
       messages[0] = {
         ...messages[0],
         content: `${systemPrompt}\n\n${messages[0].content}`
       };
+    } else if (messages.length === 0) {
+      // If there are no messages, create one with just the system prompt
+      messages.push({
+        role: 'user',
+        content: systemPrompt
+      });
     }
+
+    console.log('📋 Messages prepared:', {
+      totalMessages: messages.length,
+      firstMessageLength: messages[0]?.content?.length,
+      firstMessageRole: messages[0]?.role
+    });
 
     return messages;
   }
@@ -627,10 +673,10 @@ class SupabaseClaudeAPIService {
       'general-chat': 150,
       'debate-challenge': 200,
       'idea-brainstorm': 180,
-      'interview-practice': 120,
+      'interview-practice': 300, // Increased for interview responses
       'presentation-prep': 160,
       'language-learning': 140,
-      'document-analysis': 1000
+      'document-analysis': 1000 
     };
     return configs[mode as keyof typeof configs] || 150;
   }

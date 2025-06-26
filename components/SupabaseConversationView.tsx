@@ -46,7 +46,9 @@ export function SupabaseConversationView({
     sendMessage,
     regenerateResponse,
     clearConversation,
-    canRegenerate
+    canRegenerate,
+    isConfigured,
+    configStatus
   } = useSupabaseConversation({
     mode,
     sessionId,
@@ -101,29 +103,29 @@ export function SupabaseConversationView({
 
   // Send initial system message for interview practice with document analysis
   useEffect(() => {
-  if (mode === 'interview-practice' && 
-      documentData.analysisResult && 
-      messages.length === 0 && 
-      !initialMessageSent && 
-      isSupabaseConfigured()) { // Add this check
-    
-    console.log('Starting personalized interview with analysis:', documentData.analysisResult);
-    setInitialMessageSent(true);
-    
-    // Create the system message with analysis data
-    const analysis = documentData.analysisResult;
-    const systemMessage = createInterviewSystemPrompt(
-      analysis, 
-      documentData.jobDescription, 
-      documentData.cvContent
-    );
-    
-    console.log('System message created, length:', systemMessage.length);
-    
-    // Send the system message to start the interview
-    sendSystemMessage(systemMessage);
-  }
-}, [mode, documentData.analysisResult, messages.length, initialMessageSent, isSupabaseConfigured()]);
+    if (mode === 'interview-practice' && 
+        documentData.analysisResult && 
+        messages.length === 0 && 
+        !initialMessageSent && 
+        isConfigured()) {
+      
+      console.log('Starting personalized interview with analysis:', documentData.analysisResult);
+      setInitialMessageSent(true);
+      
+      // Create the system message with analysis data
+      const analysis = documentData.analysisResult;
+      const systemMessage = createInterviewSystemPrompt(
+        analysis, 
+        documentData.jobDescription, 
+        documentData.cvContent
+      );
+      
+      console.log('System message created, length:', systemMessage.length);
+      
+      // Send the system message to start the interview
+      sendSystemMessage(systemMessage);
+    }
+  }, [mode, documentData.analysisResult, messages.length, initialMessageSent, isConfigured]);
 
   const createInterviewSystemPrompt = (
     analysis: any,
@@ -175,56 +177,52 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
   };
 
   const sendSystemMessage = async (systemMessage: string) => {
-  console.log('Sending system message to start interview...');
-  
-  try {
-    // Create a context with custom settings that include the system message
-    const customSettings = {
-      documentAnalysis: documentData.analysisResult,
-      jobDescription: documentData.jobDescription,
-      cvContent: documentData.cvContent
-    };
-
-    const context = {
-      messages: [],
-      mode,
-      sessionId,
-      userId,
-      metadata: {
-        startTime: new Date(),
-        lastActivity: new Date(),
-        messageCount: 0,
-        totalTokens: 0,
-      },
-      customSettings // This will be used by the API service
-    };
+    console.log('Sending system message to start interview...');
     
-    // Send a greeting message that will trigger the interview with system context
-    const greetingMessage = "Hello, I'm ready to begin the interview.";
-    console.log('Sending greeting message with context...');
-    
-    await sendMessage(greetingMessage, context);
-    console.log('Interview started successfully');
-    
-  } catch (error) {
-    console.error('Failed to send system message:', error);
-    Alert.alert(
-      'Interview Setup Failed',
-      'Failed to start the personalized interview. Please try again.',
-      [{ text: 'OK' }]
-    );
-  }
-};
+    try {
+      // Create a context with custom settings that include the system message
+      const customContext = {
+        messages: [],
+        mode,
+        sessionId,
+        userId,
+        metadata: {
+          startTime: new Date(),
+          lastActivity: new Date(),
+          messageCount: 0,
+          totalTokens: 0,
+        },
+        customSettings: {
+          documentAnalysis: documentData.analysisResult,
+          jobDescription: documentData.jobDescription,
+          cvContent: documentData.cvContent
+        }
+      };
+      
+      // Send an empty message that will trigger the interview with system context
+      await sendMessage("", customContext);
+      console.log('Interview started successfully');
+      
+    } catch (error) {
+      console.error('Failed to send system message:', error);
+      Alert.alert(
+        'Interview Setup Failed',
+        'Failed to start the personalized interview. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
 
-  const handleSendMessage = async (text: string, customContext?: any) => {
-  if ((!text.trim() && !customContext?.customSettings) || isLoading || !isSupabaseConfigured()) return;
+  const handleSendMessage = async (text: string) => {
+    if ((!text.trim() && !initialMessageSent) || isLoading || !isConfigured()) return;
 
-  const message = text.trim();
-  setInputText('');
-  await sendMessage(message, customContext);
-};
+    const message = text.trim();
+    setInputText('');
+    await sendMessage(message);
+  };
 
   const handleQuickReply = async (reply: string) => {
+    if (!isConfigured()) return;
     await sendMessage(reply);
   };
 
@@ -291,30 +289,21 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
   );
 
   const ConfigurationStatus = () => {
-    if (isSupabaseConfigured()) return null;
+    if (isConfigured()) return null;
 
     return (
       <View style={styles.configurationBanner}>
-        <Alert size={20} color="#EF4444" />
+        <AlertCircle size={20} color="#EF4444" />
         <View style={styles.configurationText}>
           <Text style={styles.configurationTitle}>Configuration Required</Text>
           <Text style={styles.configurationSubtitle}>
-            {!configStatus().hasUrl && 'Missing EXPO_PUBLIC_SUPABASE_URL. '}
-            {!configStatus().hasKey && 'Missing EXPO_PUBLIC_SUPABASE_ANON_KEY. '}
+            {!configStatus.hasUrl && 'Missing EXPO_PUBLIC_SUPABASE_URL. '}
+            {!configStatus.hasKey && 'Missing EXPO_PUBLIC_SUPABASE_ANON_KEY. '}
             Please check your environment variables.
           </Text>
         </View>
       </View>
     );
-  };
-
-  // Helper functions to check configuration status
-  const isSupabaseConfigured = () => {
-    return supabaseClaudeAPI.isConfigured();
-  };
-
-  const configStatus = () => {
-    return supabaseClaudeAPI.getConfigStatus();
   };
 
   return (
@@ -329,7 +318,7 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>{mode.replace('-', ' ').toUpperCase()}</Text>
           <View style={styles.headerActions}>
-            {canRegenerate && isSupabaseConfigured() && (
+            {canRegenerate && isConfigured() && (
               <TouchableOpacity
                 style={styles.headerButton}
                 onPress={regenerateResponse}
@@ -378,10 +367,10 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
         {messages.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateTitle}>
-              {isSupabaseConfigured() ? 'Starting conversation...' : 'Configuration required'}
+              {isConfigured() ? 'Starting conversation...' : 'Configuration required'}
             </Text>
             <Text style={styles.emptyStateSubtitle}>
-              {isSupabaseConfigured() 
+              {isConfigured() 
                 ? 'Please wait while we prepare your conversation...'
                 : 'Please configure your Supabase settings to start conversations'
               }
@@ -402,7 +391,7 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
       </ScrollView>
 
       {/* Quick Replies */}
-      {quickReplies.length > 0 && !isLoading && isSupabaseConfigured() && (
+      {quickReplies.length > 0 && !isLoading && isConfigured() && (
         <View style={styles.quickRepliesContainer}>
           <ScrollView
             horizontal
@@ -429,23 +418,23 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
           <TextInput
             style={[
               styles.textInput,
-              !isSupabaseConfigured() && styles.textInputDisabled
+              !isConfigured() && styles.textInputDisabled
             ]}
             value={inputText}
             onChangeText={setInputText}
-            placeholder={isSupabaseConfigured() ? "Type your message..." : "Configuration required"}
+            placeholder={isConfigured() ? "Type your message..." : "Configuration required"}
             placeholderTextColor="#9CA3AF"
             multiline
             maxLength={1000}
-            editable={!isLoading && isSupabaseConfigured()}
+            editable={!isLoading && isConfigured()}
           />
           <TouchableOpacity
             style={[
               styles.sendButton,
-              (!inputText.trim() || isLoading || !isSupabaseConfigured()) && styles.sendButtonDisabled
+              (!inputText.trim() || isLoading || !isConfigured()) && styles.sendButtonDisabled
             ]}
             onPress={() => handleSendMessage(inputText)}
-            disabled={!inputText.trim() || isLoading || !isSupabaseConfigured()}
+            disabled={!inputText.trim() || isLoading || !isConfigured()}
           >
             {isLoading ? (
               <ActivityIndicator size="small" color="white" />

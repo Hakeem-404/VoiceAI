@@ -59,6 +59,7 @@ export function useSupabaseConversation(options: UseSupabaseConversationOptions)
 
   const streamingContentRef = useRef('');
   const responseStartTimeRef = useRef(0);
+  const initializedRef = useRef(false);
 
   // Initialize conversation context
   useEffect(() => {
@@ -132,7 +133,7 @@ export function useSupabaseConversation(options: UseSupabaseConversationOptions)
 
     // For interview practice with document analysis, if this is the first message and it's empty,
     // we're just sending the system prompt to start the conversation
-    const isInitialSystemMessage = customContext?.system && content === '';
+    const isInitialSystemMessage = customContext?.customSettings && content === '';
     
     // Only add user message if it's not an initial system message
     if (!isInitialSystemMessage && content.trim()) {
@@ -154,22 +155,47 @@ export function useSupabaseConversation(options: UseSupabaseConversationOptions)
       
       // For interview practice with document analysis, include the analysis in the system prompt
       let systemPrompt;
-      if (customContext?.system) {
-        systemPrompt = customContext.system;
-      } else if (mode === 'interview-practice' && documentData.analysisResult && !customContext?.system) {
+      if (customContext?.customSettings) {
+        // Use the custom settings from the context
+        const options: APIRequestOptions = {
+          maxTokens: 500 // Use a larger token limit for the first response
+        };
+        
+        if (enableStreaming && Platform.OS !== 'web') {
+          // Use streaming for better UX on mobile
+          await sendStreamingMessage(content, contextToUse, options);
+        } else {
+          // Use regular request for web or when streaming is disabled
+          await sendRegularMessage(content, contextToUse, options);
+        }
+      } else if (mode === 'interview-practice' && documentData.analysisResult && !customContext?.customSettings) {
         systemPrompt = createInterviewSystemPrompt(
           documentData.analysisResult,
           documentData.jobDescription,
           documentData.cvContent
         );
-      }
-
-      if (enableStreaming && Platform.OS !== 'web') {
-        // Use streaming for better UX on mobile
-        await sendStreamingMessage(content, contextToUse, systemPrompt);
+        
+        const options: APIRequestOptions = {
+          system: systemPrompt,
+          maxTokens: 500 // Use a larger token limit for the first response
+        };
+        
+        if (enableStreaming && Platform.OS !== 'web') {
+          // Use streaming for better UX on mobile
+          await sendStreamingMessage(content, contextToUse, options);
+        } else {
+          // Use regular request for web or when streaming is disabled
+          await sendRegularMessage(content, contextToUse, options);
+        }
       } else {
-        // Use regular request for web or when streaming is disabled
-        await sendRegularMessage(content, contextToUse, systemPrompt);
+        // Regular conversation without special handling
+        if (enableStreaming && Platform.OS !== 'web') {
+          // Use streaming for better UX on mobile
+          await sendStreamingMessage(content, contextToUse);
+        } else {
+          // Use regular request for web or when streaming is disabled
+          await sendRegularMessage(content, contextToUse);
+        }
       }
 
       // Generate quick replies
@@ -237,7 +263,7 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
   const sendStreamingMessage = useCallback(async (
     content: string,
     context: ConversationContext,
-    systemPrompt?: string
+    options: APIRequestOptions = {}
   ) => {
     setState(prev => ({ ...prev, isStreaming: true }));
     streamingContentRef.current = '';
@@ -252,12 +278,6 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
 
     // Add empty assistant message that will be updated
     addMessage(assistantMessage);
-
-    // Create request options with system prompt if provided
-    const options: APIRequestOptions = {};
-    if (systemPrompt) {
-      options.system = systemPrompt;
-    }
 
     await supabaseClaudeAPI.sendMessageStream(
       content,
@@ -297,14 +317,8 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
   const sendRegularMessage = useCallback(async (
     content: string,
     context: ConversationContext,
-    systemPrompt?: string
+    options: APIRequestOptions = {}
   ) => {
-    // Create request options with system prompt if provided
-    const options: APIRequestOptions = {};
-    if (systemPrompt) {
-      options.system = systemPrompt;
-    }
-
     const response = await supabaseClaudeAPI.sendMessage(content, context, options);
     
     if (response.error) {
