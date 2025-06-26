@@ -136,7 +136,7 @@ Please provide a detailed analysis in the following format:
    - Suggest focus areas for interview preparation
 
 4. INTERVIEW QUESTIONS:
-   Generate 3-4 questions for each category:
+   Generate 4-5 questions for each category:
    - Technical questions based on job requirements
    - Behavioral questions targeting CV experiences
    - Situational questions for job responsibilities
