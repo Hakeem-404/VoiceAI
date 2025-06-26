@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import { Conversation, Message, ConversationMode, RecordingState, ConversationSession, ModeConfiguration, ConversationBookmark, ConversationHighlight, DocumentAnalysis } from '../types';
+import { Conversation, ConversationMode, RecordingState, ConversationSession, ModeConfiguration, ConversationBookmark, ConversationHighlight, DocumentAnalysis, FeedbackData } from '../types';
+import { ConversationMessage } from '../../types/api';
+import { feedbackService } from '../services/feedbackService';
 
 interface ConversationState {
   currentConversation: Conversation | null;
@@ -9,13 +11,14 @@ interface ConversationState {
   isProcessing: boolean;
   audioLevels: number[];
   currentSession: ConversationSession | null;
+  lastFeedback: FeedbackData | null;
   
   // Actions
   startConversation: (mode: ConversationMode, configuration?: ModeConfiguration) => void;
-  endConversation: () => void;
+  endConversation: () => Promise<FeedbackData | null>;
   pauseSession: () => void;
   resumeSession: () => void;
-  addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void;
+  addMessage: (message: Omit<ConversationMessage, 'id' | 'timestamp'>) => void;
   addBookmark: (messageId: string, note?: string) => void;
   addHighlight: (messageId: string, text: string, color: string) => void;
   setRecordingState: (state: RecordingState) => void;
@@ -25,6 +28,8 @@ interface ConversationState {
   loadConversations: () => void;
   deleteConversation: (id: string) => void;
   switchMode: (mode: ConversationMode) => void;
+  generateFeedback: (conversation: Conversation) => Promise<FeedbackData | null>;
+  clearLastFeedback: () => void;
 }
 
 export const useConversationStore = create<ConversationState>((set, get) => ({
@@ -35,6 +40,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   isProcessing: false,
   audioLevels: [],
   currentSession: null,
+  lastFeedback: null,
 
   startConversation: (mode: ConversationMode, configuration?: ModeConfiguration) => {
     const sessionId = Date.now().toString();
@@ -75,10 +81,11 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       currentMode: mode,
       currentSession: newSession,
       recordingState: 'idle',
+      lastFeedback: null,
     });
   },
 
-  endConversation: () => {
+  endConversation: async () => {
     const { currentConversation, currentSession, conversations } = get();
     if (currentConversation && currentSession) {
       const endTime = new Date();
@@ -92,14 +99,42 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         highlights: currentSession.highlights,
       };
       
+      // Generate feedback before ending the conversation
+      let feedback: FeedbackData | null = null;
+      try {
+        feedback = await feedbackService.generateFeedback(updatedConversation);
+        console.log('Generated feedback for conversation:', updatedConversation.id);
+      } catch (error) {
+        console.error('Failed to generate feedback:', error);
+      }
+      
       set({
         conversations: [updatedConversation, ...conversations],
         currentConversation: null,
         currentMode: null,
         currentSession: null,
         recordingState: 'idle',
+        lastFeedback: feedback,
       });
+      
+      return feedback;
     }
+    return null;
+  },
+
+  generateFeedback: async (conversation: Conversation) => {
+    try {
+      const feedback = await feedbackService.generateFeedback(conversation);
+      set({ lastFeedback: feedback });
+      return feedback;
+    } catch (error) {
+      console.error('Failed to generate feedback:', error);
+      return null;
+    }
+  },
+
+  clearLastFeedback: () => {
+    set({ lastFeedback: null });
   },
 
   pauseSession: () => {
@@ -134,10 +169,11 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     const { currentConversation, currentSession } = get();
     if (!currentConversation || !currentSession) return;
 
-    const newMessage: Message = {
+    const newMessage: ConversationMessage = {
       ...messageData,
       id: Date.now().toString(),
       timestamp: new Date(),
+      role: messageData.role === 'ai' ? 'assistant' : messageData.role,
     };
 
     const updatedConversation = {
