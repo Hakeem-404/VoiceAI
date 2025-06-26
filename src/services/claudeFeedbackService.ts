@@ -303,14 +303,13 @@ Focus on grammar, vocabulary, pronunciation, and overall fluency.`;
     try {
       console.log('Raw Claude response:', response);
       
-      // Extract JSON from Claude's response
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        console.warn('No JSON found in Claude response, using fallback');
-        throw new Error('No JSON found in Claude response');
+      // Try multiple strategies to extract JSON
+      let jsonString = this.extractCompleteJson(response);
+      if (!jsonString) {
+        console.warn('No complete JSON found in Claude response, using fallback');
+        throw new Error('No complete JSON found in Claude response');
       }
       
-      let jsonString = jsonMatch[0];
       console.log('Extracted JSON string:', jsonString);
       
       // Clean up common JSON issues
@@ -381,24 +380,36 @@ Focus on grammar, vocabulary, pronunciation, and overall fluency.`;
     }
   }
 
-  // Clean up JSON string to remove common issues
-  private cleanJsonString(jsonString: string): string {
-    // Remove any text before the first {
-    const startIndex = jsonString.indexOf('{');
-    if (startIndex > 0) {
-      jsonString = jsonString.substring(startIndex);
+  // Extract complete JSON from Claude's response
+  private extractCompleteJson(response: string): string | null {
+    // Strategy 1: Look for the largest JSON object (most complete)
+    const jsonMatches = response.match(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g);
+    if (jsonMatches) {
+      // Find the largest JSON object (most likely to be complete)
+      const largestJson = jsonMatches.reduce((largest, current) => 
+        current.length > largest.length ? current : largest
+      );
+      console.log('Found largest JSON object:', largestJson);
+      return largestJson;
     }
     
-    // Remove any text after the last }
-    const endIndex = jsonString.lastIndexOf('}');
-    if (endIndex > 0 && endIndex < jsonString.length - 1) {
-      jsonString = jsonString.substring(0, endIndex + 1);
+    // Strategy 2: Look for JSON starting with { and ending with }
+    const startIndex = response.indexOf('{');
+    const endIndex = response.lastIndexOf('}');
+    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+      const jsonString = response.substring(startIndex, endIndex + 1);
+      console.log('Extracted JSON using start/end indices:', jsonString);
+      return jsonString;
     }
     
-    // Remove newlines and extra whitespace within strings
-    jsonString = jsonString.replace(/\n/g, ' ').replace(/\r/g, ' ');
+    // Strategy 3: Look for specific feedback structure
+    const feedbackMatch = response.match(/\{[^}]*"scores"[^}]*\}[^}]*\}[^}]*\}/);
+    if (feedbackMatch) {
+      console.log('Found feedback structure:', feedbackMatch[0]);
+      return feedbackMatch[0];
+    }
     
-    return jsonString;
+    return null;
   }
 
   // Fix common JSON syntax issues
@@ -423,6 +434,28 @@ Focus on grammar, vocabulary, pronunciation, and overall fluency.`;
     jsonString = jsonString.replace(/:\s*,/g, ': null,');
     jsonString = jsonString.replace(/:\s*}/g, ': null}');
     jsonString = jsonString.replace(/:\s*]/g, ': null]');
+    
+    // Fix incomplete arrays/objects
+    jsonString = jsonString.replace(/,\s*([}\]])/g, '$1');
+    jsonString = jsonString.replace(/,\s*$/g, '');
+    
+    // Fix missing closing braces/brackets
+    let braceCount = (jsonString.match(/\{/g) || []).length;
+    let bracketCount = (jsonString.match(/\[/g) || []).length;
+    let closeBraceCount = (jsonString.match(/\}/g) || []).length;
+    let closeBracketCount = (jsonString.match(/\]/g) || []).length;
+    
+    // Add missing closing braces
+    while (braceCount > closeBraceCount) {
+      jsonString += '}';
+      closeBraceCount++;
+    }
+    
+    // Add missing closing brackets
+    while (bracketCount > closeBracketCount) {
+      jsonString += ']';
+      closeBracketCount++;
+    }
     
     return jsonString;
   }
