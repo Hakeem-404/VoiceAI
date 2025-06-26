@@ -378,71 +378,71 @@ Start with a brief introduction and your first question. Be professional, thorou
 
   // Main conversation method
   async sendMessage(
-    message: string,
-    context: ConversationContext,
-    options: APIRequestOptions = {}
-  ): Promise<APIResponse<ConversationMessage>> {
-    // Get custom settings from context if available
-    const customSettings = (context as any).customSettings;
+  message: string,
+  context: ConversationContext,
+  options: APIRequestOptions = {}
+): Promise<APIResponse<ConversationMessage>> {
+  // Get custom settings from context if available
+  const customSettings = (context as any).customSettings;
+  
+  const systemPrompt = this.getSystemPrompt(context.mode, customSettings);
+  
+  // Prepare messages with intelligent context management
+  const messages = this.prepareMessages(context, systemPrompt);
+  messages.push({
+    role: 'user',
+    content: message
+  });
+
+  // Use custom maxTokens if provided, otherwise use mode default
+  const maxTokens = (options as any).maxTokens || this.getMaxTokensForMode(context.mode);
+
+  const requestData = {
+    model: 'claude-3-5-sonnet-20240620',
+    max_tokens: maxTokens, // 🔥 CHANGE THIS: Use calculated maxTokens instead of mode default
+    messages,
+    temperature: this.getTemperatureForMode(context.mode),
+    stream: false
+  };
+
+  console.log('Sending message to Claude:', {
+    mode: context.mode,
+    message_length: message.length,
+    total_messages: messages.length,
+    model: requestData.model,
+    max_tokens: requestData.max_tokens
+  });
+
+  try {
+    const response = await this.makeRequest<any>(requestData, options);
     
-    const systemPrompt = this.getSystemPrompt(context.mode, customSettings);
-    
-    // Prepare messages with intelligent context management
-    const messages = this.prepareMessages(context, systemPrompt);
-    messages.push({
-      role: 'user',
-      content: message
-    });
-
-    const requestData = {
-      model: 'claude-3-5-sonnet-20240620',
-      max_tokens: this.getMaxTokensForMode(context.mode),
-      messages,
-      temperature: this.getTemperatureForMode(context.mode),
-      stream: false
-    };
-
-    console.log('Sending message to Claude:', {
-      mode: context.mode,
-      message_length: message.length,
-      total_messages: messages.length,
-      model: requestData.model,
-      max_tokens: requestData.max_tokens
-    });
-
-    try {
-      const response = await this.makeRequest<any>(requestData, options);
-      
-      if (response.data?.content?.[0]?.text) {
-        const assistantMessage: ConversationMessage = {
-          id: Date.now().toString(),
-          role: 'assistant',
-          content: response.data.content[0].text,
-          timestamp: new Date()
-        };
-
-        console.log('Received response from Claude:', {
-          response_length: assistantMessage.content.length
-        });
-
-        return {
-          data: assistantMessage,
-          status: response.status,
-          timestamp: response.timestamp
-        };
-      }
-
-      console.error('Invalid response format from Claude:', response.data);
-      throw new Error('Invalid response format');
-    } catch (error) {
-      console.error('Error sending message to Claude:', error);
+    if (response.data?.content?.[0]?.text) {
+      const assistantMessage: ConversationMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: response.data.content[0].text,
+        timestamp: new Date()
+      };
+      console.log('Received response from Claude:', {
+        response_length: assistantMessage.content.length
+      });
       return {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        status: 500,
-        timestamp: Date.now()
+        data: assistantMessage,
+        status: response.status,
+        timestamp: response.timestamp
       };
     }
+    console.error('Invalid response format from Claude:', response.data);
+    throw new Error('Invalid response format');
+  } catch (error) {
+    console.error('Error sending message to Claude:', error);
+    return {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      status: 500,
+      timestamp: Date.now()
+    };
   }
+}
 
   // Streaming conversation for real-time responses
   async sendMessageStream(
@@ -635,7 +635,8 @@ Start with a brief introduction and your first question. Be professional, thorou
       'idea-brainstorm': 180,
       'interview-practice': 120,
       'presentation-prep': 160,
-      'language-learning': 140
+      'language-learning': 140,
+      'document-analysis': 1000
     };
     return configs[mode as keyof typeof configs] || 150;
   }
