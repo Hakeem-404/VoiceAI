@@ -184,10 +184,18 @@ Respond ONLY with the JSON object, no other text.`;
       message_length: prompt.length,
       total_messages: context.messages.length + 1,
       model: 'claude-3-5-sonnet-20240620',
-      max_tokens: 500 // Increased for JSON responses
+      max_tokens: 1000 // Increased for JSON responses
     });
     
-    const response = await supabaseClaudeAPI.sendMessage(prompt, context);
+    // Pass explicit options to override the default max_tokens
+    const apiOptions = {
+      timeout: 30000,
+      retries: 2,
+      cache: false,
+      maxTokens: 1000 // This should override the mode-specific token limit
+    };
+    
+    const response = await supabaseClaudeAPI.sendMessage(prompt, context, apiOptions);
     
     if (response.error) {
       console.error(`${analysisType} failed:`, response.error);
@@ -211,7 +219,14 @@ Respond ONLY with the JSON object, no other text.`;
       // Strategy 1: Look for JSON object
       const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        const parsedData = JSON.parse(jsonMatch[0]);
+        let jsonString = jsonMatch[0];
+        
+        // Strategy 1a: Try to fix truncated JSON by closing incomplete objects/arrays
+        if (!this.isValidJSON(jsonString)) {
+          jsonString = this.attemptJSONRepair(jsonString);
+        }
+        
+        const parsedData = JSON.parse(jsonString);
         return {
           requirements: Array.isArray(parsedData.requirements) ? parsedData.requirements : [],
           skills: Array.isArray(parsedData.skills) ? parsedData.skills : [],
@@ -223,7 +238,12 @@ Respond ONLY with the JSON object, no other text.`;
       }
       
       // Strategy 2: Try parsing the entire response as JSON
-      const parsedData = JSON.parse(responseContent.trim());
+      let jsonString = responseContent.trim();
+      if (!this.isValidJSON(jsonString)) {
+        jsonString = this.attemptJSONRepair(jsonString);
+      }
+      
+      const parsedData = JSON.parse(jsonString);
       return {
         requirements: Array.isArray(parsedData.requirements) ? parsedData.requirements : [],
         skills: Array.isArray(parsedData.skills) ? parsedData.skills : [],
@@ -235,7 +255,10 @@ Respond ONLY with the JSON object, no other text.`;
     } catch (error) {
       console.error('Failed to parse job description analysis:', error);
       console.log('Raw response:', responseContent);
-      throw new Error('Failed to parse job description analysis');
+      console.log('Falling back to manual extraction...');
+      
+      // Strategy 3: Manual extraction from partial JSON
+      return this.extractJobDescriptionFromText(responseContent);
     }
   }
 
@@ -244,7 +267,14 @@ Respond ONLY with the JSON object, no other text.`;
       // Strategy 1: Look for JSON object
       const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        const parsedData = JSON.parse(jsonMatch[0]);
+        let jsonString = jsonMatch[0];
+        
+        // Strategy 1a: Try to fix truncated JSON
+        if (!this.isValidJSON(jsonString)) {
+          jsonString = this.attemptJSONRepair(jsonString);
+        }
+        
+        const parsedData = JSON.parse(jsonString);
         return {
           skills: Array.isArray(parsedData.skills) ? parsedData.skills : [],
           experience: Array.isArray(parsedData.experience) ? parsedData.experience : [],
@@ -255,7 +285,12 @@ Respond ONLY with the JSON object, no other text.`;
       }
       
       // Strategy 2: Try parsing the entire response as JSON
-      const parsedData = JSON.parse(responseContent.trim());
+      let jsonString = responseContent.trim();
+      if (!this.isValidJSON(jsonString)) {
+        jsonString = this.attemptJSONRepair(jsonString);
+      }
+      
+      const parsedData = JSON.parse(jsonString);
       return {
         skills: Array.isArray(parsedData.skills) ? parsedData.skills : [],
         experience: Array.isArray(parsedData.experience) ? parsedData.experience : [],
@@ -266,7 +301,10 @@ Respond ONLY with the JSON object, no other text.`;
     } catch (error) {
       console.error('Failed to parse CV analysis:', error);
       console.log('Raw response:', responseContent);
-      throw new Error('Failed to parse CV analysis');
+      console.log('Falling back to manual extraction...');
+      
+      // Strategy 3: Manual extraction from partial JSON
+      return this.extractCVFromText(responseContent);
     }
   }
 
@@ -275,7 +313,14 @@ Respond ONLY with the JSON object, no other text.`;
       // Strategy 1: Look for JSON object
       const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        const parsedData = JSON.parse(jsonMatch[0]);
+        let jsonString = jsonMatch[0];
+        
+        // Strategy 1a: Try to fix truncated JSON
+        if (!this.isValidJSON(jsonString)) {
+          jsonString = this.attemptJSONRepair(jsonString);
+        }
+        
+        const parsedData = JSON.parse(jsonString);
         return {
           matchScore: typeof parsedData.matchScore === 'number' ? parsedData.matchScore : 60,
           strengths: Array.isArray(parsedData.strengths) ? parsedData.strengths : [],
@@ -293,7 +338,12 @@ Respond ONLY with the JSON object, no other text.`;
       }
       
       // Strategy 2: Try parsing the entire response as JSON
-      const parsedData = JSON.parse(responseContent.trim());
+      let jsonString = responseContent.trim();
+      if (!this.isValidJSON(jsonString)) {
+        jsonString = this.attemptJSONRepair(jsonString);
+      }
+      
+      const parsedData = JSON.parse(jsonString);
       return {
         matchScore: typeof parsedData.matchScore === 'number' ? parsedData.matchScore : 60,
         strengths: Array.isArray(parsedData.strengths) ? parsedData.strengths : [],
@@ -311,8 +361,138 @@ Respond ONLY with the JSON object, no other text.`;
     } catch (error) {
       console.error('Failed to parse match analysis:', error);
       console.log('Raw response:', responseContent);
-      throw new Error('Failed to parse match analysis');
+      console.log('Falling back to manual extraction...');
+      
+      // Strategy 3: Manual extraction from partial JSON
+      return this.extractMatchFromText(responseContent);
     }
+  }
+
+  // Helper methods for JSON repair and text extraction
+  private isValidJSON(str: string): boolean {
+    try {
+      JSON.parse(str);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private attemptJSONRepair(jsonString: string): string {
+    let repaired = jsonString;
+    
+    // Count open and close braces
+    const openBraces = (repaired.match(/\{/g) || []).length;
+    const closeBraces = (repaired.match(/\}/g) || []).length;
+    
+    // Count open and close brackets
+    const openBrackets = (repaired.match(/\[/g) || []).length;
+    const closeBrackets = (repaired.match(/\]/g) || []).length;
+    
+    // Add missing closing brackets
+    for (let i = 0; i < openBrackets - closeBrackets; i++) {
+      repaired += ']';
+    }
+    
+    // Add missing closing braces
+    for (let i = 0; i < openBraces - closeBraces; i++) {
+      repaired += '}';
+    }
+    
+    // Remove incomplete trailing strings/fields
+    repaired = repaired.replace(/,\s*$/, ''); // Remove trailing comma
+    repaired = repaired.replace(/,\s*[\]\}]+$/, (match) => match.replace(',', '')); // Remove comma before closing
+    
+    return repaired;
+  }
+
+  private extractJobDescriptionFromText(text: string): DocumentAnalysis['jobDescription'] {
+    // Extract arrays from partial JSON text
+    const requirements = this.extractArrayFromText(text, 'requirements') || [];
+    const skills = this.extractArrayFromText(text, 'skills') || [];
+    const responsibilities = this.extractArrayFromText(text, 'responsibilities') || [];
+    const culture = this.extractArrayFromText(text, 'culture') || [];
+    
+    // Extract experience level
+    const experienceMatch = text.match(/"experience":\s*"([^"]*)/);
+    const experience = experienceMatch ? experienceMatch[1] : 'mid';
+    
+    // Extract company info
+    const companyInfoMatch = text.match(/"companyInfo":\s*"([^"]*)/);
+    const companyInfo = companyInfoMatch ? companyInfoMatch[1] : '';
+    
+    return {
+      requirements,
+      skills,
+      experience,
+      responsibilities,
+      companyInfo,
+      culture
+    };
+  }
+
+  private extractCVFromText(text: string): DocumentAnalysis['cv'] {
+    return {
+      skills: this.extractArrayFromText(text, 'skills') || [],
+      experience: this.extractArrayFromText(text, 'experience') || [],
+      achievements: this.extractArrayFromText(text, 'achievements') || [],
+      education: this.extractArrayFromText(text, 'education') || [],
+      technologies: this.extractArrayFromText(text, 'technologies') || [],
+    };
+  }
+
+  private extractMatchFromText(text: string): DocumentAnalysis['analysis'] {
+    // Extract match score
+    const scoreMatch = text.match(/"matchScore":\s*(\d+)/);
+    const matchScore = scoreMatch ? parseInt(scoreMatch[1]) : 70;
+    
+    // Extract difficulty
+    const difficultyMatch = text.match(/"difficulty":\s*"([^"]*)/);
+    const difficulty = difficultyMatch && ['junior', 'mid', 'senior', 'executive'].includes(difficultyMatch[1]) 
+      ? difficultyMatch[1] as any : 'mid';
+    
+    return {
+      matchScore,
+      strengths: this.extractArrayFromText(text, 'strengths') || [],
+      gaps: this.extractArrayFromText(text, 'gaps') || [],
+      focusAreas: this.extractArrayFromText(text, 'focusAreas') || [],
+      difficulty,
+      recommendations: this.extractArrayFromText(text, 'recommendations') || [],
+      interviewQuestions: {
+        technical: this.extractArrayFromText(text, 'technical') || [],
+        behavioral: this.extractArrayFromText(text, 'behavioral') || [],
+        situational: this.extractArrayFromText(text, 'situational') || [],
+        gapFocused: this.extractArrayFromText(text, 'gapFocused') || [],
+      },
+    };
+  }
+
+  private extractArrayFromText(text: string, fieldName: string): string[] | null {
+    // Match array in JSON format, even if incomplete
+    const regex = new RegExp(`"${fieldName}":\\s*\\[([^\\]]*(?:\\]|$))`, 'i');
+    const match = text.match(regex);
+    
+    if (!match) return null;
+    
+    let arrayContent = match[1];
+    
+    // If array wasn't closed, try to extract items anyway
+    if (!arrayContent.endsWith(']')) {
+      arrayContent = arrayContent.replace(/,$/, ''); // Remove trailing comma
+    } else {
+      arrayContent = arrayContent.slice(0, -1); // Remove closing bracket
+    }
+    
+    // Extract individual string items
+    const items: string[] = [];
+    const itemRegex = /"([^"]+)"/g;
+    let itemMatch;
+    
+    while ((itemMatch = itemRegex.exec(arrayContent)) !== null) {
+      items.push(itemMatch[1]);
+    }
+    
+    return items.length > 0 ? items : null;
   }
 
   // Fallback methods for when Claude parsing fails
