@@ -148,7 +148,7 @@ export function DocumentAnalyzer({
         >
           <Brain size={20} color="white" />
           <Text style={styles.analyzeButtonText}>
-            Analyze with Claude AI
+            Analyse Documents
           </Text>
         </TouchableOpacity>
 
