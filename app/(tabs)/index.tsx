@@ -61,7 +61,7 @@ import { InterviewSetupScreen } from '@/components/InterviewSetupScreen';
 import { ConversationMode, ModeConfiguration, DailyChallenge, DocumentAnalysis } from '@/src/types';
 import { spacing, typography } from '@/src/constants/colors';
 import { ConversationContext, ConversationMessage } from '@/types/api';
-import { FeedbackModal } from '@/components/FeedbackModal';
+import { ClaudeFeedbackModal } from '@/components/ClaudeFeedbackModal';
 
 const { width } = Dimensions.get('window');
 
@@ -965,7 +965,7 @@ export default function HomeScreen() {
 
         {/* Feedback Modal */}
         {lastFeedback && (
-          <FeedbackModal
+          <ClaudeFeedbackModal
             visible={showFeedbackModal}
             onClose={() => {
               setShowFeedbackModal(false);
