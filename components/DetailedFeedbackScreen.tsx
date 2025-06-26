@@ -718,7 +718,7 @@ function getModeSpecificPractice(mode: string): Array<{ title: string; descripti
       return [
         {
           title: 'Active Listening Challenge',
-          description: 'Practice summarizing what the other person said before responding to ensure you're fully understanding them.'
+          description: 'Practice summarizing what the other person said before responding to ensure you\'re fully understanding them.'
         },
         {
           title: 'Topic Transition Exercise',
