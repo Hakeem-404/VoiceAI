@@ -1,3 +1,5 @@
+import { ConversationMessage } from '../../types/api';
+
 export interface User {
   id: string;
   email: string;
@@ -40,7 +42,7 @@ export interface Conversation {
   mode: ConversationMode;
   title: string;
   duration: number;
-  messages: Message[];
+  messages: ConversationMessage[];
   feedback?: FeedbackData;
   createdAt: Date;
   updatedAt: Date;
@@ -305,7 +307,7 @@ export interface ConversationSession {
   isPaused: boolean;
   pausedAt?: Date;
   totalPauseTime: number;
-  messages: Message[];
+  messages: ConversationMessage[];
   bookmarks: ConversationBookmark[];
   highlights: ConversationHighlight[];
 }
