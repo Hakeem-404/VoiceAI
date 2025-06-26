@@ -14,7 +14,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Send, RotateCcw, Copy, Bookmark, MoveHorizontal as MoreHorizontal, Wifi, WifiOff, Zap, ChartBar as BarChart3 } from 'lucide-react-native';
 import { useConversation } from '../hooks/useConversation';
 import { ConversationMessage } from '../types/api';
-import { ConversationFeedbackSystem } from './ConversationFeedbackSystem';
+import { RealTimeFeedbackSystem } from './RealTimeFeedbackSystem';
+import { ClaudeFeedbackModal } from './ClaudeFeedbackModal';
 import { Conversation } from '@/src/types';
 import { useConversationStore } from '@/src/stores/conversationStore';
 
@@ -55,6 +56,7 @@ export function ConversationView({
   const [inputText, setInputText] = useState('');
   const [isOnline, setIsOnline] = useState(true);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
   // Auto-scroll to bottom when new messages arrive
@@ -116,7 +118,7 @@ export function ConversationView({
   };
 
   const toggleFeedback = () => {
-    setShowFeedback(!showFeedback);
+    setShowFeedbackModal(true);
   };
 
   const MessageBubble = ({ message, index }: { message: ConversationMessage; index: number }) => {
@@ -206,12 +208,12 @@ export function ConversationView({
         <NetworkStatus />
       </LinearGradient>
 
-      {/* Feedback System */}
-      {showFeedback && currentConversation && (
-        <ConversationFeedbackSystem
+      {/* Real-time Feedback System */}
+      {currentConversation && (
+        <RealTimeFeedbackSystem
           conversation={currentConversation}
+          messages={messages}
           isActive={true}
-          showMetrics={true}
         />
       )}
 
@@ -300,6 +302,15 @@ export function ConversationView({
           </View>
         )}
       </View>
+
+      {/* Claude Feedback Modal */}
+      {currentConversation && (
+        <ClaudeFeedbackModal
+          visible={showFeedbackModal}
+          onClose={() => setShowFeedbackModal(false)}
+          conversation={currentConversation}
+        />
+      )}
     </View>
   );
 }

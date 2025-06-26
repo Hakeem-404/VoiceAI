@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,23 +7,25 @@ import {
   StyleSheet,
   Dimensions,
   Platform,
-  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Pause, Play, Square, RotateCcw, Bookmark, Highlighter, Volume2, VolumeX, MessageSquare, Settings, MoveHorizontal as MoreHorizontal, ChartBar as BarChart3 } from 'lucide-react-native';
+import { Pause, Play, Square, RotateCcw, Copy, Bookmark, MoveHorizontal as MoreHorizontal, Wifi, WifiOff, Zap, ChartBar as BarChart3 } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { ConversationSession, Message } from '@/src/types';
 import { VoiceRecordButton } from './VoiceRecordButton';
 import { TextInputModal } from './TextInputModal';
-import { ConversationFeedbackSystem } from './ConversationFeedbackSystem';
+import { RealTimeFeedbackSystem } from './RealTimeFeedbackSystem';
+import { ClaudeFeedbackModal } from './ClaudeFeedbackModal';
 import { useConversationStore } from '@/src/stores/conversationStore';
 import { spacing, typography } from '@/src/constants/colors';
+import { ConversationMessage } from '../../types/api';
 
 const { width, height } = Dimensions.get('window');
 
 interface ConversationInterfaceProps {
   session: ConversationSession;
-  messages: Message[];
+  messages: ConversationMessage[];
   isRecording: boolean;
   isProcessing: boolean;
   onVoiceRecord: () => void;
@@ -62,7 +64,7 @@ export function ConversationInterface({
   const [sessionDuration, setSessionDuration] = useState(0);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [showControls, setShowControls] = useState(true);
-  const [showFeedback, setShowFeedback] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   
   const scrollViewRef = useRef<ScrollView>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout>();
@@ -95,34 +97,35 @@ export function ConversationInterface({
   };
 
   const handleEndSession = () => {
-    Alert.alert(
-      'End Session',
-      'Are you sure you want to end this conversation session?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'End', style: 'destructive', onPress: onEnd },
-      ]
-    );
+    onEnd();
   };
 
-  const handleMessageLongPress = (message: Message) => {
+  const handleMessageLongPress = (message: ConversationMessage) => {
     setSelectedMessageId(message.id);
     
-    Alert.alert(
-      'Message Actions',
-      'What would you like to do with this message?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Bookmark', 
-          onPress: () => onBookmark(message.id) 
-        },
-        { 
-          text: 'Highlight', 
-          onPress: () => onHighlight(message.id, message.content, colors.warning) 
-        },
-      ]
-    );
+    if (Platform.OS === 'web') {
+      // For web, just bookmark the message
+      onBookmark(message.id);
+    } else {
+      // For mobile, show action sheet
+      import('react-native').then(({ Alert }) => {
+        Alert.alert(
+          'Message Actions',
+          'What would you like to do with this message?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Bookmark', 
+              onPress: () => onBookmark(message.id) 
+            },
+            { 
+              text: 'Highlight', 
+              onPress: () => onHighlight(message.id, message.content, colors.warning) 
+            },
+          ]
+        );
+      });
+    }
   };
 
   const hideControlsTemporarily = () => {
@@ -144,7 +147,7 @@ export function ConversationInterface({
   };
 
   const toggleFeedback = () => {
-    setShowFeedback(!showFeedback);
+    setShowFeedbackModal(true);
   };
 
   return (
@@ -180,9 +183,9 @@ export function ConversationInterface({
                 }}
               >
                 {isVolumeOn ? (
-                  <Volume2 size={18} color={colors.textSecondary} />
+                  <Wifi size={18} color={colors.textSecondary} />
                 ) : (
-                  <VolumeX size={18} color={colors.textSecondary} />
+                  <WifiOff size={18} color={colors.textSecondary} />
                 )}
               </TouchableOpacity>
 
@@ -219,12 +222,12 @@ export function ConversationInterface({
           </View>
         )}
 
-        {/* Feedback System */}
-        {showFeedback && currentConversation && (
-          <ConversationFeedbackSystem
+        {/* Real-time Feedback System */}
+        {currentConversation && (
+          <RealTimeFeedbackSystem
             conversation={currentConversation}
+            messages={messages}
             isActive={true}
-            showMetrics={true}
           />
         )}
 
@@ -263,12 +266,6 @@ export function ConversationInterface({
                 {message.content}
               </Text>
               
-              {message.audioUrl && (
-                <TouchableOpacity style={styles.audioIndicator}>
-                  <Volume2 size={14} color={message.role === 'user' ? 'white' : colors.primary} />
-                </TouchableOpacity>
-              )}
-              
               <Text
                 style={[
                   styles.messageTime,
@@ -305,7 +302,7 @@ export function ConversationInterface({
                 setShowTextInput(true);
               }}
             >
-              <MessageSquare size={20} color={colors.primary} />
+              <Zap size={20} color={colors.primary} />
             </TouchableOpacity>
 
             <VoiceRecordButton
@@ -359,11 +356,10 @@ export function ConversationInterface({
               style={[styles.quickActionButton, { backgroundColor: colors.surface }]}
               onPress={() => {
                 triggerHaptic();
-                const lastMessage = messages[messages.length - 1];
-                if (lastMessage) onHighlight(lastMessage.id, lastMessage.content, colors.warning);
+                toggleFeedback();
               }}
             >
-              <Highlighter size={16} color={colors.warning} />
+              <BarChart3 size={16} color={colors.warning} />
             </TouchableOpacity>
           </View>
         )}
@@ -379,6 +375,15 @@ export function ConversationInterface({
         }}
         placeholder="Type your message..."
       />
+
+      {/* Claude Feedback Modal */}
+      {currentConversation && (
+        <ClaudeFeedbackModal
+          visible={showFeedbackModal}
+          onClose={() => setShowFeedbackModal(false)}
+          conversation={currentConversation}
+        />
+      )}
     </View>
   );
 }
@@ -475,12 +480,6 @@ const styles = StyleSheet.create({
   messageTime: {
     fontSize: typography.sizes.xs,
     alignSelf: 'flex-end',
-  },
-  audioIndicator: {
-    position: 'absolute',
-    top: spacing.xs,
-    right: spacing.xs,
-    padding: spacing.xs / 2,
   },
   typingIndicator: {
     flexDirection: 'row',
