@@ -287,7 +287,7 @@ export function InterviewSetupScreen({
               >
                 <Brain size={20} color="white" />
                 <Text style={styles.analyzeButtonText}>
-                  Analyze with Claude AI
+                  Analyse Documents
                 </Text>
               </TouchableOpacity>
             )}
@@ -296,7 +296,7 @@ export function InterviewSetupScreen({
               <View style={[styles.analyzingContainer, { backgroundColor: colors.primary + '20' }]}>
                 <ActivityIndicator size="small" color={colors.primary} />
                 <Text style={[styles.analyzingText, { color: colors.primary }]}>
-                  Analyzing documents with Claude AI...
+                  Analysing documents...
                 </Text>
               </View>
             )}
