@@ -378,94 +378,96 @@ class SupabaseClaudeAPIService {
 
   // Main conversation method
   async sendMessage(
-    message: string,
-    context: ConversationContext,
-    options: APIRequestOptions = {}
-  ): Promise<APIResponse<ConversationMessage>> {
-    console.log('📨 sendMessage called:', {
-      mode: context.mode,
-      messageLength: message.length,
-      hasCustomSettings: !!(context as any).customSettings,
-      messagesCount: context.messages.length
-    });
+  message: string,
+  context: ConversationContext,
+  options: APIRequestOptions = {}
+): Promise<APIResponse<ConversationMessage>> {
+  console.log('📨 sendMessage called:', {
+    mode: context.mode,
+    messageLength: message.length,
+    hasCustomSettings: !!(context as any).customSettings,
+    messagesCount: context.messages.length
+  });
 
-    // Get custom settings from context if available
-    const customSettings = (context as any).customSettings;
+  // Get custom settings from context if available
+  const customSettings = (context as any).customSettings;
+  
+  // Generate system prompt with custom settings for interview mode
+  const systemPrompt = this.getSystemPrompt(context.mode, customSettings);
+  
+  if (context.mode === 'interview-practice') {
+    console.log('🎯 Interview mode system prompt generated:', {
+      promptLength: systemPrompt.length,
+      hasAnalysis: !!customSettings?.documentAnalysis
+    });
+  }
+
+  // Prepare messages - this should NOT include the system prompt
+  const messages = this.prepareMessages(context, systemPrompt);
+  
+  // Add the current user message
+  messages.push({
+    role: 'user',
+    content: message
+  });
+
+  // Use custom maxTokens if provided, otherwise use mode default
+  const maxTokens = (options as any).maxTokens || this.getMaxTokensForMode(context.mode);
+
+  const requestData = {
+    model: 'claude-3-5-sonnet-20240620',
+    max_tokens: maxTokens,
+    messages,
+    temperature: this.getTemperatureForMode(context.mode),
+    stream: false,
+    system: systemPrompt  // CRITICAL: System prompt goes here as a top-level parameter
+  };
+
+  console.log('🚀 Sending request to Claude:', {
+    mode: context.mode,
+    message_length: message.length,
+    total_messages: messages.length,
+    model: requestData.model,
+    max_tokens: requestData.max_tokens,
+    has_system: !!requestData.system,
+    system_length: requestData.system?.length || 0
+  });
+
+  try {
+    const response = await this.makeRequest<any>(requestData, options);
     
-    // Generate system prompt with custom settings for interview mode
-    const systemPrompt = this.getSystemPrompt(context.mode, customSettings);
-    
-    if (context.mode === 'interview-practice') {
-      console.log('🎯 Interview mode system prompt generated:', {
-        promptLength: systemPrompt.length,
-        hasAnalysis: !!customSettings?.documentAnalysis
+    if (response.data?.content?.[0]?.text) {
+      const assistantMessage: ConversationMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: response.data.content[0].text,
+        timestamp: new Date()
+      };
+      
+      console.log('✅ Received response from Claude:', {
+        response_length: assistantMessage.content.length,
+        mode: context.mode
       });
-    }
-
-    // Prepare messages with intelligent context management
-    const messages = this.prepareMessages(context, systemPrompt);
-    
-    // Add the current user message
-    messages.push({
-      role: 'user',
-      content: message
-    });
-
-    // Use custom maxTokens if provided, otherwise use mode default
-    const maxTokens = (options as any).maxTokens || this.getMaxTokensForMode(context.mode);
-
-    const requestData = {
-      model: 'claude-3-5-sonnet-20240620',
-      max_tokens: maxTokens,
-      messages,
-      temperature: this.getTemperatureForMode(context.mode),
-      stream: false
-    };
-
-    console.log('🚀 Sending request to Claude:', {
-      mode: context.mode,
-      message_length: message.length,
-      total_messages: messages.length,
-      model: requestData.model,
-      max_tokens: requestData.max_tokens,
-      systemPromptIncluded: messages[0]?.content?.includes('You are a professional interviewer')
-    });
-
-    try {
-      const response = await this.makeRequest<any>(requestData, options);
       
-      if (response.data?.content?.[0]?.text) {
-        const assistantMessage: ConversationMessage = {
-          id: Date.now().toString(),
-          role: 'assistant',
-          content: response.data.content[0].text,
-          timestamp: new Date()
-        };
-        
-        console.log('✅ Received response from Claude:', {
-          response_length: assistantMessage.content.length,
-          mode: context.mode
-        });
-        
-        return {
-          data: assistantMessage,
-          status: response.status,
-          timestamp: response.timestamp
-        };
-      }
-      
-      console.error('❌ Invalid response format from Claude:', response.data);
-      throw new Error('Invalid response format');
-      
-    } catch (error) {
-      console.error('❌ Error sending message to Claude:', error);
       return {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        status: 500,
-        timestamp: Date.now()
+        data: assistantMessage,
+        status: response.status,
+        timestamp: response.timestamp
       };
     }
+    
+    console.error('❌ Invalid response format from Claude:', response.data);
+    throw new Error('Invalid response format');
+    
+  } catch (error) {
+    console.error('❌ Error sending message to Claude:', error);
+    return {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      status: 500,
+      timestamp: Date.now()
+    };
   }
+}
 
   // Streaming conversation for real-time responses
   async sendMessageStream(
@@ -578,65 +580,36 @@ class SupabaseClaudeAPIService {
 
   // Context management with intelligent truncation
   private prepareMessages(context: ConversationContext, systemPrompt: string): any[] {
-    console.log('📝 Preparing messages:', {
-      mode: context.mode,
-      systemPromptLength: systemPrompt.length,
-      existingMessages: context.messages.length
-    });
+  console.log('📝 Preparing messages:', {
+    mode: context.mode,
+    systemPromptLength: systemPrompt.length,
+    existingMessages: context.messages.length
+  });
 
-    const messages: any[] = [];
-    
-    // Intelligent context truncation for mobile memory management
-    const maxMessages = this.getMaxMessagesForDevice();
-    const recentMessages = context.messages.slice(-maxMessages);
-    
-    // If we're truncating, add a summary of earlier conversation
-    if (context.messages.length > maxMessages) {
-      const summary = this.generateContextSummary(
-        context.messages.slice(0, context.messages.length - maxMessages)
-      );
-      // We'll prepend summary to the system prompt instead
-    }
-
-    // Add recent messages, filtering out system messages
-    recentMessages.forEach(msg => {
-      if (msg.role !== 'system') {
-        messages.push({
-          role: msg.role,
-          content: msg.content
-        });
-      }
-    });
-
-    // For interview mode, we need to ensure the system prompt is properly set
-    if (context.mode === 'interview-practice' && messages.length === 0) {
-      // This is the first message, create a user message that will trigger the interview
+  const messages: any[] = [];
+  
+  // Intelligent context truncation for mobile memory management
+  const maxMessages = this.getMaxMessagesForDevice();
+  const recentMessages = context.messages.slice(-maxMessages);
+  
+  // Add recent messages, filtering out system messages (they should never be in the messages array)
+  recentMessages.forEach(msg => {
+    if (msg.role !== 'system') {
       messages.push({
-        role: 'user',
-        content: `${systemPrompt}\n\nPlease start the interview now with a brief introduction and your first question.`
-      });
-    } else if (messages.length > 0 && messages[0].role === 'user') {
-      // If we have existing messages, prepend the system prompt to the first user message
-      messages[0] = {
-        ...messages[0],
-        content: `${systemPrompt}\n\n${messages[0].content}`
-      };
-    } else if (messages.length === 0) {
-      // If there are no messages, create one with just the system prompt
-      messages.push({
-        role: 'user',
-        content: systemPrompt
+        role: msg.role,
+        content: msg.content
       });
     }
+  });
 
-    console.log('📋 Messages prepared:', {
-      totalMessages: messages.length,
-      firstMessageLength: messages[0]?.content?.length,
-      firstMessageRole: messages[0]?.role
-    });
+  console.log('📋 Messages prepared:', {
+    totalMessages: messages.length,
+    firstMessageLength: messages[0]?.content?.length,
+    firstMessageRole: messages[0]?.role
+  });
 
-    return messages;
-  }
+  return messages;
+}
 
   private getMaxMessagesForDevice(): number {
     if (Platform.OS === 'web') return 50;
