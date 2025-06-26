@@ -90,7 +90,7 @@ serve(async (req) => {
     
     // Format messages for Claude
     const formattedMessages = conversation.messages.map(msg => {
-      return `${msg.role.toUpperCase()}: ${msg.content}`
+      return `${msg.role === 'user' ? 'USER' : 'AI'}: ${msg.content}`
     }).join('\n\n')
 
     // Create a base prompt with conversation details
@@ -98,13 +98,15 @@ serve(async (req) => {
 You are an expert communication coach specializing in ${conversation.mode.name} conversations. 
 Please analyze the following conversation that lasted ${Math.floor(conversation.duration / 60)} minutes and ${conversation.duration % 60} seconds.
 
+CRITICAL INSTRUCTION: Analyze only the USER's performance and communication skills. Do NOT analyze the AI assistant's responses.
+
 CONVERSATION MODE: ${conversation.mode.name}
 MODE DESCRIPTION: ${conversation.mode.description}
 
 CONVERSATION TRANSCRIPT:
 ${formattedMessages}
 
-Based on this conversation, provide a comprehensive feedback analysis in the following JSON format:
+Based on this conversation, provide a comprehensive feedback analysis of the USER's communication skills in the following JSON format:
 
 {
   "scores": {
@@ -145,6 +147,15 @@ Based on this conversation, provide a comprehensive feedback analysis in the fol
     "Work on incorporating more evidence in arguments"
   ]
 }
+
+IMPORTANT: 
+1. All scores should be integers between 0-100
+2. Provide 3-5 specific strengths based on actual examples from the USER's messages
+3. Provide 3-5 specific improvements with actionable suggestions for the USER
+4. Make analytics as accurate as possible based on the USER's communication patterns
+5. Provide 3-5 practical tips that are specific to the USER's communication
+6. Suggest 2-3 concrete next steps for the USER to improve
+7. Remember: You are coaching the USER, not evaluating the AI assistant.
 `
 
     // Add mode-specific analysis instructions
@@ -162,7 +173,7 @@ Based on this conversation, provide a comprehensive feedback analysis in the fol
   }
 }
 
-Focus on social skills, active listening, empathy, and natural conversation flow.`
+Focus on the USER's social skills, active listening, empathy, and natural conversation flow.`
         break
         
       case 'debate-challenge':
@@ -182,7 +193,7 @@ Focus on social skills, active listening, empathy, and natural conversation flow
   }
 }
 
-Focus on argument quality, evidence usage, logical consistency, and respectful disagreement.`
+Focus on the USER's argument quality, evidence usage, logical consistency, and respectful disagreement.`
         break
         
       case 'idea-brainstorm':
@@ -201,7 +212,7 @@ Focus on argument quality, evidence usage, logical consistency, and respectful d
   }
 }
 
-Focus on idea generation, creativity, concept development, and collaborative thinking.`
+Focus on the USER's idea generation, creativity, concept development, and collaborative thinking.`
         break
         
       case 'interview-practice':
@@ -220,7 +231,7 @@ Focus on idea generation, creativity, concept development, and collaborative thi
   }
 }
 
-Focus on STAR method usage, professional communication, question handling, and confidence.`
+Focus on the USER's STAR method usage, professional communication, question handling, and confidence.`
         break
         
       case 'presentation-prep':
@@ -239,7 +250,7 @@ Focus on STAR method usage, professional communication, question handling, and c
   }
 }
 
-Focus on structure, clarity, audience engagement, and delivery style.`
+Focus on the USER's structure, clarity, audience engagement, and delivery style.`
         break
         
       case 'language-learning':
@@ -259,11 +270,11 @@ Focus on structure, clarity, audience engagement, and delivery style.`
   }
 }
 
-Focus on grammar, vocabulary, pronunciation, and overall fluency.`
+Focus on the USER's grammar, vocabulary, pronunciation, and overall fluency.`
         break
     }
     
-    prompt += `\n\nEnsure your feedback is specific to this conversation, mentioning actual examples from the transcript. Provide actionable advice that will help the user improve their ${conversation.mode.name} skills.`
+    prompt += `\n\nEnsure your feedback is specific to the USER's communication in this conversation, mentioning actual examples from the USER's messages. Provide actionable advice that will help the USER improve their ${conversation.mode.name} skills.`
 
     // Prepare Claude API request
     const claudeRequest = {

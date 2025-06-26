@@ -83,27 +83,30 @@ serve(async (req) => {
     
     // Format messages for Claude
     const formattedMessages = recentMessages.map(msg => {
-      return `${msg.role.toUpperCase()}: ${msg.content}`
+      return `${msg.role === 'user' ? 'USER' : 'AI'}: ${msg.content}`
     }).join('\n\n')
 
     // Create prompt for real-time feedback
     const prompt = `
 You are an expert communication coach providing real-time feedback during a ${requestBody.conversationMode} conversation.
-Analyze these recent messages and provide ONE specific, actionable piece of feedback if needed.
+Analyze these recent messages and provide ONE specific, actionable piece of feedback for the USER if needed.
+
+CRITICAL INSTRUCTION: Analyze only the USER's messages and communication skills. Do NOT analyze the AI assistant's responses.
 
 RECENT MESSAGES:
 ${formattedMessages}
 
-If you notice an issue that needs improvement, respond in this JSON format:
+If you notice an issue in the USER's communication that needs improvement, respond in this JSON format:
 {
   "type": "pace"|"volume"|"filler"|"engagement"|"question"|"clarity",
-  "message": "Brief, specific feedback",
+  "message": "Brief, specific feedback for the USER",
   "severity": "info"|"suggestion"|"warning"
 }
 
-If no feedback is needed right now, respond with: {"none": true}
+If no feedback is needed right now for the USER, respond with: {"none": true}
 
-Focus on ONE specific aspect that would most help improve the conversation right now.
+Focus on ONE specific aspect of the USER's communication that would most help improve the conversation right now.
+Remember: You are coaching the USER, not evaluating the AI assistant.
 `
 
     // Prepare Claude API request

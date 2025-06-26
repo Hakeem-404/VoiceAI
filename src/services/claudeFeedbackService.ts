@@ -112,7 +112,7 @@ class ClaudeFeedbackService {
     
     // Convert messages to a format suitable for analysis
     const formattedMessages = messages.map(msg => {
-      return `${msg.role.toUpperCase()}: ${msg.content}`;
+      return `${msg.role === 'user' ? 'USER' : 'AI'}: ${msg.content}`;
     }).join('\n\n');
     
     // Create a base prompt with conversation details
@@ -120,13 +120,15 @@ class ClaudeFeedbackService {
 You are an expert communication coach specializing in ${mode.name} conversations. 
 Please analyze the following conversation that lasted ${Math.floor(duration / 60)} minutes and ${duration % 60} seconds.
 
+CRITICAL INSTRUCTION: Analyze only the USER's performance and communication skills. Do NOT analyze the AI assistant's responses.
+
 CONVERSATION MODE: ${mode.name}
 MODE DESCRIPTION: ${mode.description}
 
 CONVERSATION TRANSCRIPT:
 ${formattedMessages}
 
-Based on this conversation, provide a comprehensive feedback analysis in the following JSON format:
+Based on this conversation, provide a comprehensive feedback analysis of the USER's communication skills in the following JSON format:
 
 {
   "scores": {
@@ -170,11 +172,12 @@ Based on this conversation, provide a comprehensive feedback analysis in the fol
 
 IMPORTANT: 
 1. All scores should be integers between 0-100
-2. Provide 3-5 specific strengths based on actual examples from the conversation
-3. Provide 3-5 specific improvements with actionable suggestions
-4. Make analytics as accurate as possible based on the conversation
-5. Provide 3-5 practical tips that are specific to this conversation
-6. Suggest 2-3 concrete next steps for improvement
+2. Provide 3-5 specific strengths based on actual examples from the USER's messages
+3. Provide 3-5 specific improvements with actionable suggestions for the USER
+4. Make analytics as accurate as possible based on the USER's communication patterns
+5. Provide 3-5 practical tips that are specific to how the USER communicated
+6. Suggest 2-3 concrete next steps for the USER to improve
+7. Remember: You are coaching the USER, not evaluating the AI assistant.
 `;
 
     // Add mode-specific analysis instructions
@@ -192,7 +195,7 @@ IMPORTANT:
   }
 }
 
-Focus on social skills, active listening, empathy, and natural conversation flow.`;
+Focus on the USER's social skills, active listening, empathy, and natural conversation flow.`;
         break;
         
       case 'debate-challenge':
@@ -212,7 +215,7 @@ Focus on social skills, active listening, empathy, and natural conversation flow
   }
 }
 
-Focus on argument quality, evidence usage, logical consistency, and respectful disagreement.`;
+Focus on the USER's argument quality, evidence usage, logical consistency, and respectful disagreement.`;
         break;
         
       case 'idea-brainstorm':
@@ -231,7 +234,7 @@ Focus on argument quality, evidence usage, logical consistency, and respectful d
   }
 }
 
-Focus on idea generation, creativity, concept development, and collaborative thinking.`;
+Focus on the USER's idea generation, creativity, concept development, and collaborative thinking.`;
         break;
         
       case 'interview-practice':
@@ -250,7 +253,7 @@ Focus on idea generation, creativity, concept development, and collaborative thi
   }
 }
 
-Focus on STAR method usage, professional communication, question handling, and confidence.`;
+Focus on the USER's STAR method usage, professional communication, question handling, and confidence.`;
         break;
         
       case 'presentation-prep':
@@ -269,7 +272,7 @@ Focus on STAR method usage, professional communication, question handling, and c
   }
 }
 
-Focus on structure, clarity, audience engagement, and delivery style.`;
+Focus on the USER's structure, clarity, audience engagement, and delivery style.`;
         break;
         
       case 'language-learning':
@@ -289,11 +292,11 @@ Focus on structure, clarity, audience engagement, and delivery style.`;
   }
 }
 
-Focus on grammar, vocabulary, pronunciation, and overall fluency.`;
+Focus on the USER's grammar, vocabulary, pronunciation, and overall fluency.`;
         break;
     }
     
-    prompt += `\n\nEnsure your feedback is specific to this conversation, mentioning actual examples from the transcript. Provide actionable advice that will help the user improve their ${mode.name} skills.`;
+    prompt += `\n\nEnsure your feedback is specific to the USER's communication in this conversation, mentioning actual examples from the USER's messages. Provide actionable advice that will help the USER improve their ${mode.name} skills.`;
     
     return prompt;
   }
@@ -1187,21 +1190,24 @@ private fixCommonJsonIssues(jsonString: string): string {
     // Create a prompt for Claude
     const prompt = `
 You are an expert communication coach providing real-time feedback during a ${conversationMode} conversation.
-Analyze these recent messages and provide ONE specific, actionable piece of feedback if needed.
+Analyze these recent messages and provide ONE specific, actionable piece of feedback for the USER if needed.
+
+CRITICAL INSTRUCTION: Analyze only the USER's messages and communication skills. Do NOT analyze the AI assistant's responses.
 
 RECENT MESSAGES:
-${recentMessages.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n\n')}
+${recentMessages.map(msg => `${msg.role === 'user' ? 'USER' : 'AI'}: ${msg.content}`).join('\n\n')}
 
-If you notice an issue that needs improvement, respond in this JSON format:
+If you notice an issue in the USER's communication that needs improvement, respond in this JSON format:
 {
   "type": "pace"|"volume"|"filler"|"engagement"|"question"|"clarity",
-  "message": "Brief, specific feedback",
+  "message": "Brief, specific feedback for the USER",
   "severity": "info"|"suggestion"|"warning"
 }
 
-If no feedback is needed right now, respond with: {"none": true}
+If no feedback is needed right now for the USER, respond with: {"none": true}
 
-Focus on ONE specific aspect that would most help improve the conversation right now.
+Focus on ONE specific aspect of the USER's communication that would most help improve the conversation right now.
+Remember: You are coaching the USER, not evaluating the AI assistant.
 `;
 
     try {
