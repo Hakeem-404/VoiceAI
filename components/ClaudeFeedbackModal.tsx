@@ -9,18 +9,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { 
-  Star, 
-  Award, 
-  ArrowRight, 
-  X,
-  BarChart3,
-  Share2,
-  MessageSquare,
-  Brain,
-  Zap,
-  Target
-} from 'lucide-react-native';
+import { Star, Award, ArrowRight, X, ChartBar as BarChart3, Share2, MessageSquare, Brain, Zap, Target } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { FeedbackData, FeedbackSummary, Conversation } from '@/src/types';
 import { FeedbackSummaryCard } from './FeedbackSummaryCard';
