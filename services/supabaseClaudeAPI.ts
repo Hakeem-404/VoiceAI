@@ -330,7 +330,7 @@ class SupabaseClaudeAPIService {
   }
 
   // Mode-specific system prompts
-  private getSystemPrompt(mode: string): string {
+  private getSystemPrompt(mode: string, customSettings?: any): string {
     const prompts = {
       'general-chat': `You are a warm, empathetic conversation partner who loves discussing any topic. Be curious, ask follow-up questions, and show genuine interest in the user's thoughts and experiences. Keep responses conversational and engaging, around 2-3 sentences on mobile. Show empathy and understanding.`,
       
@@ -344,6 +344,28 @@ class SupabaseClaudeAPIService {
       
       'language-learning': `You are a patient, encouraging language teacher focused on conversation practice. Correct mistakes gently, introduce new vocabulary naturally, and discuss cultural context. Adapt your complexity to the user's proficiency level. Encourage practice and celebrate progress.`
     };
+
+    // For interview practice, add document analysis if available
+    if (mode === 'interview-practice' && customSettings?.documentAnalysis) {
+      const analysis = customSettings.documentAnalysis;
+      const jobDescription = customSettings.jobDescription || '';
+      const cvContent = customSettings.cvContent || '';
+
+      // Get interview questions from analysis
+      const technicalQuestions = analysis.analysis.interviewQuestions?.technical || [];
+      const behavioralQuestions = analysis.analysis.interviewQuestions?.behavioral || [];
+      const situationalQuestions = analysis.analysis.interviewQuestions?.situational || [];
+      const gapFocusedQuestions = analysis.analysis.interviewQuestions?.gapFocused || [];
+      const allQuestions = [
+        ...technicalQuestions,
+        ...behavioralQuestions,
+        ...situationalQuestions,
+        ...gapFocusedQuestions
+      ];
+      const formattedQuestions = allQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n');
+      
+      return `You are a professional interviewer conducting a job interview. \n\nJob Description: ${jobDescription || 'Not provided'}\n\nCandidate CV: ${cvContent || 'Not provided'}\n\nAnalysis:\n- Match Score: ${analysis.analysis.matchScore}%\n- Candidate Strengths: ${analysis.analysis.strengths.join(', ')}\n- Gaps to Address: ${analysis.analysis.gaps.join(', ')}\n- Focus Areas: ${analysis.analysis.focusAreas.join(', ')}\n- Experience Level: ${analysis.analysis.difficulty}\n\nPERSONALIZED QUESTIONS TO ASK:\n${formattedQuestions}\n\nYour task is to conduct a realistic interview for this position. Ask relevant questions that:\n1. Explore the candidate's strengths mentioned in the analysis\n2. Tactfully probe the identified gaps\n3. Focus on the key areas relevant to the job\n4. Include a mix of technical, behavioral, and situational questions\n\nStart with a brief introduction and your first question. Be professional, thorough, and provide constructive feedback. Ask one question at a time and wait for complete answers.\n\nIMPORTANT: Begin the interview immediately with a brief introduction and your first question from the list above.`;
+    }
 
     return prompts[mode as keyof typeof prompts] || prompts['general-chat'];
   }
@@ -366,7 +388,7 @@ class SupabaseClaudeAPIService {
     content: message
   });
 
-  // 🔥 ADD THIS: Use custom maxTokens if provided, otherwise use mode default
+  // Use custom maxTokens if provided, otherwise use mode default
   const maxTokens = (options as any).maxTokens || this.getMaxTokensForMode(context.mode);
 
   const requestData = {
@@ -432,7 +454,10 @@ class SupabaseClaudeAPIService {
       return;
     }
 
-    const systemPrompt = this.getSystemPrompt(context.mode);
+    // Get custom settings from context if available
+    const customSettings = (context as any).customSettings;
+    
+    const systemPrompt = this.getSystemPrompt(context.mode, customSettings);
     const messages = this.prepareMessages(context, systemPrompt);
     messages.push({
       role: 'user',
@@ -605,7 +630,7 @@ class SupabaseClaudeAPIService {
       'interview-practice': 120,
       'presentation-prep': 160,
       'language-learning': 140,
-      'document-analysis': 1000 
+      'document-analysis': 1000
     };
     return configs[mode as keyof typeof configs] || 150;
   }
