@@ -208,7 +208,7 @@ export function EnhancedTextInputModal({
             onVoiceToggle={onVoiceToggle}
             placeholder={placeholder}
             mode={mode}
-            maxLength={mode === 'document' ? 3000 : 1000}
+            maxLength={mode === 'document' ? 10000 : 1000}
             suggestions={suggestions}
             autoComplete={autoComplete}
             showSuggestions={!text.trim()}
