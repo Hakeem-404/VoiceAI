@@ -601,7 +601,8 @@ class SupabaseClaudeAPIService {
       'idea-brainstorm': 180,
       'interview-practice': 120,
       'presentation-prep': 160,
-      'language-learning': 140
+      'language-learning': 140,
+      'document-analysis': 1000 
     };
     return configs[mode as keyof typeof configs] || 150;
   }
