@@ -377,7 +377,8 @@ class SupabaseClaudeAPIService {
   }
 
   // Main conversation method
-  async sendMessage(
+  // Fixed sendMessage method in SupabaseClaudeAPIService
+async sendMessage(
   message: string,
   context: ConversationContext,
   options: APIRequestOptions = {}
@@ -405,11 +406,31 @@ class SupabaseClaudeAPIService {
   // Prepare messages - this should NOT include the system prompt
   const messages = this.prepareMessages(context, systemPrompt);
   
-  // Add the current user message
-  messages.push({
-    role: 'user',
-    content: message
-  });
+  // send a starter message to begin the interview
+  if (context.mode === 'interview-practice' && 
+      !message.trim() && 
+      messages.length === 0 && 
+      customSettings?.documentAnalysis) {
+    
+    // Send a starter message to initiate the interview
+    messages.push({
+      role: 'user',
+      content: 'Please start the interview now with a brief introduction and your first question.'
+    });
+  } else if (message.trim()) {
+    // Add the current user message only if it's not empty
+    messages.push({
+      role: 'user',
+      content: message.trim()
+    });
+  } else {
+    // If no message and not interview initialization, return error
+    return {
+      error: 'Cannot send empty message',
+      status: 400,
+      timestamp: Date.now()
+    };
+  }
 
   // Use custom maxTokens if provided, otherwise use mode default
   const maxTokens = (options as any).maxTokens || this.getMaxTokensForMode(context.mode);
@@ -420,7 +441,7 @@ class SupabaseClaudeAPIService {
     messages,
     temperature: this.getTemperatureForMode(context.mode),
     stream: false,
-    system: systemPrompt  // CRITICAL: System prompt goes here as a top-level parameter
+    system: systemPrompt  // System prompt goes here as a top-level parameter
   };
 
   console.log('🚀 Sending request to Claude:', {
@@ -468,6 +489,45 @@ class SupabaseClaudeAPIService {
     };
   }
 }
+
+// Also update the sendSystemMessage function in your React component
+const sendSystemMessage = async (systemMessage: string) => {
+  console.log('Sending system message to start interview...');
+  
+  try {
+    // Create a context with custom settings that include the system message
+    const customContext = {
+      messages: [],
+      mode,
+      sessionId,
+      userId,
+      metadata: {
+        startTime: new Date(),
+        lastActivity: new Date(),
+        messageCount: 0,
+        totalTokens: 0,
+      },
+      customSettings: {
+        documentAnalysis: documentData.analysisResult,
+        jobDescription: documentData.jobDescription,
+        cvContent: documentData.cvContent
+      }
+    };
+    
+    // Send an empty message that will trigger the interview with system context
+    // The service will automatically add a starter message for interview mode
+    await sendMessage("", customContext);
+    console.log('Interview started successfully');
+    
+  } catch (error) {
+    console.error('Failed to send system message:', error);
+    Alert.alert(
+      'Interview Setup Failed',
+      'Failed to start the personalized interview. Please try again.',
+      [{ text: 'OK' }]
+    );
+  }
+};
 
   // Streaming conversation for real-time responses
   async sendMessageStream(
