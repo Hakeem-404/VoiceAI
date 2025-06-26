@@ -182,7 +182,7 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
       };
       
       // Send a simple greeting to trigger the conversation with the system context
-      await sendMessage("Let's begin the interview.", context);
+      await sendMessage("", context);
     } catch (error) {
       console.error('Failed to send system message:', error);
       Alert.alert(
