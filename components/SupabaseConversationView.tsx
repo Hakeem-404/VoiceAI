@@ -177,41 +177,42 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
   };
 
   const sendSystemMessage = async (systemMessage: string) => {
-    console.log('Sending system message to start interview...');
+  console.log('Sending system message to start interview...');
+  
+  try {
+    // Create a context with custom settings that include the system message
+    const customContext = {
+      messages: [],
+      mode,
+      sessionId,
+      userId,
+      metadata: {
+        startTime: new Date(),
+        lastActivity: new Date(),
+        messageCount: 0,
+        totalTokens: 0,
+      },
+      customSettings: {
+        documentAnalysis: documentData.analysisResult,
+        jobDescription: documentData.jobDescription,
+        cvContent: documentData.cvContent
+      }
+    };
     
-    try {
-      // Create a context with custom settings that include the system message
-      const customContext = {
-        messages: [],
-        mode,
-        sessionId,
-        userId,
-        metadata: {
-          startTime: new Date(),
-          lastActivity: new Date(),
-          messageCount: 0,
-          totalTokens: 0,
-        },
-        customSettings: {
-          documentAnalysis: documentData.analysisResult,
-          jobDescription: documentData.jobDescription,
-          cvContent: documentData.cvContent
-        }
-      };
-      
-      // Send an empty message that will trigger the interview with system context
-      await sendMessage("", customContext);
-      console.log('Interview started successfully');
-      
-    } catch (error) {
-      console.error('Failed to send system message:', error);
-      Alert.alert(
-        'Interview Setup Failed',
-        'Failed to start the personalized interview. Please try again.',
-        [{ text: 'OK' }]
-      );
-    }
-  };
+    // Send an empty message that will trigger the interview with system context
+    // The service will automatically add a starter message for interview mode
+    await sendMessage("", customContext);
+    console.log('Interview started successfully');
+    
+  } catch (error) {
+    console.error('Failed to send system message:', error);
+    Alert.alert(
+      'Interview Setup Failed',
+      'Failed to start the personalized interview. Please try again.',
+      [{ text: 'OK' }]
+    );
+  }
+};
 
   const handleSendMessage = async (text: string) => {
     if ((!text.trim() && !initialMessageSent) || isLoading || !isConfigured) return;
