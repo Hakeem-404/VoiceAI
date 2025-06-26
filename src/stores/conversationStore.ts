@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { Conversation, ConversationMode, RecordingState, ConversationSession, ModeConfiguration, ConversationBookmark, ConversationHighlight, DocumentAnalysis, FeedbackData } from '../types';
 import { ConversationMessage } from '../../types/api';
-import { feedbackService } from '../services/feedbackService';
+import { claudeFeedbackService } from '../services/claudeFeedbackService';
 
 interface ConversationState {
   currentConversation: Conversation | null;
@@ -102,7 +102,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       // Generate feedback before ending the conversation
       let feedback: FeedbackData | null = null;
       try {
-        feedback = await feedbackService.generateFeedback(updatedConversation);
+        feedback = await claudeFeedbackService.generateFeedback(updatedConversation);
         console.log('Generated feedback for conversation:', updatedConversation.id);
       } catch (error) {
         console.error('Failed to generate feedback:', error);
@@ -124,7 +124,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
   generateFeedback: async (conversation: Conversation) => {
     try {
-      const feedback = await feedbackService.generateFeedback(conversation);
+      const feedback = await claudeFeedbackService.generateFeedback(conversation);
       set({ lastFeedback: feedback });
       return feedback;
     } catch (error) {
