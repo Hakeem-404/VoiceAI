@@ -449,7 +449,7 @@ export default function HomeScreen() {
             language: 'en-US',
             continuous: true,
             interimResults: true,
-            timeout: 30000 // 30 second timeout
+             // 30 second timeout
           }
         );
 
