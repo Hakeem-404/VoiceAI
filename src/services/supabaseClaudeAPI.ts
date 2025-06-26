@@ -454,10 +454,7 @@ class SupabaseClaudeAPIService {
       return;
     }
 
-    // Get custom settings from context if available
-    const customSettings = (context as any).customSettings;
-    
-    const systemPrompt = this.getSystemPrompt(context.mode, customSettings);
+    const systemPrompt = this.getSystemPrompt(context.mode);
     const messages = this.prepareMessages(context, systemPrompt);
     messages.push({
       role: 'user',
@@ -630,7 +627,7 @@ class SupabaseClaudeAPIService {
       'interview-practice': 120,
       'presentation-prep': 160,
       'language-learning': 140,
-      'document-analysis': 1000
+      'document-analysis': 1000 
     };
     return configs[mode as keyof typeof configs] || 150;
   }
