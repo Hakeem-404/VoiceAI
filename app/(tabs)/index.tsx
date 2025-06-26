@@ -225,88 +225,127 @@ export default function HomeScreen() {
     setError(null);
   };
 
-  const handleModeStart = async (configuration: ModeConfiguration) => {
-    const mode = conversationModes.find(m => m.id === configuration.modeId);
-    if (!mode) return;
+const handleModeStart = async (configuration: ModeConfiguration) => {
+  const mode = conversationModes.find(m => m.id === configuration.modeId);
+  if (!mode) return;
 
-    // Update recent modes
-    setRecentModes(prev => [mode.id, ...prev.filter(id => id !== mode.id)].slice(0, 3));
+  console.log('🎯 Starting mode:', mode.name, 'with configuration:', configuration);
+
+  // Update recent modes
+  setRecentModes(prev => [mode.id, ...prev.filter(id => id !== mode.id)].slice(0, 3));
+  
+  // Start conversation and reset state
+  startConversation(mode, configuration);
+  setShowConfigModal(false);
+  setError(null);
+  setConversationMessages([]);
+  generateQuickRepliesForMode(mode.id);
+
+  // Special handling for interview practice mode
+  if (mode.id === 'interview-practice') {
+    // If this came from the personalized path, it will have customSettings with document analysis
+    const isPersonalizedInterview = !!configuration.customSettings?.documentAnalysis;
     
-    // Start conversation with Claude API integration
-    startConversation(mode, configuration);
-    setShowConfigModal(false);
-    setError(null);
-    setConversationMessages([]);
-    
-    // Generate initial quick replies for the mode
-    generateQuickRepliesForMode(mode.id);
-
-    // For interview mode, only send initial message if there's document analysis
-    if (mode.id === 'interview-practice' && configuration.customSettings?.documentAnalysis) {
-      const initialMessage = "I'm ready to start the personalized interview based on the job description and CV analysis. Let me begin with my first question.";
-
-      // Add a small delay to ensure conversation is properly initialized
-      setTimeout(async () => {
-        await sendMessageToClaude(initialMessage);
-      }, 500);
+    if (isPersonalizedInterview) {
+      console.log('🚀 Starting PERSONALIZED interview with document analysis');
+      
+      // Ensure document data is in the store (from configuration)
+      updateDocumentData({
+        jobDescription: configuration.customSettings.jobDescription,
+        cvContent: configuration.customSettings.cvContent,
+        analysisResult: configuration.customSettings.documentAnalysis
+      });
+    } else {
+      console.log('⚡ Starting QUICK START interview (standard questions)');
     }
+
+    // Let the AI interviewer start the conversation
+    setTimeout(async () => {
+      console.log('💬 Triggering AI interviewer to start');
+      await sendMessageToClaude(""); // Empty message lets AI start as interviewer
+    }, 500);
+  } else {
+    console.log('✅ Non-interview mode started:', mode.name);
+  }
+};
+
+const handleInterviewContinue = async () => {
+  const interviewMode = conversationModes.find(mode => mode.id === 'interview-practice');
+  if (!interviewMode) {
+    Alert.alert('Error', 'Interview practice mode not found');
+    return;
+  }
+
+  console.log('🎯 Personalized Interview Continue - using analyzed data:', {
+    hasJobDescription: !!documentData.jobDescription,
+    hasCvContent: !!documentData.cvContent,
+    hasAnalysisResult: !!documentData.analysisResult
+  });
+
+  // This function is ONLY called from the personalized path, so we know we have analysis
+  const configuration: ModeConfiguration = {
+    modeId: 'interview-practice',
+    difficulty: 'intermediate' as any,
+    sessionType: 'standard',
+    selectedTopics: interviewMode.topics.slice(0, 3),
+    aiPersonality: 'Professional',
+    customSettings: {
+      documentAnalysis: documentData.analysisResult,
+      jobDescription: documentData.jobDescription,
+      cvContent: documentData.cvContent,
+    },
   };
 
-  const handleInterviewQuickStart = async () => {
-    const mode = conversationModes.find(m => m.id === 'interview-practice');
-    if (!mode) return;
-    
-    startConversation(mode);
-    setShowInterviewSetup(false);
-    setError(null);
-    setConversationMessages([]);
-    generateQuickRepliesForMode(mode.id);
-    
-    // Don't send initial message for quick start - let user speak first
+  console.log('🚀 Starting PERSONALIZED interview with analysis');
+
+  // Start the conversation
+  startConversation(interviewMode, configuration);
+  setShowInterviewSetup(false);
+  setError(null);
+  setConversationMessages([]);
+  generateQuickRepliesForMode(interviewMode.id);
+
+  // Let the AI interviewer start with personalized questions
+  setTimeout(async () => {
+    console.log('💬 Triggering PERSONALIZED interview start');
+    await sendMessageToClaude("");
+  }, 500);
+};
+
+// Add a new function for quick start (to be called from the quick start button)
+const handleInterviewQuickStart = async () => {
+  const mode = conversationModes.find(m => m.id === 'interview-practice');
+  if (!mode) return;
+  
+  console.log('⚡ Quick Start Interview - no document analysis');
+
+  // Configuration for quick start (no customSettings = standard interview)
+  const configuration: ModeConfiguration = {
+    modeId: 'interview-practice',
+    difficulty: 'beginner' as any,
+    sessionType: 'quick',
+    selectedTopics: mode.topics.slice(0, 2), // Fewer topics for quick session
+    aiPersonality: 'Friendly',
+    // NO customSettings = standard interview questions
   };
+
+  // Start conversation
+  startConversation(mode, configuration);
+  setShowInterviewSetup(false);
+  setError(null);
+  setConversationMessages([]);
+  generateQuickRepliesForMode(mode.id);
+
+  // Let AI start with standard interview questions
+  setTimeout(async () => {
+    console.log('💬 Triggering STANDARD interview start');
+    await sendMessageToClaude("");
+  }, 500);
+};
 
   const handleInterviewDocumentSelect = (type: 'job' | 'cv') => {
     setActiveDocument(type);
     setTextInputVisible(true);
-  };
-
-  const handleInterviewContinue = async () => {
-    // Start the interview conversation automatically
-    const interviewMode = conversationModes.find(mode => mode.id === 'interview-practice');
-    if (!interviewMode) {
-      Alert.alert('Error', 'Interview practice mode not found');
-      return;
-    }
-
-    // Start conversation with document data if available
-    const configuration = {
-      modeId: 'interview-practice',
-      difficulty: 'intermediate',
-      sessionType: 'standard',
-      selectedTopics: interviewMode.topics.slice(0, 3),
-      aiPersonality: 'Professional',
-      customSettings: {
-        jobDescription: documentData.jobDescription,
-        cvContent: documentData.cvContent,
-        analysisResult: documentData.analysisResult,
-      },
-    };
-
-    startConversation(interviewMode, configuration);
-    setShowInterviewSetup(false);
-    setError(null);
-    setConversationMessages([]);
-    generateQuickRepliesForMode(interviewMode.id);
-
-    // Send initial message to make AI speak first
-    const initialMessage = documentData.analysisResult 
-      ? "I'm ready to start the personalized interview based on the job description and CV analysis. Let me begin with my first question."
-      : "I'm ready to start the interview practice session. Let me begin with my first question.";
-
-    // Add a small delay to ensure conversation is properly initialized
-    setTimeout(async () => {
-      await sendMessageToClaude(initialMessage);
-    }, 500);
   };
 
   const [activeDocument, setActiveDocument] = useState<'job' | 'cv' | null>(null);
@@ -364,25 +403,39 @@ export default function HomeScreen() {
 
   const sendMessageToClaude = async (content: string) => {
     if (!currentMode || !isSupabaseConfigured) return;
-
+  
+    const isInterviewInitialization = currentMode.id === 'interview-practice' && 
+                                     !content.trim() && 
+                                     conversationMessages.length === 0;
+  
+    console.log('📨 sendMessageToClaude:', {
+      mode: currentMode.id,
+      isInitialization: isInterviewInitialization,
+      contentLength: content.length,
+      hasCurrentConversation: !!currentConversation
+    });
+  
     setIsLoadingResponse(true);
     setError(null);
-
+  
     try {
-      // Add user message to conversation
-      const userMessage: ConversationMessage = {
-        id: Date.now().toString(),
-        role: 'user',
-        content,
-        timestamp: new Date(),
-      };
-
-      const updatedMessages = [...conversationMessages, userMessage];
-      setConversationMessages(updatedMessages);
-      addMessage(userMessage);
-
+      let updatedMessages = [...conversationMessages];
+      
+      // Only add user message if there's actual content
+      if (content.trim()) {
+        const userMessage: ConversationMessage = {
+          id: Date.now().toString(),
+          role: 'user',
+          content: content.trim(),
+          timestamp: new Date(),
+        };
+        updatedMessages = [...updatedMessages, userMessage];
+        setConversationMessages(updatedMessages);
+        addMessage(userMessage);
+      }
+  
       // Create conversation context
-      const context: ConversationContext = {
+      let context: ConversationContext = {
         messages: updatedMessages,
         mode: currentMode.id,
         sessionId: currentConversation?.id || Date.now().toString(),
@@ -393,34 +446,42 @@ export default function HomeScreen() {
           totalTokens: 0,
         },
       };
-
-      // Send to Claude API via Supabase
-      const response = await supabaseClaudeAPI.sendMessage(content, context);
-
-      if (response.error) {
-        throw new Error(response.error);
-      }
-
-      if (response.data) {
-        const assistantMessage = response.data;
-        setConversationMessages(prev => [...prev, assistantMessage]);
-        addMessage(assistantMessage);
-
-        // Generate and play voice response if enabled and configured
-        if (voicePlaybackEnabled && isElevenLabsConfigured) {
-          try {
-            await generateAndPlaySpeech(
-              assistantMessage.content,
-              `${currentMode.name} Response`
-            );
-          } catch (voiceError) {
-            console.warn('Voice generation failed:', voiceError);
-            // Continue without voice - don't break the conversation flow
-          }
+  
+      // For interview mode, check if this conversation was started with personalized data
+      if (currentMode.id === 'interview-practice') {
+        // Check if the current conversation has document analysis data
+        const hasPersonalizedData = !!(
+          currentConversation?.configuration?.customSettings?.documentAnalysis ||
+          documentData.analysisResult
+        );
+  
+        if (hasPersonalizedData) {
+          console.log('🎯 Using PERSONALIZED interview questions');
+          
+          // Add custom settings to context for personalized interview
+          (context as any).customSettings = {
+            documentAnalysis: currentConversation?.configuration?.customSettings?.documentAnalysis || documentData.analysisResult,
+            jobDescription: currentConversation?.configuration?.customSettings?.jobDescription || documentData.jobDescription,
+            cvContent: currentConversation?.configuration?.customSettings?.cvContent || documentData.cvContent
+          };
+  
+          const options: any = { maxTokens: 500 };
+          const messageToSend = isInterviewInitialization ? "" : content;
+          
+          const response = await supabaseClaudeAPI.sendMessage(messageToSend, context, options);
+          await handleApiResponse(response, context);
+        } else {
+          console.log('⚡ Using STANDARD interview questions');
+          
+          // Standard interview (quick start path)
+          const response = await supabaseClaudeAPI.sendMessage(content, context);
+          await handleApiResponse(response, context);
         }
-
-        // Generate new quick replies based on the response
-        await generateContextualQuickReplies(context, assistantMessage.content);
+      } else {
+        // Non-interview modes
+        console.log('💬 Regular conversation mode:', currentMode.id);
+        const response = await supabaseClaudeAPI.sendMessage(content, context);
+        await handleApiResponse(response, context);
       }
     } catch (error) {
       console.error('Error sending message to Claude:', error);
@@ -429,7 +490,41 @@ export default function HomeScreen() {
       setIsLoadingResponse(false);
     }
   };
-
+  
+  // Helper function to handle API responses (DRY principle)
+  const handleApiResponse = async (response: any, context: ConversationContext) => {
+    if (response.error) {
+      throw new Error(response.error);
+    }
+  
+    if (response.data) {
+      const assistantMessage = response.data;
+      setConversationMessages(prev => [...prev, assistantMessage]);
+      addMessage(assistantMessage);
+  
+      console.log('✅ Received response:', {
+        responseLength: assistantMessage.content.length,
+        mode: currentMode?.id
+      });
+  
+      // Generate and play voice response if enabled
+      if (voicePlaybackEnabled && isElevenLabsConfigured) {
+        try {
+          await generateAndPlaySpeech(
+            assistantMessage.content,
+            `${currentMode?.name} Response`
+          );
+        } catch (voiceError) {
+          console.warn('Voice generation failed:', voiceError);
+        }
+      }
+  
+      // Generate contextual quick replies
+      await generateContextualQuickReplies(context, assistantMessage.content);
+    }
+  };
+  
+  // Fix the generateContextualQuickReplies function
   const generateContextualQuickReplies = async (context: ConversationContext, lastResponse: string) => {
     try {
       const replies = await supabaseClaudeAPI.generateQuickReplies(context, 3);
@@ -440,7 +535,7 @@ export default function HomeScreen() {
       generateQuickRepliesForMode(context.mode);
     }
   };
-
+  
   const handleVoiceRecord = async () => {
     if (!currentConversation || !isSupabaseConfigured) return;
 
@@ -494,7 +589,7 @@ export default function HomeScreen() {
             language: 'en-US',
             continuous: true,
             interimResults: true,
-            // 30 second timeout
+             // 30 second timeout
           }
         );
 
