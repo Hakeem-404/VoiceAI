@@ -220,7 +220,7 @@ export function TextInputSystem({
   };
 
   const getCharacterCountColor = () => {
-    const maxLength = mode === 'document' ? 3000 : 1000;
+    const maxLength = mode === 'document' ? 10000 : 1000;
     const percentage = text.length / maxLength;
     if (percentage >= 0.9) return colors.error;
     if (percentage >= 0.7) return colors.warning;
@@ -289,7 +289,7 @@ export function TextInputSystem({
               placeholderTextColor={colors.textTertiary}
               multiline
               textAlignVertical="top"
-              maxLength={mode === 'document' ? 3000 : 1000}
+              maxLength={mode === 'document' ? 10000 : 1000}
               autoCapitalize="sentences"
               autoCorrect={true}
               spellCheck={true}
@@ -320,7 +320,7 @@ export function TextInputSystem({
                 styles.characterCount,
                 { color: getCharacterCountColor() }
               ]}>
-                {text.length}/{mode === 'document' ? 3000 : 1000}
+                {text.length}/{mode === 'document' ? 10000 : 1000}
               </Text>
               
               <TouchableOpacity
