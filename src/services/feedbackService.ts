@@ -412,7 +412,7 @@ class FeedbackService {
     // Analyze speaking pace
     if (metrics.speakingPace > this.feedbackThresholds.pace.slow && 
         metrics.speakingPace < this.feedbackThresholds.pace.fast) {
-      strengths.push(`Good speaking pace that's easy to follow`);
+      strengths.push(`Good speaking pace that\'s easy to follow`);
     } else if (metrics.speakingPace > this.feedbackThresholds.pace.fast) {
       improvements.push(`Speaking pace is a bit fast at times`);
       tips.push(`Try to slow down slightly and add strategic pauses for emphasis`);
