@@ -118,8 +118,6 @@ export function useSupabaseConversation(options: UseSupabaseConversationOptions)
     content: string,
     customContext?: any
   ) => {
-    if (!content.trim()) return;
-
     // Check if Supabase is configured
     if (!supabaseClaudeAPI.isConfigured()) {
       setState(prev => ({
@@ -129,16 +127,24 @@ export function useSupabaseConversation(options: UseSupabaseConversationOptions)
       return;
     }
 
-    // Add user message
-    const userMessage: ConversationMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: content.trim(),
-      timestamp: new Date()
-    };
-
-    addMessage(userMessage);
+    // Set loading state
     setState(prev => ({ ...prev, isLoading: true, error: null }));
+
+    // For interview practice with document analysis, if this is the first message and it's empty,
+    // we're just sending the system prompt to start the conversation
+    const isInitialSystemMessage = customContext?.system && content === '';
+    
+    // Only add user message if it's not an initial system message
+    if (!isInitialSystemMessage && content.trim()) {
+      // Add user message
+      const userMessage: ConversationMessage = {
+        id: Date.now().toString(),
+        role: 'user',
+        content: content.trim(),
+        timestamp: new Date()
+      };
+      addMessage(userMessage);
+    }
 
     responseStartTimeRef.current = Date.now();
 
@@ -148,7 +154,9 @@ export function useSupabaseConversation(options: UseSupabaseConversationOptions)
       
       // For interview practice with document analysis, include the analysis in the system prompt
       let systemPrompt;
-      if (mode === 'interview-practice' && documentData.analysisResult && !customContext?.system) {
+      if (customContext?.system) {
+        systemPrompt = customContext.system;
+      } else if (mode === 'interview-practice' && documentData.analysisResult && !customContext?.system) {
         systemPrompt = createInterviewSystemPrompt(
           documentData.analysisResult,
           documentData.jobDescription,
@@ -182,6 +190,23 @@ export function useSupabaseConversation(options: UseSupabaseConversationOptions)
     jobDescription: string,
     cvContent: string
   ): string => {
+    // Get interview questions from analysis
+    const technicalQuestions = analysis.analysis.interviewQuestions?.technical || [];
+    const behavioralQuestions = analysis.analysis.interviewQuestions?.behavioral || [];
+    const situationalQuestions = analysis.analysis.interviewQuestions?.situational || [];
+    const gapFocusedQuestions = analysis.analysis.interviewQuestions?.gapFocused || [];
+    
+    // Combine all questions
+    const allQuestions = [
+      ...technicalQuestions,
+      ...behavioralQuestions,
+      ...situationalQuestions,
+      ...gapFocusedQuestions
+    ];
+    
+    // Format questions for the prompt
+    const formattedQuestions = allQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n');
+    
     return `You are a professional interviewer conducting a job interview. 
     
 Job Description: ${jobDescription || 'Not provided'}
@@ -195,13 +220,18 @@ Analysis:
 - Focus Areas: ${analysis.analysis.focusAreas.join(', ')}
 - Experience Level: ${analysis.analysis.difficulty}
 
+PERSONALIZED QUESTIONS TO ASK:
+${formattedQuestions}
+
 Your task is to conduct a realistic interview for this position. Ask relevant questions that:
 1. Explore the candidate's strengths mentioned in the analysis
 2. Tactfully probe the identified gaps
 3. Focus on the key areas relevant to the job
 4. Include a mix of technical, behavioral, and situational questions
 
-Start with a brief introduction and your first question. Be professional, thorough, and provide constructive feedback. Ask one question at a time and wait for complete answers.`;
+Start with a brief introduction and your first question. Be professional, thorough, and provide constructive feedback. Ask one question at a time and wait for complete answers.
+
+IMPORTANT: Begin the interview immediately with a brief introduction and your first question from the list above.`;
   };
 
   const sendStreamingMessage = useCallback(async (

@@ -93,18 +93,6 @@ serve(async (req) => {
       )
     }
 
-    // Validate messages array
-    if (!Array.isArray(requestBody.messages) || requestBody.messages.length === 0) {
-      console.error('Invalid messages array:', requestBody.messages)
-      return new Response(
-        JSON.stringify({ error: 'Messages must be a non-empty array' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
-    }
-
     // Use a supported Claude model - updated to use Claude 3.5 Sonnet
     const supportedModels = [
       'claude-3-5-sonnet-20240620',

@@ -8,7 +8,8 @@ import {
   Dimensions,
   Platform,
   ActivityIndicator,
-  TextInput
+  TextInput,
+  Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Send, RotateCcw, Copy, Bookmark, MoveHorizontal as MoreHorizontal, Wifi, WifiOff, Zap, ChartBar as BarChart3 } from 'lucide-react-native';
@@ -19,6 +20,7 @@ import { ClaudeFeedbackModal } from './ClaudeFeedbackModal';
 import { Conversation } from '@/src/types';
 import { useConversationStore } from '@/src/stores/conversationStore';
 import { useInputStore } from '@/src/stores/inputStore';
+import { supabaseClaudeAPI } from '../services/supabaseClaudeAPI';
 
 const { width, height } = Dimensions.get('window');
 
@@ -59,6 +61,7 @@ export function SupabaseConversationView({
   const [isOnline, setIsOnline] = useState(true);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const [initialMessageSent, setInitialMessageSent] = useState(false);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -98,7 +101,10 @@ export function SupabaseConversationView({
 
   // Send initial system message for interview practice with document analysis
   useEffect(() => {
-    if (mode === 'interview-practice' && documentData.analysisResult && messages.length === 0) {
+    if (mode === 'interview-practice' && documentData.analysisResult && messages.length === 0 && !initialMessageSent) {
+      // Mark as sent to prevent multiple attempts
+      setInitialMessageSent(true);
+      
       // Create a system message with the analysis data
       const analysis = documentData.analysisResult;
       const systemMessage = createInterviewSystemPrompt(analysis, documentData.jobDescription, documentData.cvContent);
@@ -106,13 +112,30 @@ export function SupabaseConversationView({
       // Send the system message
       sendSystemMessage(systemMessage);
     }
-  }, [mode, documentData.analysisResult, messages.length]);
+  }, [mode, documentData.analysisResult, messages.length, initialMessageSent]);
 
   const createInterviewSystemPrompt = (
     analysis: any,
     jobDescription: string,
     cvContent: string
   ): string => {
+    // Get interview questions from analysis
+    const technicalQuestions = analysis.analysis.interviewQuestions?.technical || [];
+    const behavioralQuestions = analysis.analysis.interviewQuestions?.behavioral || [];
+    const situationalQuestions = analysis.analysis.interviewQuestions?.situational || [];
+    const gapFocusedQuestions = analysis.analysis.interviewQuestions?.gapFocused || [];
+    
+    // Combine all questions
+    const allQuestions = [
+      ...technicalQuestions,
+      ...behavioralQuestions,
+      ...situationalQuestions,
+      ...gapFocusedQuestions
+    ];
+    
+    // Format questions for the prompt
+    const formattedQuestions = allQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n');
+    
     return `You are a professional interviewer conducting a job interview. 
     
 Job Description: ${jobDescription || 'Not provided'}
@@ -126,13 +149,18 @@ Analysis:
 - Focus Areas: ${analysis.analysis.focusAreas.join(', ')}
 - Experience Level: ${analysis.analysis.difficulty}
 
+PERSONALIZED QUESTIONS TO ASK:
+${formattedQuestions}
+
 Your task is to conduct a realistic interview for this position. Ask relevant questions that:
 1. Explore the candidate's strengths mentioned in the analysis
 2. Tactfully probe the identified gaps
 3. Focus on the key areas relevant to the job
 4. Include a mix of technical, behavioral, and situational questions
 
-Start with a brief introduction and your first question. Be professional, thorough, and provide constructive feedback. Ask one question at a time and wait for complete answers.`;
+Start with a brief introduction and your first question. Be professional, thorough, and provide constructive feedback. Ask one question at a time and wait for complete answers.
+
+IMPORTANT: Begin the interview immediately with a brief introduction and your first question from the list above.`;
   };
 
   const sendSystemMessage = async (systemMessage: string) => {
@@ -154,14 +182,19 @@ Start with a brief introduction and your first question. Be professional, thorou
       };
       
       // Send a simple greeting to trigger the conversation with the system context
-      await sendMessage("Hello, I'm here for the interview.", context);
+      await sendMessage("", context);
     } catch (error) {
       console.error('Failed to send system message:', error);
+      Alert.alert(
+        'Interview Setup Failed',
+        'Failed to start the personalized interview. Please try again.',
+        [{ text: 'OK' }]
+      );
     }
   };
 
   const handleSendMessage = async (text: string, customContext?: any) => {
-    if (!text.trim() || isLoading) return;
+    if ((!text.trim() && !customContext?.system) || isLoading || !isSupabaseConfigured()) return;
 
     const message = text.trim();
     setInputText('');
@@ -239,7 +272,7 @@ Start with a brief introduction and your first question. Be professional, thorou
 
     return (
       <View style={styles.configurationBanner}>
-        <AlertCircle size={20} color="#EF4444" />
+        <Alert size={20} color="#EF4444" />
         <View style={styles.configurationText}>
           <Text style={styles.configurationTitle}>Configuration Required</Text>
           <Text style={styles.configurationSubtitle}>
@@ -322,11 +355,11 @@ Start with a brief introduction and your first question. Be professional, thorou
         {messages.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateTitle}>
-              {isSupabaseConfigured() ? 'Start a conversation' : 'Configuration required'}
+              {isSupabaseConfigured() ? 'Starting conversation...' : 'Configuration required'}
             </Text>
             <Text style={styles.emptyStateSubtitle}>
               {isSupabaseConfigured() 
-                ? 'Ask me anything or use one of the quick replies below'
+                ? 'Please wait while we prepare your conversation...'
                 : 'Please configure your Supabase settings to start conversations'
               }
             </Text>

@@ -6,7 +6,8 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  Platform
+  Platform,
+  Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,7 +21,8 @@ import {
   Plus,
   Settings,
   Database,
-  TestTube
+  TestTube,
+  X
 } from 'lucide-react-native';
 import { SupabaseConversationView } from '../../components/SupabaseConversationView';
 import { supabaseClaudeAPI } from '../../services/supabaseClaudeAPI';
@@ -156,11 +158,6 @@ export default function ChatScreen() {
     setSessionId(Date.now().toString());
   };
 
-  const endConversation = () => {
-    setSelectedMode(null);
-    setSessionId(null);
-  };
-
   const handleInterviewContinue = () => {
     if (documentData.analysisResult) {
       // Start interview with the analysis data
@@ -180,7 +177,10 @@ export default function ChatScreen() {
       <SupabaseConversationView
         mode={selectedMode}
         sessionId={sessionId}
-        onClose={endConversation}
+        onClose={() => {
+          setSelectedMode(null);
+          setSessionId(null);
+        }}
       />
     );
   }
@@ -631,10 +631,6 @@ const styles = StyleSheet.create({
   interviewSetupTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
-  },
-  X: {
-    fontSize: 24,
     color: '#111827',
   }
 });
