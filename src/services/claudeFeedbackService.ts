@@ -299,166 +299,214 @@ Focus on grammar, vocabulary, pronunciation, and overall fluency.`;
   }
 
   // Parse Claude's response into a structured feedback object
-  private parseFeedbackResponse(response: string, conversation: Conversation): FeedbackData {
+private parseFeedbackResponse(response: string, conversation: Conversation): FeedbackData {
+  try {
+    console.log('Raw Claude response:', response);
+    
+    // Try to extract and parse JSON from the response
+    let parsedFeedback;
+    
+    // First, try to find a complete JSON object
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.warn('No JSON found in Claude response');
+      throw new Error('No JSON found in Claude response');
+    }
+    
+    let jsonString = jsonMatch[0];
+    console.log('Extracted JSON string:', jsonString);
+    
+    // Try to parse the JSON
     try {
-      console.log('Raw Claude response:', response);
+      parsedFeedback = JSON.parse(jsonString);
+    } catch (parseError) {
+      console.warn('Initial JSON parse failed, trying to fix common issues:', parseError);
       
-      // Try multiple strategies to extract JSON
-      let jsonString = this.extractCompleteJson(response);
-      if (!jsonString) {
-        console.warn('No complete JSON found in Claude response, using fallback');
-        throw new Error('No complete JSON found in Claude response');
-      }
-      
-      console.log('Extracted JSON string:', jsonString);
-      
-      // Clean up common JSON issues
-      jsonString = this.cleanJsonString(jsonString);
-      console.log('Cleaned JSON string:', jsonString);
-      
-      let parsedFeedback;
-      try {
-        parsedFeedback = JSON.parse(jsonString);
-      } catch (parseError) {
-        console.warn('Initial JSON parse failed, trying to fix common issues:', parseError);
-        
-        // Try to fix common JSON issues
-        jsonString = this.fixCommonJsonIssues(jsonString);
-        console.log('Fixed JSON string:', jsonString);
+      // If the JSON is incomplete, try to handle partial responses
+      if (jsonString.includes('"scores"') && !jsonString.includes('"strengths"')) {
+        console.log('Detected incomplete JSON response, attempting to reconstruct');
+        // This appears to be just a scores object, wrap it properly
+        if (!jsonString.trim().endsWith('}')) {
+          // Find the last complete property and close the object
+          const lastCommaIndex = jsonString.lastIndexOf(',');
+          const lastBraceIndex = jsonString.lastIndexOf('}');
+          if (lastCommaIndex > lastBraceIndex) {
+            // Remove trailing comma and close
+            jsonString = jsonString.substring(0, lastCommaIndex) + '}';
+          } else if (!jsonString.trim().endsWith('}')) {
+            jsonString += '}';
+          }
+        }
         
         try {
-          parsedFeedback = JSON.parse(jsonString);
+          const scoresOnly = JSON.parse(jsonString);
+          // If it's just a scores object, create a minimal feedback structure
+          if (scoresOnly.scores || (scoresOnly.fluency !== undefined)) {
+            parsedFeedback = {
+              scores: scoresOnly.scores || scoresOnly,
+              strengths: ["Good participation in the conversation"],
+              improvements: ["Continue practicing to improve skills"],
+              analytics: {
+                wordsPerMinute: 150,
+                pauseCount: 10,
+                fillerWords: 5
+              },
+              tips: ["Keep practicing regularly"],
+              nextSteps: ["Schedule another practice session"]
+            };
+          } else {
+            throw parseError;
+          }
         } catch (secondError) {
-          console.error('Second JSON parse attempt failed:', secondError);
-          throw new Error('Failed to parse JSON after cleanup attempts');
+          console.error('Failed to parse even partial JSON:', secondError);
+          throw new Error('Failed to parse feedback response');
         }
+      } else {
+        throw parseError;
       }
-      
-      console.log('Successfully parsed feedback:', parsedFeedback);
-      
-      // Ensure all required fields are present
-      const feedback: FeedbackData = {
-        scores: {
-          fluency: parsedFeedback.scores?.fluency || 70,
-          clarity: parsedFeedback.scores?.clarity || 70,
-          confidence: parsedFeedback.scores?.confidence || 70,
-          pace: parsedFeedback.scores?.pace || 70,
-          overall: parsedFeedback.scores?.overall || 70,
-          engagement: parsedFeedback.scores?.engagement,
-          relevance: parsedFeedback.scores?.relevance,
-          structure: parsedFeedback.scores?.structure,
-          persuasiveness: parsedFeedback.scores?.persuasiveness,
-          creativity: parsedFeedback.scores?.creativity,
-          criticalThinking: parsedFeedback.scores?.criticalThinking,
-          emotionalIntelligence: parsedFeedback.scores?.emotionalIntelligence,
-          vocabularyUsage: parsedFeedback.scores?.vocabularyUsage,
-          grammarAccuracy: parsedFeedback.scores?.grammarAccuracy,
-          professionalCommunication: parsedFeedback.scores?.professionalCommunication,
-        },
-        strengths: parsedFeedback.strengths || [],
-        improvements: parsedFeedback.improvements || [],
-        analytics: {
-          wordsPerMinute: parsedFeedback.analytics?.wordsPerMinute || 150,
-          pauseCount: parsedFeedback.analytics?.pauseCount || 10,
-          fillerWords: parsedFeedback.analytics?.fillerWords || 5,
-          questionCount: parsedFeedback.analytics?.questionCount,
-          topicChanges: parsedFeedback.analytics?.topicChanges,
-          responseTime: parsedFeedback.analytics?.responseTime,
-          complexSentences: parsedFeedback.analytics?.complexSentences,
-          speakingTime: parsedFeedback.analytics?.speakingTime,
-          listeningTime: parsedFeedback.analytics?.listeningTime,
-        },
-        modeSpecific: parsedFeedback.modeSpecific || {},
-        tips: parsedFeedback.tips || [],
-        nextSteps: parsedFeedback.nextSteps || [],
-      };
-      
-      return feedback;
-    } catch (error) {
-      console.error('Failed to parse Claude feedback response:', error);
-      throw new Error('Failed to parse feedback response');
     }
+    
+    console.log('Successfully parsed feedback:', parsedFeedback);
+    
+    // Ensure all required fields are present
+    const feedback: FeedbackData = {
+      scores: {
+        fluency: parsedFeedback.scores?.fluency || 70,
+        clarity: parsedFeedback.scores?.clarity || 70,
+        confidence: parsedFeedback.scores?.confidence || 70,
+        pace: parsedFeedback.scores?.pace || 70,
+        overall: parsedFeedback.scores?.overall || 70,
+        engagement: parsedFeedback.scores?.engagement,
+        relevance: parsedFeedback.scores?.relevance,
+        structure: parsedFeedback.scores?.structure,
+        persuasiveness: parsedFeedback.scores?.persuasiveness,
+        creativity: parsedFeedback.scores?.creativity,
+        criticalThinking: parsedFeedback.scores?.criticalThinking,
+        emotionalIntelligence: parsedFeedback.scores?.emotionalIntelligence,
+        vocabularyUsage: parsedFeedback.scores?.vocabularyUsage,
+        grammarAccuracy: parsedFeedback.scores?.grammarAccuracy,
+        professionalCommunication: parsedFeedback.scores?.professionalCommunication,
+      },
+      strengths: parsedFeedback.strengths || [],
+      improvements: parsedFeedback.improvements || [],
+      analytics: {
+        wordsPerMinute: parsedFeedback.analytics?.wordsPerMinute || 150,
+        pauseCount: parsedFeedback.analytics?.pauseCount || 10,
+        fillerWords: parsedFeedback.analytics?.fillerWords || 5,
+        questionCount: parsedFeedback.analytics?.questionCount,
+        topicChanges: parsedFeedback.analytics?.topicChanges,
+        responseTime: parsedFeedback.analytics?.responseTime,
+        complexSentences: parsedFeedback.analytics?.complexSentences,
+        speakingTime: parsedFeedback.analytics?.speakingTime,
+        listeningTime: parsedFeedback.analytics?.listeningTime,
+      },
+      modeSpecific: parsedFeedback.modeSpecific || {},
+      tips: parsedFeedback.tips || [],
+      nextSteps: parsedFeedback.nextSteps || [],
+    };
+    
+    return feedback;
+  } catch (error) {
+    console.error('Failed to parse Claude feedback response:', error);
+    throw new Error('Failed to parse feedback response');
   }
+}
 
-  // Extract complete JSON from Claude's response
-  private extractCompleteJson(response: string): string | null {
-    // Strategy 1: Look for the largest JSON object (most complete)
-    const jsonMatches = response.match(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g);
-    if (jsonMatches) {
-      // Find the largest JSON object (most likely to be complete)
-      const largestJson = jsonMatches.reduce((largest, current) => 
-        current.length > largest.length ? current : largest
-      );
-      console.log('Found largest JSON object:', largestJson);
-      return largestJson;
-    }
-    
-    // Strategy 2: Look for JSON starting with { and ending with }
-    const startIndex = response.indexOf('{');
-    const endIndex = response.lastIndexOf('}');
-    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-      const jsonString = response.substring(startIndex, endIndex + 1);
-      console.log('Extracted JSON using start/end indices:', jsonString);
-      return jsonString;
-    }
-    
-    // Strategy 3: Look for specific feedback structure
-    const feedbackMatch = response.match(/\{[^}]*"scores"[^}]*\}[^}]*\}[^}]*\}/);
-    if (feedbackMatch) {
-      console.log('Found feedback structure:', feedbackMatch[0]);
-      return feedbackMatch[0];
-    }
-    
-    return null;
+// Clean up common JSON syntax issues
+private cleanJsonString(jsonString: string): string {
+  // Fix trailing commas
+  jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
+  
+  // Fix missing quotes around property names
+  jsonString = jsonString.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
+  
+  // Fix single quotes to double quotes
+  jsonString = jsonString.replace(/'/g, '"');
+  
+  // Fix unescaped quotes in string values
+  jsonString = jsonString.replace(/"([^"]*)"([^"]*)"([^"]*)"/g, '"$1$2$3"');
+  
+  // Fix missing commas between properties
+  jsonString = jsonString.replace(/"\s*}\s*"/g, '", "');
+  jsonString = jsonString.replace(/"\s*]\s*"/g, '", "');
+  
+  // Fix empty values
+  jsonString = jsonString.replace(/:\s*,/g, ': null,');
+  jsonString = jsonString.replace(/:\s*}/g, ': null}');
+  jsonString = jsonString.replace(/:\s*]/g, ': null]');
+  
+  // Fix incomplete arrays/objects
+  jsonString = jsonString.replace(/,\s*([}\]])/g, '$1');
+  jsonString = jsonString.replace(/,\s*$/g, '');
+  
+  // Fix missing closing braces/brackets
+  let braceCount = (jsonString.match(/\{/g) || []).length;
+  let bracketCount = (jsonString.match(/\[/g) || []).length;
+  let closeBraceCount = (jsonString.match(/\}/g) || []).length;
+  let closeBracketCount = (jsonString.match(/\]/g) || []).length;
+  
+  // Add missing closing braces
+  while (braceCount > closeBraceCount) {
+    jsonString += '}';
+    closeBraceCount++;
   }
+  
+  // Add missing closing brackets
+  while (bracketCount > closeBracketCount) {
+    jsonString += ']';
+    closeBracketCount++;
+  }
+  
+  return jsonString;
+}
 
-  // Fix common JSON syntax issues
-  private fixCommonJsonIssues(jsonString: string): string {
-    // Fix trailing commas
-    jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
-    
-    // Fix missing quotes around property names
-    jsonString = jsonString.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
-    
-    // Fix single quotes to double quotes
-    jsonString = jsonString.replace(/'/g, '"');
-    
-    // Fix unescaped quotes in string values
-    jsonString = jsonString.replace(/"([^"]*)"([^"]*)"([^"]*)"/g, '"$1$2$3"');
-    
-    // Fix missing commas between properties
-    jsonString = jsonString.replace(/"\s*}\s*"/g, '", "');
-    jsonString = jsonString.replace(/"\s*]\s*"/g, '", "');
-    
-    // Fix empty values
-    jsonString = jsonString.replace(/:\s*,/g, ': null,');
-    jsonString = jsonString.replace(/:\s*}/g, ': null}');
-    jsonString = jsonString.replace(/:\s*]/g, ': null]');
-    
-    // Fix incomplete arrays/objects
-    jsonString = jsonString.replace(/,\s*([}\]])/g, '$1');
-    jsonString = jsonString.replace(/,\s*$/g, '');
-    
-    // Fix missing closing braces/brackets
-    let braceCount = (jsonString.match(/\{/g) || []).length;
-    let bracketCount = (jsonString.match(/\[/g) || []).length;
-    let closeBraceCount = (jsonString.match(/\}/g) || []).length;
-    let closeBracketCount = (jsonString.match(/\]/g) || []).length;
-    
-    // Add missing closing braces
-    while (braceCount > closeBraceCount) {
-      jsonString += '}';
-      closeBraceCount++;
-    }
-    
-    // Add missing closing brackets
-    while (bracketCount > closeBracketCount) {
-      jsonString += ']';
-      closeBracketCount++;
-    }
-    
-    return jsonString;
+// Fix common JSON syntax issues
+private fixCommonJsonIssues(jsonString: string): string {
+  // Fix trailing commas
+  jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
+  
+  // Fix missing quotes around property names
+  jsonString = jsonString.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
+  
+  // Fix single quotes to double quotes
+  jsonString = jsonString.replace(/'/g, '"');
+  
+  // Fix unescaped quotes in string values
+  jsonString = jsonString.replace(/"([^"]*)"([^"]*)"([^"]*)"/g, '"$1$2$3"');
+  
+  // Fix missing commas between properties
+  jsonString = jsonString.replace(/"\s*}\s*"/g, '", "');
+  jsonString = jsonString.replace(/"\s*]\s*"/g, '", "');
+  
+  // Fix empty values
+  jsonString = jsonString.replace(/:\s*,/g, ': null,');
+  jsonString = jsonString.replace(/:\s*}/g, ': null}');
+  jsonString = jsonString.replace(/:\s*]/g, ': null]');
+  
+  // Fix incomplete arrays/objects
+  jsonString = jsonString.replace(/,\s*([}\]])/g, '$1');
+  jsonString = jsonString.replace(/,\s*$/g, '');
+  
+  // Fix missing closing braces/brackets
+  let braceCount = (jsonString.match(/\{/g) || []).length;
+  let bracketCount = (jsonString.match(/\[/g) || []).length;
+  let closeBraceCount = (jsonString.match(/\}/g) || []).length;
+  let closeBracketCount = (jsonString.match(/\]/g) || []).length;
+  
+  // Add missing closing braces
+  while (braceCount > closeBraceCount) {
+    jsonString += '}';
+    closeBraceCount++;
   }
+  
+  // Add missing closing brackets
+  while (bracketCount > closeBracketCount) {
+    jsonString += ']';
+    closeBracketCount++;
+  }
+  
+  return jsonString;
+}
 
   // Generate a summary of the feedback
   generateFeedbackSummary(feedback: FeedbackData, conversationMode: string): FeedbackSummary {
