@@ -7,7 +7,7 @@ const corsHeaders = {
 }
 
 interface ClaudeMessage {
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant'; // Removed 'system' from here
   content: string;
 }
 
@@ -17,7 +17,7 @@ interface ClaudeRequest {
   messages: ClaudeMessage[];
   temperature?: number;
   stream?: boolean;
-  system?: string;
+  system?: string; // System prompt goes here as a top-level parameter
 }
 
 serve(async (req) => {
@@ -107,18 +107,30 @@ serve(async (req) => {
       modelToUse = 'claude-3-5-sonnet-20240620'
     }
 
-    // Handle system prompt if provided
-    let messages = [...requestBody.messages]
-    if (requestBody.system) {
-      // Add system message at the beginning
-      messages.unshift({
-        role: 'system',
-        content: requestBody.system
-      })
+    // CRITICAL FIX: Properly separate system messages from regular messages
+    let messages: ClaudeMessage[] = []
+    let systemPrompt: string | undefined = requestBody.system
+
+    // Process messages and extract any system messages
+    for (const msg of requestBody.messages) {
+      if (msg.role === 'system') {
+        // Extract system message content and add to system prompt
+        if (systemPrompt) {
+          systemPrompt += '\n\n' + msg.content
+        } else {
+          systemPrompt = msg.content
+        }
+      } else if (msg.role === 'user' || msg.role === 'assistant') {
+        // Only include user and assistant messages in the messages array
+        messages.push({
+          role: msg.role,
+          content: msg.content
+        })
+      }
     }
 
     // Prepare Claude API request with correct format
-    const claudeRequest = {
+    const claudeRequest: any = {
       model: modelToUse,
       max_tokens: Math.min(Math.max(requestBody.max_tokens, 1), 4096), // Ensure valid range
       messages: messages,
@@ -126,12 +138,19 @@ serve(async (req) => {
       stream: requestBody.stream || false
     }
 
+    // Add system prompt as top-level parameter if it exists
+    if (systemPrompt) {
+      claudeRequest.system = systemPrompt
+    }
+
     console.log('Sending request to Claude API:', {
       model: claudeRequest.model,
       max_tokens: claudeRequest.max_tokens,
       messages_count: claudeRequest.messages.length,
       temperature: claudeRequest.temperature,
-      stream: claudeRequest.stream
+      stream: claudeRequest.stream,
+      has_system: !!claudeRequest.system,
+      system_length: claudeRequest.system?.length || 0
     })
 
     // Make request to Claude API with correct headers
