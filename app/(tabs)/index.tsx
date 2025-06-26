@@ -58,9 +58,9 @@ import { PermissionHandler } from '@/components/PermissionHandler';
 import { VoicePersonalitySelector } from '@/components/VoicePersonalitySelector';
 import { AudioPlayerControls } from '@/components/AudioPlayerControls';
 import { InterviewSetupScreen } from '@/components/InterviewSetupScreen';
-import { ConversationMode, ModeConfiguration, DailyChallenge, ConversationMessage, DocumentAnalysis } from '@/src/types';
+import { ConversationMode, ModeConfiguration, DailyChallenge, DocumentAnalysis } from '@/src/types';
 import { spacing, typography } from '@/src/constants/colors';
-import { ConversationContext } from '@/types/api';
+import { ConversationContext, ConversationMessage } from '@/types/api';
 import { FeedbackModal } from '@/components/FeedbackModal';
 
 const { width } = Dimensions.get('window');
@@ -608,10 +608,15 @@ export default function HomeScreen() {
   ];
 
   const handleEndConversation = async () => {
+    console.log('Starting end conversation process');
+    console.log('endConversation function exists:', typeof endConversation);
+    console.log('currentConversation:', currentConversation);
+    
     try {
       setIsGeneratingFeedback(true);
       // End conversation and generate feedback
       const feedback = await endConversation();
+      console.log('End conversation completed, feedback:', feedback);
       
       // Clear conversation state
       setConversationMessages([]);
@@ -620,7 +625,10 @@ export default function HomeScreen() {
       
       // Show feedback modal if feedback was generated
       if (feedback) {
+        console.log('Showing feedback modal');
         setShowFeedbackModal(true);
+      } else {
+        console.log('No feedback generated');
       }
     } catch (error) {
       console.error('Error ending conversation:', error);
@@ -634,11 +642,19 @@ export default function HomeScreen() {
   };
 
   const handleGenerateFeedback = async () => {
-    if (!currentConversation) return;
+    if (!currentConversation) {
+      console.log('No current conversation found');
+      return;
+    }
+    
+    console.log('Starting feedback generation for conversation:', currentConversation.id);
+    console.log('generateFeedback function exists:', typeof generateFeedback);
+    console.log('currentConversation:', currentConversation);
     
     try {
       setIsGeneratingFeedback(true);
       const feedback = await generateFeedback(currentConversation);
+      console.log('Feedback generated successfully:', feedback);
       if (feedback) {
         setShowFeedbackModal(true);
       }
@@ -948,14 +964,40 @@ export default function HomeScreen() {
         />
 
         {/* Feedback Modal */}
-        {lastFeedback && currentConversation && (
+        {lastFeedback && (
           <FeedbackModal
             visible={showFeedbackModal}
             onClose={() => {
               setShowFeedbackModal(false);
               clearLastFeedback();
             }}
-            conversation={currentConversation}
+            conversation={currentConversation || {
+              id: 'ended-conversation',
+              mode: { 
+                id: 'general-chat', 
+                name: 'General Chat', 
+                description: '', 
+                icon: '', 
+                systemPrompt: '', 
+                category: 'social', 
+                difficulty: 'beginner', 
+                estimatedDuration: 0, 
+                color: { primary: '', secondary: '', gradient: [] }, 
+                features: [], 
+                topics: [], 
+                aiPersonalities: [], 
+                sessionTypes: { 
+                  quick: { duration: 0, description: '' }, 
+                  standard: { duration: 0, description: '' }, 
+                  extended: { duration: 0, description: '' } 
+                } 
+              },
+              title: 'Ended Conversation',
+              duration: 0,
+              messages: [],
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            }}
           />
         )}
       </SafeAreaView>
