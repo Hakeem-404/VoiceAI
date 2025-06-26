@@ -233,7 +233,7 @@ class FeedbackService {
     if (metrics.fillerWordFrequency > this.feedbackThresholds.fillerWordFrequency.high) {
       return {
         type: 'filler',
-        message: 'Try to reduce filler words like "um" and "uh"',
+        message: `Try to reduce filler words like "um" and "uh"`,
         severity: 'suggestion',
         timestamp: new Date(),
       };
@@ -412,61 +412,61 @@ class FeedbackService {
     // Analyze speaking pace
     if (metrics.speakingPace > this.feedbackThresholds.pace.slow && 
         metrics.speakingPace < this.feedbackThresholds.pace.fast) {
-      strengths.push('Good speaking pace that's easy to follow');
+      strengths.push(`Good speaking pace that's easy to follow`);
     } else if (metrics.speakingPace > this.feedbackThresholds.pace.fast) {
-      improvements.push('Speaking pace is a bit fast at times');
-      tips.push('Try to slow down slightly and add strategic pauses for emphasis');
+      improvements.push(`Speaking pace is a bit fast at times`);
+      tips.push(`Try to slow down slightly and add strategic pauses for emphasis`);
     } else if (metrics.speakingPace < this.feedbackThresholds.pace.slow) {
-      improvements.push('Speaking pace could be more energetic');
-      tips.push('Try to increase your speaking pace slightly to maintain engagement');
+      improvements.push(`Speaking pace could be more energetic`);
+      tips.push(`Try to increase your speaking pace slightly to maintain engagement`);
     }
     
     // Analyze filler words
     if (metrics.fillerWordFrequency < this.feedbackThresholds.fillerWordFrequency.low) {
-      strengths.push('Minimal use of filler words');
+      strengths.push(`Minimal use of filler words`);
     } else if (metrics.fillerWordFrequency > this.feedbackThresholds.fillerWordFrequency.high) {
-      improvements.push('Frequent use of filler words like "um" and "uh"');
-      tips.push('Practice replacing filler words with brief pauses');
+      improvements.push(`Frequent use of filler words like "um" and "uh"`);
+      tips.push(`Practice replacing filler words with brief pauses`);
     }
     
     // Analyze question frequency
     if (metrics.questionFrequency > this.feedbackThresholds.questionFrequency.low) {
-      strengths.push('Good use of questions to drive conversation');
+      strengths.push(`Good use of questions to drive conversation`);
     } else {
-      improvements.push('Could ask more questions to engage the other speaker');
-      tips.push('Try to include more open-ended questions to encourage deeper discussion');
+      improvements.push(`Could ask more questions to engage the other speaker`);
+      tips.push(`Try to include more open-ended questions to encourage deeper discussion`);
     }
     
     // Analyze vocabulary diversity
     if (metrics.vocabularyDiversity > this.feedbackThresholds.vocabularyDiversity.high) {
-      strengths.push('Excellent vocabulary diversity');
+      strengths.push(`Excellent vocabulary diversity`);
     } else if (metrics.vocabularyDiversity < this.feedbackThresholds.vocabularyDiversity.low) {
-      improvements.push('Limited vocabulary range');
-      tips.push('Try to incorporate more varied vocabulary in your responses');
+      improvements.push(`Limited vocabulary range`);
+      tips.push(`Try to incorporate more varied vocabulary in your responses`);
     }
     
     // Analyze engagement level
     if (metrics.engagementLevel > this.feedbackThresholds.engagementLevel.high) {
-      strengths.push('High level of engagement throughout the conversation');
+      strengths.push(`High level of engagement throughout the conversation`);
     } else if (metrics.engagementLevel < this.feedbackThresholds.engagementLevel.low) {
-      improvements.push('Could show more engagement in the conversation');
-      tips.push('Try to respond more directly to points made and show more interest');
+      improvements.push(`Could show more engagement in the conversation`);
+      tips.push(`Try to respond more directly to points made and show more interest`);
     }
     
     // Analyze speaking/listening ratio
     if (metrics.speakingListeningRatio > 0.7 && metrics.speakingListeningRatio < 1.3) {
-      strengths.push('Good balance between speaking and listening');
+      strengths.push(`Good balance between speaking and listening`);
     } else if (metrics.speakingListeningRatio > this.feedbackThresholds.speakingListeningRatio.highSpeaking) {
-      improvements.push('Dominated the conversation at times');
-      tips.push('Try to allow more space for the other speaker');
+      improvements.push(`Dominated the conversation at times`);
+      tips.push(`Try to allow more space for the other speaker`);
     } else if (metrics.speakingListeningRatio < this.feedbackThresholds.speakingListeningRatio.lowSpeaking) {
-      improvements.push('Could contribute more to the conversation');
-      tips.push('Try to elaborate more on your responses and share your thoughts');
+      improvements.push(`Could contribute more to the conversation`);
+      tips.push(`Try to elaborate more on your responses and share your thoughts`);
     }
     
     // Generate next steps
-    nextSteps.push('Practice with different conversation topics to build versatility');
-    nextSteps.push('Review your strongest moments in this conversation');
+    nextSteps.push(`Practice with different conversation topics to build versatility`);
+    nextSteps.push(`Review your strongest moments in this conversation`);
     
     // Calculate overall scores
     const fluency = this.calculateScore([
@@ -614,53 +614,53 @@ class FeedbackService {
     
     // Generate strengths
     if (conversationFlow > 80) {
-      strengths.push('Excellent conversation flow and natural transitions');
+      strengths.push(`Excellent conversation flow and natural transitions`);
     } else if (conversationFlow > 60) {
-      strengths.push('Good conversation flow with smooth exchanges');
+      strengths.push(`Good conversation flow with smooth exchanges`);
     }
     
     if (topicExploration > 80) {
-      strengths.push('Explored topics in depth with insightful questions');
+      strengths.push(`Explored topics in depth with insightful questions`);
     } else if (topicExploration > 60) {
-      strengths.push('Good exploration of conversation topics');
+      strengths.push(`Good exploration of conversation topics`);
     }
     
     if (empathyScore > 80) {
-      strengths.push('Showed strong empathy and understanding');
+      strengths.push(`Showed strong empathy and understanding`);
     } else if (empathyScore > 60) {
-      strengths.push('Demonstrated good empathy in responses');
+      strengths.push(`Demonstrated good empathy in responses`);
     }
     
     if (curiosityLevel > 80) {
-      strengths.push('Excellent curiosity with thoughtful follow-up questions');
+      strengths.push(`Excellent curiosity with thoughtful follow-up questions`);
     } else if (curiosityLevel > 60) {
-      strengths.push('Good curiosity about the topics discussed');
+      strengths.push(`Good curiosity about the topics discussed`);
     }
     
     // Generate improvements
     if (conversationFlow < 60) {
-      improvements.push('Conversation flow could be more natural');
-      tips.push('Practice smoother transitions between topics');
+      improvements.push(`Conversation flow could be more natural`);
+      tips.push(`Practice smoother transitions between topics`);
     }
     
     if (topicExploration < 60) {
-      improvements.push('Could explore topics in more depth');
-      tips.push('Try asking more follow-up questions to dig deeper into topics');
+      improvements.push(`Could explore topics in more depth`);
+      tips.push(`Try asking more follow-up questions to dig deeper into topics`);
     }
     
     if (empathyScore < 60) {
-      improvements.push('Could show more empathy in responses');
-      tips.push('Try acknowledging feelings and perspectives more explicitly');
+      improvements.push(`Could show more empathy in responses`);
+      tips.push(`Try acknowledging feelings and perspectives more explicitly`);
     }
     
     if (curiosityLevel < 60) {
-      improvements.push('Could show more curiosity about the other speaker');
-      tips.push('Ask more open-ended questions to learn more about the other person');
+      improvements.push(`Could show more curiosity about the other speaker`);
+      tips.push(`Ask more open-ended questions to learn more about the other person`);
     }
     
     // Generate next steps
-    nextSteps.push('Practice active listening techniques in your next conversation');
-    nextSteps.push('Try to ask at least one follow-up question for each topic discussed');
+    nextSteps.push(`Practice active listening techniques in your next conversation`);
+    nextSteps.push(`Try to ask at least one follow-up question for each topic discussed`);
     
     return {
       strengths,
@@ -722,53 +722,53 @@ class FeedbackService {
     
     // Generate strengths
     if (argumentStrength > 80) {
-      strengths.push('Excellent argument construction with strong logical flow');
+      strengths.push(`Excellent argument construction with strong logical flow`);
     } else if (argumentStrength > 60) {
-      strengths.push('Good argument structure and reasoning');
+      strengths.push(`Good argument structure and reasoning`);
     }
     
     if (evidenceUsage > 80) {
-      strengths.push('Strong use of evidence to support arguments');
+      strengths.push(`Strong use of evidence to support arguments`);
     } else if (evidenceUsage > 60) {
-      strengths.push('Good incorporation of supporting evidence');
+      strengths.push(`Good incorporation of supporting evidence`);
     }
     
     if (counterArgumentHandling > 80) {
-      strengths.push('Excellent handling of counter-arguments');
+      strengths.push(`Excellent handling of counter-arguments`);
     } else if (counterArgumentHandling > 60) {
-      strengths.push('Good responses to opposing viewpoints');
+      strengths.push(`Good responses to opposing viewpoints`);
     }
     
     if (logicalConsistency > 80) {
-      strengths.push('Highly consistent logical reasoning throughout');
+      strengths.push(`Highly consistent logical reasoning throughout`);
     } else if (logicalConsistency > 60) {
-      strengths.push('Generally consistent logical approach');
+      strengths.push(`Generally consistent logical approach`);
     }
     
     // Generate improvements
     if (argumentStrength < 60) {
-      improvements.push('Argument structure could be stronger');
-      tips.push('Try organizing your points in a clearer logical sequence');
+      improvements.push(`Argument structure could be stronger`);
+      tips.push(`Try organizing your points in a clearer logical sequence`);
     }
     
     if (evidenceUsage < 60) {
-      improvements.push('Could use more evidence to support claims');
-      tips.push('Incorporate specific examples or data to strengthen your arguments');
+      improvements.push(`Could use more evidence to support claims`);
+      tips.push(`Incorporate specific examples or data to strengthen your arguments`);
     }
     
     if (counterArgumentHandling < 60) {
-      improvements.push('Could improve handling of counter-arguments');
-      tips.push('Practice anticipating and addressing potential objections to your position');
+      improvements.push(`Could improve handling of counter-arguments`);
+      tips.push(`Practice anticipating and addressing potential objections to your position`);
     }
     
     if (logicalConsistency < 60) {
-      improvements.push('Logical consistency could be improved');
-      tips.push('Check for contradictions in your arguments and ensure consistent reasoning');
+      improvements.push(`Logical consistency could be improved`);
+      tips.push(`Check for contradictions in your arguments and ensure consistent reasoning`);
     }
     
     // Generate next steps
-    nextSteps.push('Practice structuring arguments with clear premises and conclusions');
-    nextSteps.push('Research and prepare evidence for common debate topics');
+    nextSteps.push(`Practice structuring arguments with clear premises and conclusions`);
+    nextSteps.push(`Research and prepare evidence for common debate topics`);
     
     return {
       strengths,
@@ -828,47 +828,47 @@ class FeedbackService {
     }
     
     if (uniqueIdeas > 8) {
-      strengths.push('Excellent variety of unique concepts');
+      strengths.push(`Excellent variety of unique concepts`);
     } else if (uniqueIdeas > 4) {
-      strengths.push('Good range of different ideas');
+      strengths.push(`Good range of different ideas`);
     }
     
     if (ideaQuality > 80) {
-      strengths.push('High-quality ideas with excellent development');
+      strengths.push(`High-quality ideas with excellent development`);
     } else if (ideaQuality > 60) {
-      strengths.push('Good quality ideas with solid potential');
+      strengths.push(`Good quality ideas with solid potential`);
     }
     
     if (buildingOnIdeas > 80) {
-      strengths.push('Excellent at building upon and expanding ideas');
+      strengths.push(`Excellent at building upon and expanding ideas`);
     } else if (buildingOnIdeas > 60) {
-      strengths.push('Good collaboration in developing concepts further');
+      strengths.push(`Good collaboration in developing concepts further`);
     }
     
     // Generate improvements
     if (ideaCount < 5) {
-      improvements.push('Could generate more ideas during brainstorming');
-      tips.push('Try rapid ideation techniques like timed idea sprints');
+      improvements.push(`Could generate more ideas during brainstorming`);
+      tips.push(`Try rapid ideation techniques like timed idea sprints`);
     }
     
     if (uniqueIdeas < 4) {
-      improvements.push('Could explore a wider variety of concepts');
-      tips.push('Try using different perspectives or constraints to spark diverse ideas');
+      improvements.push(`Could explore a wider variety of concepts`);
+      tips.push(`Try using different perspectives or constraints to spark diverse ideas`);
     }
     
     if (ideaQuality < 60) {
-      improvements.push('Could develop ideas in more depth');
-      tips.push('Spend more time exploring the potential of each idea');
+      improvements.push(`Could develop ideas in more depth`);
+      tips.push(`Spend more time exploring the potential of each idea`);
     }
     
     if (buildingOnIdeas < 60) {
-      improvements.push('Could build more effectively on existing ideas');
-      tips.push('Practice the "Yes, and..." technique to expand on concepts');
+      improvements.push(`Could build more effectively on existing ideas`);
+      tips.push(`Practice the "Yes, and..." technique to expand on concepts`);
     }
     
     // Generate next steps
-    nextSteps.push('Try brainstorming with constraints to spark creative solutions');
-    nextSteps.push('Practice combining different ideas to create hybrid concepts');
+    nextSteps.push(`Try brainstorming with constraints to spark creative solutions`);
+    nextSteps.push(`Practice combining different ideas to create hybrid concepts`);
     
     return {
       strengths,
@@ -928,53 +928,53 @@ class FeedbackService {
     
     // Generate strengths
     if (questionRelevance > 80) {
-      strengths.push('Excellent understanding of interview questions');
+      strengths.push(`Excellent understanding of interview questions`);
     } else if (questionRelevance > 60) {
-      strengths.push('Good comprehension of interview questions');
+      strengths.push(`Good comprehension of interview questions`);
     }
     
     if (answerCompleteness > 80) {
-      strengths.push('Thorough and comprehensive answers');
+      strengths.push(`Thorough and comprehensive answers`);
     } else if (answerCompleteness > 60) {
-      strengths.push('Answers covered key points effectively');
+      strengths.push(`Answers covered key points effectively`);
     }
     
     if (professionalDemeanor > 80) {
-      strengths.push('Excellent professional communication style');
+      strengths.push(`Excellent professional communication style`);
     } else if (professionalDemeanor > 60) {
-      strengths.push('Good professional demeanor throughout');
+      strengths.push(`Good professional demeanor throughout`);
     }
     
     if (technicalAccuracy > 80) {
-      strengths.push('Strong technical knowledge demonstrated');
+      strengths.push(`Strong technical knowledge demonstrated`);
     } else if (technicalAccuracy > 60) {
-      strengths.push('Good technical understanding shown');
+      strengths.push(`Good technical understanding shown`);
     }
     
     // Generate improvements
     if (questionRelevance < 60) {
-      improvements.push('Could better address the specific questions asked');
-      tips.push('Listen carefully to each question and ensure your answer directly addresses it');
+      improvements.push(`Could better address the specific questions asked`);
+      tips.push(`Listen carefully to each question and ensure your answer directly addresses it`);
     }
     
     if (answerCompleteness < 60) {
-      improvements.push('Answers could be more comprehensive');
-      tips.push('Use the STAR method (Situation, Task, Action, Result) for behavioral questions');
+      improvements.push(`Answers could be more comprehensive`);
+      tips.push(`Use the STAR method (Situation, Task, Action, Result) for behavioral questions`);
     }
     
     if (professionalDemeanor < 60) {
-      improvements.push('Could present a more professional demeanor');
-      tips.push('Reduce casual language and filler words in professional contexts');
+      improvements.push(`Could present a more professional demeanor`);
+      tips.push(`Reduce casual language and filler words in professional contexts`);
     }
     
     if (technicalAccuracy < 60) {
-      improvements.push('Technical explanations could be clearer');
-      tips.push('Practice explaining technical concepts concisely and accurately');
+      improvements.push(`Technical explanations could be clearer`);
+      tips.push(`Practice explaining technical concepts concisely and accurately`);
     }
     
     // Generate next steps
-    nextSteps.push('Research common interview questions for your target role');
-    nextSteps.push('Practice the STAR method for behavioral questions');
+    nextSteps.push(`Research common interview questions for your target role`);
+    nextSteps.push(`Practice the STAR method for behavioral questions`);
     
     return {
       strengths,
@@ -1034,53 +1034,53 @@ class FeedbackService {
     
     // Generate strengths
     if (structureQuality > 80) {
-      strengths.push('Excellent presentation structure with clear organization');
+      strengths.push(`Excellent presentation structure with clear organization`);
     } else if (structureQuality > 60) {
-      strengths.push('Good presentation structure with logical flow');
+      strengths.push(`Good presentation structure with logical flow`);
     }
     
     if (audienceEngagement > 80) {
-      strengths.push('Highly engaging presentation style');
+      strengths.push(`Highly engaging presentation style`);
     } else if (audienceEngagement > 60) {
-      strengths.push('Good audience engagement techniques');
+      strengths.push(`Good audience engagement techniques`);
     }
     
     if (messageClarity > 80) {
-      strengths.push('Exceptionally clear and concise messaging');
+      strengths.push(`Exceptionally clear and concise messaging`);
     } else if (messageClarity > 60) {
-      strengths.push('Clear communication of key points');
+      strengths.push(`Clear communication of key points`);
     }
     
     if (deliveryStyle > 80) {
-      strengths.push('Excellent delivery with effective pacing and emphasis');
+      strengths.push(`Excellent delivery with effective pacing and emphasis`);
     } else if (deliveryStyle > 60) {
-      strengths.push('Good presentation delivery style');
+      strengths.push(`Good presentation delivery style`);
     }
     
     // Generate improvements
     if (structureQuality < 60) {
-      improvements.push('Presentation structure could be more organized');
-      tips.push('Use a clear introduction, body, and conclusion structure');
+      improvements.push(`Presentation structure could be more organized`);
+      tips.push(`Use a clear introduction, body, and conclusion structure`);
     }
     
     if (audienceEngagement < 60) {
-      improvements.push('Could be more engaging for the audience');
-      tips.push('Incorporate rhetorical questions or interactive elements');
+      improvements.push(`Could be more engaging for the audience`);
+      tips.push(`Incorporate rhetorical questions or interactive elements`);
     }
     
     if (messageClarity < 60) {
-      improvements.push('Main message could be clearer');
-      tips.push('Focus on simplifying complex ideas and emphasizing key points');
+      improvements.push(`Main message could be clearer`);
+      tips.push(`Focus on simplifying complex ideas and emphasizing key points`);
     }
     
     if (deliveryStyle < 60) {
-      improvements.push('Delivery style could be more dynamic');
-      tips.push('Vary your pace, volume, and tone for emphasis');
+      improvements.push(`Delivery style could be more dynamic`);
+      tips.push(`Vary your pace, volume, and tone for emphasis`);
     }
     
     // Generate next steps
-    nextSteps.push('Practice your presentation with a timer to improve pacing');
-    nextSteps.push('Record yourself presenting and review for areas to improve');
+    nextSteps.push(`Practice your presentation with a timer to improve pacing`);
+    nextSteps.push(`Record yourself presenting and review for areas to improve`);
     
     return {
       strengths,
@@ -1140,53 +1140,53 @@ class FeedbackService {
     
     // Generate strengths
     if (grammarAccuracy > 80) {
-      strengths.push('Excellent grammar usage throughout the conversation');
+      strengths.push(`Excellent grammar usage throughout the conversation`);
     } else if (grammarAccuracy > 60) {
-      strengths.push('Good grammatical structure in most sentences');
+      strengths.push(`Good grammatical structure in most sentences`);
     }
     
     if (vocabularyRange > 80) {
-      strengths.push('Impressive vocabulary range and usage');
+      strengths.push(`Impressive vocabulary range and usage`);
     } else if (vocabularyRange > 60) {
-      strengths.push('Good variety of vocabulary');
+      strengths.push(`Good variety of vocabulary`);
     }
     
     if (pronunciationScore > 80) {
-      strengths.push('Clear and accurate pronunciation');
+      strengths.push(`Clear and accurate pronunciation`);
     } else if (pronunciationScore > 60) {
-      strengths.push('Generally good pronunciation');
+      strengths.push(`Generally good pronunciation`);
     }
     
     if (fluencyProgress > 80) {
-      strengths.push('Excellent conversational fluency');
+      strengths.push(`Excellent conversational fluency`);
     } else if (fluencyProgress > 60) {
-      strengths.push('Good speaking flow and fluency');
+      strengths.push(`Good speaking flow and fluency`);
     }
     
     // Generate improvements
     if (grammarAccuracy < 60) {
-      improvements.push('Some grammatical structures could be improved');
-      tips.push('Focus on practicing specific grammar patterns that challenge you');
+      improvements.push(`Some grammatical structures could be improved`);
+      tips.push(`Focus on practicing specific grammar patterns that challenge you`);
     }
     
     if (vocabularyRange < 60) {
-      improvements.push('Could use a wider range of vocabulary');
-      tips.push('Try to incorporate new words into each conversation');
+      improvements.push(`Could use a wider range of vocabulary`);
+      tips.push(`Try to incorporate new words into each conversation`);
     }
     
     if (pronunciationScore < 60) {
-      improvements.push('Pronunciation could be clearer in some words');
-      tips.push('Practice difficult sounds and words by recording and listening to yourself');
+      improvements.push(`Pronunciation could be clearer in some words`);
+      tips.push(`Practice difficult sounds and words by recording and listening to yourself`);
     }
     
     if (fluencyProgress < 60) {
-      improvements.push('Conversational fluency could be smoother');
-      tips.push('Regular speaking practice will help improve your overall fluency');
+      improvements.push(`Conversational fluency could be smoother`);
+      tips.push(`Regular speaking practice will help improve your overall fluency`);
     }
     
     // Generate next steps
-    nextSteps.push('Practice with different conversation topics to expand vocabulary');
-    nextSteps.push('Focus on using more complex sentence structures');
+    nextSteps.push(`Practice with different conversation topics to expand vocabulary`);
+    nextSteps.push(`Focus on using more complex sentence structures`);
     
     return {
       strengths,
@@ -1250,7 +1250,7 @@ class FeedbackService {
           const { conversationFlow, topicExploration, empathyScore, curiosityLevel } = feedback.modeSpecific.generalChat;
           
           if (conversationFlow > 80) {
-            insights.push('Excellent natural conversation flow');
+            insights.push(`Excellent natural conversation flow`);
           }
           
           if (curiosityLevel > 80) {
@@ -1258,7 +1258,7 @@ class FeedbackService {
           }
           
           if (empathyScore > 80) {
-            insights.push('Showed strong empathy and understanding');
+            insights.push(`Showed strong empathy and understanding`);
           }
         }
         break;
@@ -1268,15 +1268,15 @@ class FeedbackService {
           const { argumentStrength, evidenceUsage, counterArgumentHandling, logicalConsistency } = feedback.modeSpecific.debate;
           
           if (argumentStrength > 80) {
-            insights.push('Strong, well-structured arguments');
+            insights.push(`Strong, well-structured arguments`);
           }
           
           if (counterArgumentHandling > 80) {
-            insights.push('Excellent handling of opposing viewpoints');
+            insights.push(`Excellent handling of opposing viewpoints`);
           }
           
           if (logicalConsistency > 80) {
-            insights.push('Highly consistent logical reasoning');
+            insights.push(`Highly consistent logical reasoning`);
           }
         }
         break;
@@ -1288,11 +1288,11 @@ class FeedbackService {
           insights.push(`Generated ${ideaCount} ideas (${uniqueIdeas} unique concepts)`);
           
           if (ideaQuality > 80) {
-            insights.push('High-quality, well-developed ideas');
+            insights.push(`High-quality, well-developed ideas`);
           }
           
           if (buildingOnIdeas > 80) {
-            insights.push('Excellent at expanding and building on concepts');
+            insights.push(`Excellent at expanding and building on concepts`);
           }
         }
         break;
@@ -1302,15 +1302,15 @@ class FeedbackService {
           const { questionRelevance, answerCompleteness, professionalDemeanor, technicalAccuracy } = feedback.modeSpecific.interview;
           
           if (answerCompleteness > 80) {
-            insights.push('Comprehensive, well-structured answers');
+            insights.push(`Comprehensive, well-structured answers`);
           }
           
           if (professionalDemeanor > 80) {
-            insights.push('Excellent professional communication style');
+            insights.push(`Excellent professional communication style`);
           }
           
           if (technicalAccuracy > 80) {
-            insights.push('Strong technical knowledge demonstrated');
+            insights.push(`Strong technical knowledge demonstrated`);
           }
         }
         break;
@@ -1320,15 +1320,15 @@ class FeedbackService {
           const { structureQuality, audienceEngagement, messageClarity, deliveryStyle } = feedback.modeSpecific.presentation;
           
           if (structureQuality > 80) {
-            insights.push('Clear, well-organized presentation structure');
+            insights.push(`Clear, well-organized presentation structure`);
           }
           
           if (audienceEngagement > 80) {
-            insights.push('Highly engaging presentation style');
+            insights.push(`Highly engaging presentation style`);
           }
           
           if (deliveryStyle > 80) {
-            insights.push('Excellent delivery with effective pacing');
+            insights.push(`Excellent delivery with effective pacing`);
           }
         }
         break;
@@ -1344,11 +1344,11 @@ class FeedbackService {
           }
           
           if (vocabularyRange > 80) {
-            insights.push('Impressive vocabulary range and usage');
+            insights.push(`Impressive vocabulary range and usage`);
           }
           
           if (fluencyProgress > 80) {
-            insights.push('Excellent conversational fluency');
+            insights.push(`Excellent conversational fluency`);
           }
         }
         break;
