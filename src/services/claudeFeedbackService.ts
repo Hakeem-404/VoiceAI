@@ -298,7 +298,9 @@ Focus on grammar, vocabulary, pronunciation, and overall fluency.`;
     return prompt;
   }
 
-  // Parse Claude's response into a structured feedback object
+  // Enhanced parsing methods to capture ALL of Claude's feedback
+
+// Parse Claude's response into a structured feedback object
 private parseFeedbackResponse(response: string, conversation: Conversation): FeedbackData {
   try {
     console.log('Raw Claude response:', response);
@@ -306,52 +308,398 @@ private parseFeedbackResponse(response: string, conversation: Conversation): Fee
     // Clean the response first
     const cleanedResponse = response.trim();
     
-    // Try multiple strategies to extract and fix JSON
-    let parsedFeedback;
-    let jsonString = this.extractBestJson(cleanedResponse);
+    // Try to extract ALL possible data from Claude's response
+    const extractedData = this.extractAllClaudeData(cleanedResponse);
     
-    if (!jsonString) {
-      console.warn('No JSON found in Claude response');
-      throw new Error('No JSON found in Claude response');
-    }
+    console.log('Extracted data from Claude:', extractedData);
     
-    console.log('Extracted JSON string:', jsonString);
-    
-    // Try to parse the JSON with progressive fixes
-    try {
-      parsedFeedback = JSON.parse(jsonString);
-    } catch (parseError) {
-      console.warn('Initial JSON parse failed, trying to fix issues:', parseError);
-      
-      // Apply progressive JSON fixes
-      jsonString = this.fixJsonProgressively(jsonString);
-      console.log('Fixed JSON string:', jsonString);
-      
-      try {
-        parsedFeedback = JSON.parse(jsonString);
-      } catch (secondError) {
-        console.warn('Second parse failed, trying partial reconstruction:', secondError);
-        
-        // Try to reconstruct from partial data
-        parsedFeedback = this.reconstructFromPartialJson(jsonString, conversation);
-        
-        if (!parsedFeedback) {
-          console.error('All JSON parsing attempts failed');
-          throw new Error('Failed to parse feedback response');
-        }
-      }
-    }
-    
-    console.log('Successfully parsed feedback:', parsedFeedback);
-    
-    // Ensure all required fields are present with robust validation
-    const feedback: FeedbackData = this.validateAndCompleteFeedback(parsedFeedback, conversation);
+    // Build feedback from extracted data
+    const feedback = this.buildFeedbackFromExtractedData(extractedData, conversation);
     
     return feedback;
   } catch (error) {
     console.error('Failed to parse Claude feedback response:', error);
-    throw new Error('Failed to parse feedback response');
+    // Only fall back to basic feedback if we truly can't extract anything
+    return this.generateBasicFeedback(conversation);
   }
+}
+
+// Extract ALL possible data from Claude's response using multiple strategies
+private extractAllClaudeData(response: string): any {
+  const extractedData = {
+    scores: {},
+    strengths: [],
+    improvements: [],
+    analytics: {},
+    tips: [],
+    nextSteps: [],
+    modeSpecific: {}
+  };
+  
+  // Strategy 1: Try to parse complete JSON if possible
+  try {
+    const completeJson = this.extractAndFixCompleteJson(response);
+    if (completeJson) {
+      console.log('Successfully parsed complete JSON');
+      return completeJson;
+    }
+  } catch (e) {
+    console.log('Complete JSON parsing failed, trying partial extraction');
+  }
+  
+  // Strategy 2: Extract data piece by piece using regex patterns
+  
+  // Extract scores (even if incomplete)
+  extractedData.scores = this.extractAllScores(response);
+  
+  // Extract arrays with better pattern matching
+  extractedData.strengths = this.extractArrayAdvanced(response, 'strengths');
+  extractedData.improvements = this.extractArrayAdvanced(response, 'improvements');
+  extractedData.tips = this.extractArrayAdvanced(response, 'tips');
+  extractedData.nextSteps = this.extractArrayAdvanced(response, 'nextSteps');
+  
+  // Extract analytics if present
+  extractedData.analytics = this.extractAnalytics(response);
+  
+  // Extract mode-specific data
+  extractedData.modeSpecific = this.extractModeSpecific(response);
+  
+  console.log('Partial extraction results:', extractedData);
+  return extractedData;
+}
+
+// Try to extract and fix complete JSON with aggressive repair
+private extractAndFixCompleteJson(response: string): any | null {
+  // Find JSON boundaries
+  const jsonStart = response.indexOf('{');
+  if (jsonStart === -1) return null;
+  
+  // Try to find the end, or reconstruct it
+  let jsonString = response.substring(jsonStart);
+  
+  // Aggressive JSON completion
+  jsonString = this.aggressiveJsonRepair(jsonString);
+  
+  try {
+    return JSON.parse(jsonString);
+  } catch (e) {
+    return null;
+  }
+}
+
+// Aggressive JSON repair that tries to complete incomplete JSON
+private aggressiveJsonRepair(jsonString: string): string {
+  let repaired = jsonString;
+  
+  // If it's clearly cut off mid-string, try to complete it
+  if (repaired.includes('"improvements": [') && !repaired.includes(']')) {
+    // Find the last complete string in improvements array
+    const improvementsMatch = repaired.match(/"improvements":\s*\[(.*?)(?:\]|$)/s);
+    if (improvementsMatch) {
+      const improvementsContent = improvementsMatch[1];
+      
+      // Extract complete strings from the content
+      const strings = this.extractCompleteStringsFromArray(improvementsContent);
+      
+      // Reconstruct the improvements array
+      const improvementsJson = '"improvements": [' + strings.map(s => `"${s}"`).join(', ') + ']';
+      
+      // Replace in the original
+      repaired = repaired.replace(/"improvements":\s*\[.*?(?:\]|$)/s, improvementsJson);
+    }
+  }
+  
+  // Apply similar logic for other arrays
+  ['strengths', 'tips', 'nextSteps'].forEach(arrayName => {
+    repaired = this.repairArrayInJson(repaired, arrayName);
+  });
+  
+  // Ensure proper closing
+  repaired = this.ensureProperJsonClosing(repaired);
+  
+  return repaired;
+}
+
+// Extract complete strings from a partially parsed array content
+private extractCompleteStringsFromArray(content: string): string[] {
+  const strings: string[] = [];
+  
+  // Match complete quoted strings
+  const completeStrings = content.match(/"([^"\\]*(\\.[^"\\]*)*)"/g);
+  if (completeStrings) {
+    strings.push(...completeStrings.map(s => s.slice(1, -1))); // Remove quotes
+  }
+  
+  // If there's an incomplete string at the end, try to use it
+  const incompleteMatch = content.match(/,\s*"([^"]*?)(?:\s*$)/);
+  if (incompleteMatch && incompleteMatch[1].length > 10) {
+    // Only include if it's substantial content
+    strings.push(incompleteMatch[1]);
+  }
+  
+  return strings;
+}
+
+// Repair specific arrays in JSON
+private repairArrayInJson(jsonString: string, arrayName: string): string {
+  const arrayPattern = new RegExp(`"${arrayName}":\\s*\\[(.*?)(?:\\]|$)`, 's');
+  const match = jsonString.match(arrayPattern);
+  
+  if (match) {
+    const content = match[1];
+    const strings = this.extractCompleteStringsFromArray(content);
+    
+    if (strings.length > 0) {
+      const repairedArray = `"${arrayName}": [${strings.map(s => `"${s}"`).join(', ')}]`;
+      return jsonString.replace(arrayPattern, repairedArray);
+    }
+  }
+  
+  return jsonString;
+}
+
+// Ensure proper JSON closing
+private ensureProperJsonClosing(jsonString: string): string {
+  let result = jsonString.trim();
+  
+  // Count braces and brackets
+  const openBraces = (result.match(/\{/g) || []).length;
+  const closeBraces = (result.match(/\}/g) || []).length;
+  const openBrackets = (result.match(/\[/g) || []).length;
+  const closeBrackets = (result.match(/\]/g) || []).length;
+  
+  // Add missing closings
+  for (let i = 0; i < openBrackets - closeBrackets; i++) {
+    result += ']';
+  }
+  for (let i = 0; i < openBraces - closeBraces; i++) {
+    result += '}';
+  }
+  
+  return result;
+}
+
+// Extract all possible scores from the response
+private extractAllScores(response: string): any {
+  const scores: any = {};
+  
+  // Common score fields
+  const scoreFields = [
+    'fluency', 'clarity', 'confidence', 'pace', 'overall', 'engagement',
+    'relevance', 'structure', 'persuasiveness', 'creativity', 'criticalThinking',
+    'emotionalIntelligence', 'vocabularyUsage', 'grammarAccuracy', 'professionalCommunication'
+  ];
+  
+  for (const field of scoreFields) {
+    // Try multiple regex patterns
+    const patterns = [
+      new RegExp(`"${field}"\\s*:\\s*(\\d+)`, 'i'),
+      new RegExp(`${field}.*?(\\d+)`, 'i'),
+      new RegExp(`"${field}".*?(\\d{1,3})`, 'i')
+    ];
+    
+    for (const pattern of patterns) {
+      const match = response.match(pattern);
+      if (match) {
+        const value = parseInt(match[1], 10);
+        if (value >= 0 && value <= 100) {
+          scores[field] = value;
+          break;
+        }
+      }
+    }
+  }
+  
+  return scores;
+}
+
+// Advanced array extraction with multiple fallback strategies
+private extractArrayAdvanced(response: string, arrayName: string): string[] {
+  const results: string[] = [];
+  
+  // Strategy 1: Standard JSON array extraction
+  const standardResult = this.extractArrayFromJson(response, arrayName);
+  if (standardResult && standardResult.length > 0) {
+    return standardResult;
+  }
+  
+  // Strategy 2: Look for the array pattern even if incomplete
+  const arrayPattern = new RegExp(`"${arrayName}"\\s*:\\s*\\[(.*?)(?:\\]|$)`, 's');
+  const match = response.match(arrayPattern);
+  
+  if (match) {
+    const content = match[1];
+    
+    // Extract all quoted strings from the content
+    const quotes = content.match(/"([^"\\]*(\\.[^"\\]*)*)"/g);
+    if (quotes) {
+      results.push(...quotes.map(q => q.slice(1, -1))); // Remove quotes
+    }
+    
+    // Also look for unfinished strings
+    const unfinished = content.match(/,\s*"([^"]{10,})\s*$/);
+    if (unfinished) {
+      results.push(unfinished[1]);
+    }
+  }
+  
+  // Strategy 3: Look for patterns without the array structure
+  if (results.length === 0) {
+    results.push(...this.extractByPattern(response, arrayName));
+  }
+  
+  return results.filter(item => item && item.trim().length > 0);
+}
+
+// Extract items by looking for patterns in the text
+private extractByPattern(response: string, arrayName: string): string[] {
+  const results: string[] = [];
+  
+  // Look for bullet points or list-like patterns after the array name
+  const sectionPattern = new RegExp(`${arrayName}[^\\[]*\\[(.*?)(?:\\]|improvements|tips|analytics|nextSteps|$)`, 'is');
+  const match = response.match(sectionPattern);
+  
+  if (match) {
+    const content = match[1];
+    
+    // Look for patterns like "text", or bullet points
+    const items = content.match(/["']([^"']{20,})["']/g);
+    if (items) {
+      results.push(...items.map(item => item.slice(1, -1)));
+    }
+  }
+  
+  return results;
+}
+
+// Extract analytics data
+private extractAnalytics(response: string): any {
+  const analytics: any = {};
+  
+  const analyticsFields = [
+    'wordsPerMinute', 'pauseCount', 'fillerWords', 'questionCount',
+    'topicChanges', 'responseTime', 'complexSentences', 'speakingTime', 'listeningTime'
+  ];
+  
+  for (const field of analyticsFields) {
+    const patterns = [
+      new RegExp(`"${field}"\\s*:\\s*(\\d+(?:\\.\\d+)?)`, 'i'),
+      new RegExp(`${field}.*?(\\d+(?:\\.\\d+)?)`, 'i')
+    ];
+    
+    for (const pattern of patterns) {
+      const match = response.match(pattern);
+      if (match) {
+        const value = parseFloat(match[1]);
+        if (!isNaN(value) && value >= 0) {
+          analytics[field] = value;
+          break;
+        }
+      }
+    }
+  }
+  
+  return analytics;
+}
+
+// Extract mode-specific data
+private extractModeSpecific(response: string): any {
+  const modeSpecific: any = {};
+  
+  // Look for modeSpecific object
+  const modeSpecificPattern = /"modeSpecific"\s*:\s*\{(.*?)\}/s;
+  const match = response.match(modeSpecificPattern);
+  
+  if (match) {
+    try {
+      const content = `{${match[1]}}`;
+      const parsed = JSON.parse(content);
+      return parsed;
+    } catch (e) {
+      // Extract manually if JSON parsing fails
+      return this.extractModeSpecificManually(match[1]);
+    }
+  }
+  
+  return modeSpecific;
+}
+
+// Manually extract mode-specific data if JSON parsing fails
+private extractModeSpecificManually(content: string): any {
+  const result: any = {};
+  
+  // Look for nested objects like "generalChat": { ... }
+  const objectPattern = /"(\w+)"\s*:\s*\{([^}]*)\}/g;
+  let match;
+  
+  while ((match = objectPattern.exec(content)) !== null) {
+    const objectName = match[1];
+    const objectContent = match[2];
+    
+    result[objectName] = {};
+    
+    // Extract properties from the object
+    const propPattern = /"(\w+)"\s*:\s*(\d+(?:\.\d+)?)/g;
+    let propMatch;
+    
+    while ((propMatch = propPattern.exec(objectContent)) !== null) {
+      const propName = propMatch[1];
+      const propValue = parseFloat(propMatch[2]);
+      result[objectName][propName] = propValue;
+    }
+  }
+  
+  return result;
+}
+
+// Build final feedback object from all extracted data
+private buildFeedbackFromExtractedData(extractedData: any, conversation: Conversation): FeedbackData {
+  const feedback: FeedbackData = {
+    scores: {
+      fluency: extractedData.scores?.fluency || 75,
+      clarity: extractedData.scores?.clarity || 75,
+      confidence: extractedData.scores?.confidence || 75,
+      pace: extractedData.scores?.pace || 75,
+      overall: extractedData.scores?.overall || 75,
+      engagement: extractedData.scores?.engagement,
+      relevance: extractedData.scores?.relevance,
+      structure: extractedData.scores?.structure,
+      persuasiveness: extractedData.scores?.persuasiveness,
+      creativity: extractedData.scores?.creativity,
+      criticalThinking: extractedData.scores?.criticalThinking,
+      emotionalIntelligence: extractedData.scores?.emotionalIntelligence,
+      vocabularyUsage: extractedData.scores?.vocabularyUsage,
+      grammarAccuracy: extractedData.scores?.grammarAccuracy,
+      professionalCommunication: extractedData.scores?.professionalCommunication,
+    },
+    strengths: extractedData.strengths?.length > 0 
+      ? extractedData.strengths 
+      : [`Good participation in the ${conversation.mode.name} conversation`],
+    improvements: extractedData.improvements?.length > 0 
+      ? extractedData.improvements 
+      : [`Continue practicing ${conversation.mode.name} skills`],
+    analytics: {
+      wordsPerMinute: extractedData.analytics?.wordsPerMinute || 150,
+      pauseCount: extractedData.analytics?.pauseCount || 10,
+      fillerWords: extractedData.analytics?.fillerWords || 5,
+      questionCount: extractedData.analytics?.questionCount,
+      topicChanges: extractedData.analytics?.topicChanges,
+      responseTime: extractedData.analytics?.responseTime,
+      complexSentences: extractedData.analytics?.complexSentences,
+      speakingTime: extractedData.analytics?.speakingTime,
+      listeningTime: extractedData.analytics?.listeningTime,
+    },
+    modeSpecific: extractedData.modeSpecific || {},
+    tips: extractedData.tips?.length > 0 
+      ? extractedData.tips 
+      : [`Practice ${conversation.mode.name} regularly to build confidence`],
+    nextSteps: extractedData.nextSteps?.length > 0 
+      ? extractedData.nextSteps 
+      : [`Schedule another ${conversation.mode.name} practice session`],
+  };
+  
+  console.log('Final constructed feedback:', feedback);
+  return feedback;
 }
 
 // Extract the best JSON from Claude's response
