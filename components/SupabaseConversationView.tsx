@@ -18,7 +18,7 @@ import { useSupabaseConversation } from '../hooks/useSupabaseConversation';
 import { ConversationMessage } from '../types/api';
 import { RealTimeFeedbackSystem } from './RealTimeFeedbackSystem';
 import { ClaudeFeedbackModal } from './ClaudeFeedbackModal';
-import { Conversation } from '@/src/types';
+import { Conversation, ConversationMode } from '@/src/types';
 import { useConversationStore } from '@/src/stores/conversationStore';
 import { useInputStore } from '@/src/stores/inputStore';
 import { supabaseClaudeAPI } from '../services/supabaseClaudeAPI';
@@ -65,6 +65,47 @@ export function SupabaseConversationView({
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const [initialMessageSent, setInitialMessageSent] = useState(false);
+
+  // Create conversation mode object for the store
+  const conversationMode: ConversationMode = {
+    id: mode,
+    name: mode.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+    description: `AI-powered ${mode.replace('-', ' ')} conversation`,
+    icon: '',
+    systemPrompt: '',
+    category: 'social' as const,
+    difficulty: 'beginner' as const,
+    estimatedDuration: 0,
+    color: { primary: '#6366F1', secondary: '#8B5CF6', gradient: ['#6366F1', '#8B5CF6'] },
+    features: [],
+    topics: [],
+    aiPersonalities: [],
+    sessionTypes: {
+      quick: { duration: 0, description: '' },
+      standard: { duration: 0, description: '' },
+      extended: { duration: 0, description: '' }
+    }
+  };
+
+  // Create a conversation object for feedback when needed
+  const createConversationForFeedback = (): Conversation => {
+    return {
+      id: sessionId,
+      mode: conversationMode,
+      title: `${conversationMode.name} - ${new Date().toLocaleDateString()}`,
+      duration: 0,
+      messages: messages.map((msg: ConversationMessage) => ({
+        id: msg.id,
+        role: msg.role === 'assistant' ? 'ai' : msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp
+      })),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      bookmarks: [],
+      highlights: [],
+    };
+  };
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -454,13 +495,11 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
       </View>
 
       {/* Claude Feedback Modal */}
-      {currentConversation && (
-        <ClaudeFeedbackModal
-          visible={showFeedbackModal}
-          onClose={() => setShowFeedbackModal(false)}
-          conversation={currentConversation}
-        />
-      )}
+      <ClaudeFeedbackModal
+        visible={showFeedbackModal}
+        onClose={() => setShowFeedbackModal(false)}
+        conversation={createConversationForFeedback()}
+      />
     </View>
   );
 }
