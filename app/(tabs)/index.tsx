@@ -259,9 +259,39 @@ export default function HomeScreen() {
   };
 
   const handleInterviewContinue = () => {
-    // Navigate to the interview-prep screen with the documents
-    router.push('/interview-prep');
-    setShowInterviewSetup(false);
+    if (documentData.analysisResult) {
+      // Start interview with the analysis data
+      const mode = conversationModes.find(m => m.id === 'interview-practice');
+      if (!mode) return;
+      
+      startConversation(mode, {
+        modeId: 'interview-practice',
+        difficulty: (documentData.analysisResult.analysis.difficulty === 'junior' ? 'beginner' : 
+                    documentData.analysisResult.analysis.difficulty === 'executive' ? 'advanced' : 'intermediate') || 'intermediate',
+        sessionType: 'standard',
+        selectedTopics: documentData.analysisResult.analysis.focusAreas.slice(0, 3) || mode.topics.slice(0, 3),
+        aiPersonality: 'Professional',
+        customSettings: {
+          documentAnalysis: documentData.analysisResult,
+          jobDescription: documentData.jobDescription,
+          cvContent: documentData.cvContent,
+        },
+      });
+      setShowInterviewSetup(false);
+      setError(null);
+      setConversationMessages([]);
+      generateQuickRepliesForMode(mode.id);
+    } else {
+      // Start regular interview if no analysis
+      const mode = conversationModes.find(m => m.id === 'interview-practice');
+      if (!mode) return;
+      
+      startConversation(mode);
+      setShowInterviewSetup(false);
+      setError(null);
+      setConversationMessages([]);
+      generateQuickRepliesForMode(mode.id);
+    }
   };
 
   const [activeDocument, setActiveDocument] = useState<'job' | 'cv' | null>(null);
@@ -449,7 +479,7 @@ export default function HomeScreen() {
             language: 'en-US',
             continuous: true,
             interimResults: true,
-             // 30 second timeout
+            // 30 second timeout
           }
         );
 
