@@ -301,14 +301,41 @@ Focus on grammar, vocabulary, pronunciation, and overall fluency.`;
   // Parse Claude's response into a structured feedback object
   private parseFeedbackResponse(response: string, conversation: Conversation): FeedbackData {
     try {
+      console.log('Raw Claude response:', response);
+      
       // Extract JSON from Claude's response
       const jsonMatch = response.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
+        console.warn('No JSON found in Claude response, using fallback');
         throw new Error('No JSON found in Claude response');
       }
       
-      const jsonString = jsonMatch[0];
-      const parsedFeedback = JSON.parse(jsonString);
+      let jsonString = jsonMatch[0];
+      console.log('Extracted JSON string:', jsonString);
+      
+      // Clean up common JSON issues
+      jsonString = this.cleanJsonString(jsonString);
+      console.log('Cleaned JSON string:', jsonString);
+      
+      let parsedFeedback;
+      try {
+        parsedFeedback = JSON.parse(jsonString);
+      } catch (parseError) {
+        console.warn('Initial JSON parse failed, trying to fix common issues:', parseError);
+        
+        // Try to fix common JSON issues
+        jsonString = this.fixCommonJsonIssues(jsonString);
+        console.log('Fixed JSON string:', jsonString);
+        
+        try {
+          parsedFeedback = JSON.parse(jsonString);
+        } catch (secondError) {
+          console.error('Second JSON parse attempt failed:', secondError);
+          throw new Error('Failed to parse JSON after cleanup attempts');
+        }
+      }
+      
+      console.log('Successfully parsed feedback:', parsedFeedback);
       
       // Ensure all required fields are present
       const feedback: FeedbackData = {
@@ -352,6 +379,52 @@ Focus on grammar, vocabulary, pronunciation, and overall fluency.`;
       console.error('Failed to parse Claude feedback response:', error);
       throw new Error('Failed to parse feedback response');
     }
+  }
+
+  // Clean up JSON string to remove common issues
+  private cleanJsonString(jsonString: string): string {
+    // Remove any text before the first {
+    const startIndex = jsonString.indexOf('{');
+    if (startIndex > 0) {
+      jsonString = jsonString.substring(startIndex);
+    }
+    
+    // Remove any text after the last }
+    const endIndex = jsonString.lastIndexOf('}');
+    if (endIndex > 0 && endIndex < jsonString.length - 1) {
+      jsonString = jsonString.substring(0, endIndex + 1);
+    }
+    
+    // Remove newlines and extra whitespace within strings
+    jsonString = jsonString.replace(/\n/g, ' ').replace(/\r/g, ' ');
+    
+    return jsonString;
+  }
+
+  // Fix common JSON syntax issues
+  private fixCommonJsonIssues(jsonString: string): string {
+    // Fix trailing commas
+    jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
+    
+    // Fix missing quotes around property names
+    jsonString = jsonString.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
+    
+    // Fix single quotes to double quotes
+    jsonString = jsonString.replace(/'/g, '"');
+    
+    // Fix unescaped quotes in string values
+    jsonString = jsonString.replace(/"([^"]*)"([^"]*)"([^"]*)"/g, '"$1$2$3"');
+    
+    // Fix missing commas between properties
+    jsonString = jsonString.replace(/"\s*}\s*"/g, '", "');
+    jsonString = jsonString.replace(/"\s*]\s*"/g, '", "');
+    
+    // Fix empty values
+    jsonString = jsonString.replace(/:\s*,/g, ': null,');
+    jsonString = jsonString.replace(/:\s*}/g, ': null}');
+    jsonString = jsonString.replace(/:\s*]/g, ': null]');
+    
+    return jsonString;
   }
 
   // Generate a summary of the feedback
