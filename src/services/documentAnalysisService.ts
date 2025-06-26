@@ -184,7 +184,7 @@ Respond ONLY with the JSON object, no other text.`;
       message_length: prompt.length,
       total_messages: context.messages.length + 1,
       model: 'claude-3-5-sonnet-20240620',
-      max_tokens: 200 // Increased for JSON responses
+      max_tokens: 500 // Increased for JSON responses
     });
     
     const response = await supabaseClaudeAPI.sendMessage(prompt, context);
