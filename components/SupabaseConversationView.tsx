@@ -101,18 +101,29 @@ export function SupabaseConversationView({
 
   // Send initial system message for interview practice with document analysis
   useEffect(() => {
-    if (mode === 'interview-practice' && documentData.analysisResult && messages.length === 0 && !initialMessageSent) {
-      // Mark as sent to prevent multiple attempts
-      setInitialMessageSent(true);
-      
-      // Create a system message with the analysis data
-      const analysis = documentData.analysisResult;
-      const systemMessage = createInterviewSystemPrompt(analysis, documentData.jobDescription, documentData.cvContent);
-      
-      // Send the system message
-      sendSystemMessage(systemMessage);
-    }
-  }, [mode, documentData.analysisResult, messages.length, initialMessageSent]);
+  if (mode === 'interview-practice' && 
+      documentData.analysisResult && 
+      messages.length === 0 && 
+      !initialMessageSent && 
+      isSupabaseConfigured()) { // Add this check
+    
+    console.log('Starting personalized interview with analysis:', documentData.analysisResult);
+    setInitialMessageSent(true);
+    
+    // Create the system message with analysis data
+    const analysis = documentData.analysisResult;
+    const systemMessage = createInterviewSystemPrompt(
+      analysis, 
+      documentData.jobDescription, 
+      documentData.cvContent
+    );
+    
+    console.log('System message created, length:', systemMessage.length);
+    
+    // Send the system message to start the interview
+    sendSystemMessage(systemMessage);
+  }
+}, [mode, documentData.analysisResult, messages.length, initialMessageSent, isSupabaseConfigured()]);
 
   const createInterviewSystemPrompt = (
     analysis: any,
@@ -164,42 +175,54 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
   };
 
   const sendSystemMessage = async (systemMessage: string) => {
-    // We'll use a special method to send a system message
-    try {
-      // Create a context with the system message
-      const context = {
-        messages: [],
-        mode,
-        sessionId,
-        userId,
-        metadata: {
-          startTime: new Date(),
-          lastActivity: new Date(),
-          messageCount: 0,
-          totalTokens: 0,
-        },
-        system: systemMessage
-      };
-      
-      // Send a simple greeting to trigger the conversation with the system context
-      await sendMessage("", context);
-    } catch (error) {
-      console.error('Failed to send system message:', error);
-      Alert.alert(
-        'Interview Setup Failed',
-        'Failed to start the personalized interview. Please try again.',
-        [{ text: 'OK' }]
-      );
-    }
-  };
+  console.log('Sending system message to start interview...');
+  
+  try {
+    // Create a context with custom settings that include the system message
+    const customSettings = {
+      documentAnalysis: documentData.analysisResult,
+      jobDescription: documentData.jobDescription,
+      cvContent: documentData.cvContent
+    };
+
+    const context = {
+      messages: [],
+      mode,
+      sessionId,
+      userId,
+      metadata: {
+        startTime: new Date(),
+        lastActivity: new Date(),
+        messageCount: 0,
+        totalTokens: 0,
+      },
+      customSettings // This will be used by the API service
+    };
+    
+    // Send a greeting message that will trigger the interview with system context
+    const greetingMessage = "Hello, I'm ready to begin the interview.";
+    console.log('Sending greeting message with context...');
+    
+    await sendMessage(greetingMessage, context);
+    console.log('Interview started successfully');
+    
+  } catch (error) {
+    console.error('Failed to send system message:', error);
+    Alert.alert(
+      'Interview Setup Failed',
+      'Failed to start the personalized interview. Please try again.',
+      [{ text: 'OK' }]
+    );
+  }
+};
 
   const handleSendMessage = async (text: string, customContext?: any) => {
-    if ((!text.trim() && !customContext?.system) || isLoading || !isSupabaseConfigured()) return;
+  if ((!text.trim() && !customContext?.customSettings) || isLoading || !isSupabaseConfigured()) return;
 
-    const message = text.trim();
-    setInputText('');
-    await sendMessage(message, customContext);
-  };
+  const message = text.trim();
+  setInputText('');
+  await sendMessage(message, customContext);
+};
 
   const handleQuickReply = async (reply: string) => {
     await sendMessage(reply);
