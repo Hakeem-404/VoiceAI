@@ -31,6 +31,7 @@ export interface APIRequestOptions {
   cache?: boolean;
   priority?: 'high' | 'normal' | 'low';
   compress?: boolean;
+  maxTokens?: number; 
 }
 
 export interface StreamingResponse {
