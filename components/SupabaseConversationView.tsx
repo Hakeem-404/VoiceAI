@@ -65,7 +65,6 @@ export function SupabaseConversationView({
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const [initialMessageSent, setInitialMessageSent] = useState(false);
-  const [initialMessageSent, setInitialMessageSent] = useState(false);
 
   // Create conversation mode object for the store
   const conversationMode: ConversationMode = {
