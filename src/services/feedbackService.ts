@@ -1,1390 +1,1772 @@
-import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  Platform,
+  Dimensions,
+  RefreshControl,
+  TextInput,
+  Modal,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import { 
-  Conversation, 
-  Message, 
-  FeedbackData, 
-  FeedbackMetrics, 
-  RealTimeFeedback,
-  FeedbackSummary
-} from '../types';
+  Star, 
+  TrendingUp, 
+  Zap, 
+  Filter,
+  Search,
+  Settings,
+  Trophy,
+  Target,
+  Calendar,
+  Send,
+  Mic,
+  Square,
+  RotateCcw,
+  X,
+  MessageSquare,
+  Volume2,
+  VolumeX,
+  Play,
+  Pause,
+  BarChart3,
+} from 'lucide-react-native';
+import { useTheme } from '@/src/hooks/useTheme';
+import { useConversationStore } from '@/src/stores/conversationStore';
+import { useVoiceStore } from '@/src/stores/voiceStore';
+import { useInputStore } from '@/src/stores/inputStore';
+import { useSettingsStore } from '@/src/stores/settingsStore';
+import { useUserStore } from '@/src/stores/userStore';
+import { conversationModes } from '@/src/constants/conversationModes';
+import { voiceService } from '@/src/services/voiceService';
+import { speechRecognitionService } from '@/services/speechRecognitionService';
+import { supabaseClaudeAPI } from '@/services/supabaseClaudeAPI';
+import { useElevenLabsVoice } from '@/hooks/useElevenLabsVoice';
+import { ModeSelectionCard } from '@/components/ModeSelectionCard';
+import { ModeConfigurationModal } from '@/components/ModeConfigurationModal';
+import { VoiceRecordButton } from '@/components/VoiceRecordButton';
+import { FloatingActionButtons } from '@/components/FloatingActionButtons';
+import { TextInputSystem } from '@/components/TextInputSystem';
+import { GestureHandler } from '@/components/GestureHandler';
+import { PermissionHandler } from '@/components/PermissionHandler';
+import { VoicePersonalitySelector } from '@/components/VoicePersonalitySelector';
+import { AudioPlayerControls } from '@/components/AudioPlayerControls';
+import { InterviewSetupScreen } from '@/components/InterviewSetupScreen';
+import { ConversationMode, ModeConfiguration, DailyChallenge, DocumentAnalysis } from '@/src/types';
+import { spacing, typography } from '@/src/constants/colors';
+import { ConversationContext, ConversationMessage } from '@/types/api';
+import { ClaudeFeedbackModal } from '@/components/ClaudeFeedbackModal';
 
-class FeedbackService {
-  private realtimeFeedback: RealTimeFeedback[] = [];
-  private currentMetrics: FeedbackMetrics | null = null;
-  private previousFeedback: Map<string, FeedbackData> = new Map();
-  private feedbackThresholds = {
-    pace: {
-      slow: 100, // words per minute
-      fast: 180, // words per minute
-    },
-    pauseFrequency: {
-      low: 2, // pauses per minute
-      high: 12, // pauses per minute
-    },
-    fillerWordFrequency: {
-      low: 0, // filler words per minute
-      high: 5, // filler words per minute
-    },
-    responseTime: {
-      quick: 1, // seconds
-      slow: 5, // seconds
-    },
-    questionFrequency: {
-      low: 0.5, // questions per minute
-      high: 3, // questions per minute
-    },
-    sentenceComplexity: {
-      simple: 8, // words per sentence
-      complex: 20, // words per sentence
-    },
-    vocabularyDiversity: {
-      low: 0.3, // unique words / total words
-      high: 0.7, // unique words / total words
-    },
-    topicRelevance: {
-      low: 60, // score
-      high: 90, // score
-    },
-    emotionalTone: {
-      negative: -30, // score
-      positive: 30, // score
-    },
-    engagementLevel: {
-      low: 50, // score
-      high: 80, // score
-    },
-    speakingListeningRatio: {
-      lowSpeaking: 0.5, // ratio
-      highSpeaking: 2, // ratio
+const { width } = Dimensions.get('window');
+
+export default function HomeScreen() {
+  const { colors, isDark } = useTheme();
+  const {
+    currentConversation,
+    currentMode,
+    recordingState,
+    isProcessing,
+    startConversation,
+    endConversation,
+    addMessage,
+    setRecordingState,
+    setProcessing,
+    lastFeedback,
+    clearLastFeedback,
+    generateFeedback,
+  } = useConversationStore();
+
+  const {
+    isRecording,
+    audioLevel,
+    setIsRecording,
+    setAudioLevel,
+    setRecording,
+    resetVoiceState,
+  } = useVoiceStore();
+
+  const {
+    inputMode,
+    currentText,
+    isTextInputVisible,
+    documentData,
+    setInputMode,
+    setTextInputVisible,
+    clearCurrentText,
+    updateDocumentData,
+  } = useInputStore();
+
+  const { permissions, voiceSettings } = useSettingsStore();
+  const { user, analytics } = useUserStore();
+
+  // ElevenLabs voice integration
+  const {
+    isGenerating: isGeneratingVoice,
+    isPlaying: isPlayingVoice,
+    error: voiceError,
+    currentPersonality,
+    generateAndPlaySpeech,
+    stopCurrentPlayback,
+    pauseCurrentPlayback,
+    resumeCurrentPlayback,
+    isConfigured: isElevenLabsConfigured,
+    checkUsageLimits,
+  } = useElevenLabsVoice({
+    conversationMode: currentMode?.id || 'general-chat',
+    autoPlay: true,
+    queueMode: 'immediate'
+  });
+
+  const [recordButtonState, setRecordButtonState] = useState<'idle' | 'recording' | 'processing' | 'error'>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const [showPermissionHandler, setShowPermissionHandler] = useState(true);
+  const [selectedMode, setSelectedMode] = useState<ConversationMode | null>(null);
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [refreshing, setRefreshing] = useState(false);
+  const [dailyChallenges, setDailyChallenges] = useState<DailyChallenge[]>([]);
+  const [isSupabaseConfigured, setIsSupabaseConfigured] = useState(false);
+  const [conversationMessages, setConversationMessages] = useState<ConversationMessage[]>([]);
+  const [isLoadingResponse, setIsLoadingResponse] = useState(false);
+  const [quickReplies, setQuickReplies] = useState<string[]>([]);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcriptionText, setTranscriptionText] = useState('');
+  const [speechRecognitionSupported, setSpeechRecognitionSupported] = useState(false);
+  const [showVoicePersonalitySelector, setShowVoicePersonalitySelector] = useState(false);
+  const [showAudioPlayerControls, setShowAudioPlayerControls] = useState(false);
+  const [voicePlaybackEnabled, setVoicePlaybackEnabled] = useState(true);
+  const [showInterviewSetup, setShowInterviewSetup] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [isGeneratingFeedback, setIsGeneratingFeedback] = useState(false);
+
+  // Mock user preferences for favorites and recent modes
+  const [favoriteMode, setFavoriteMode] = useState<string>('general-chat');
+  const [recentModes, setRecentModes] = useState<string[]>(['interview-practice', 'presentation-prep']);
+
+  useEffect(() => {
+    if (permissions.microphone === 'granted') {
+      setShowPermissionHandler(false);
+    }
+    loadDailyChallenges();
+    
+    // Check Supabase configuration
+    const status = supabaseClaudeAPI.getConfigStatus();
+    setIsSupabaseConfigured(status.configured);
+
+    // Check speech recognition support
+    setSpeechRecognitionSupported(speechRecognitionService.isSupported());
+    console.log('Speech recognition supported:', speechRecognitionService.isSupported());
+
+    // Check ElevenLabs usage limits
+    if (isElevenLabsConfigured) {
+      const usageLimits = checkUsageLimits();
+      if (usageLimits.isNearLimit) {
+        console.warn('Approaching ElevenLabs usage limit:', usageLimits.usagePercentage + '%');
+      }
+    }
+  }, [permissions.microphone, isElevenLabsConfigured]);
+
+  const loadDailyChallenges = () => {
+    // Mock daily challenges
+    const mockChallenges: DailyChallenge[] = [
+      {
+        id: '1',
+        modeId: 'debate-challenge',
+        title: 'Climate Change Debate',
+        description: 'Argue for renewable energy solutions',
+        difficulty: 'intermediate',
+        reward: { points: 100, badge: 'Climate Advocate' },
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        completed: false,
+      },
+      {
+        id: '2',
+        modeId: 'presentation-prep',
+        title: 'Elevator Pitch Challenge',
+        description: 'Perfect your 30-second pitch',
+        difficulty: 'beginner',
+        reward: { points: 50 },
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        completed: false,
+      },
+    ];
+    setDailyChallenges(mockChallenges);
+  };
+
+  const handleModeSelect = (mode: ConversationMode) => {
+    if (!isSupabaseConfigured) {
+      Alert.alert(
+        'Configuration Required',
+        'Supabase is not properly configured. Please check your environment variables and try again.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    if (permissions.microphone === 'denied' && inputMode === 'voice') {
+      setInputMode('text');
+    }
+    
+    // Special handling for interview practice mode
+    if (mode.id === 'interview-practice') {
+      setSelectedMode(mode);
+      setShowInterviewSetup(true);
+      return;
+    }
+    
+    setSelectedMode(mode);
+    setShowConfigModal(true);
+    setError(null);
+  };
+
+const handleModeStart = async (configuration: ModeConfiguration) => {
+  const mode = conversationModes.find(m => m.id === configuration.modeId);
+  if (!mode) return;
+
+  console.log('🎯 Starting mode:', mode.name, 'with configuration:', configuration);
+
+  // Update recent modes
+  setRecentModes(prev => [mode.id, ...prev.filter(id => id !== mode.id)].slice(0, 3));
+  
+  // Start conversation and reset state
+  startConversation(mode, configuration);
+  setShowConfigModal(false);
+  setError(null);
+  setConversationMessages([]);
+  generateQuickRepliesForMode(mode.id);
+
+  // Special handling for interview practice mode
+  if (mode.id === 'interview-practice') {
+    // If this came from the personalized path, it will have customSettings with document analysis
+    const isPersonalizedInterview = !!configuration.customSettings?.documentAnalysis;
+    
+    if (isPersonalizedInterview) {
+      console.log('🚀 Starting PERSONALIZED interview with document analysis');
+      
+      // Ensure document data is in the store (from configuration)
+      updateDocumentData({
+        jobDescription: configuration.customSettings.jobDescription,
+        cvContent: configuration.customSettings.cvContent,
+        analysisResult: configuration.customSettings.documentAnalysis
+      });
+    } else {
+      console.log('⚡ Starting QUICK START interview (standard questions)');
+    }
+
+    // Let the AI interviewer start the conversation
+    setTimeout(async () => {
+      console.log('💬 Triggering AI interviewer to start');
+      await sendMessageToClaude(""); // Empty message lets AI start as interviewer
+    }, 500);
+  } else {
+    console.log('✅ Non-interview mode started:', mode.name);
+  }
+};
+
+const handleInterviewContinue = async () => {
+  const interviewMode = conversationModes.find(mode => mode.id === 'interview-practice');
+  if (!interviewMode) {
+    Alert.alert('Error', 'Interview practice mode not found');
+    return;
+  }
+
+  console.log('🎯 Personalized Interview Continue - using analyzed data:', {
+    hasJobDescription: !!documentData.jobDescription,
+    hasCvContent: !!documentData.cvContent,
+    hasAnalysisResult: !!documentData.analysisResult
+  });
+
+  // This function is ONLY called from the personalized path, so we know we have analysis
+  const configuration: ModeConfiguration = {
+    modeId: 'interview-practice',
+    difficulty: 'intermediate' as any,
+    sessionType: 'standard',
+    selectedTopics: interviewMode.topics.slice(0, 3),
+    aiPersonality: 'Professional',
+    customSettings: {
+      documentAnalysis: documentData.analysisResult,
+      jobDescription: documentData.jobDescription,
+      cvContent: documentData.cvContent,
     },
   };
 
-  constructor() {
-    this.loadPreviousFeedback();
-  }
+  console.log('🚀 Starting PERSONALIZED interview with analysis');
 
-  private async loadPreviousFeedback() {
-    try {
-      const feedbackData = await AsyncStorage.getItem('previous_feedback');
-      if (feedbackData) {
-        const parsed = JSON.parse(feedbackData);
-        this.previousFeedback = new Map(parsed);
-      }
-    } catch (error) {
-      console.warn('Failed to load previous feedback:', error);
-    }
-  }
+  // Start the conversation
+  startConversation(interviewMode, configuration);
+  setShowInterviewSetup(false);
+  setError(null);
+  setConversationMessages([]);
+  generateQuickRepliesForMode(interviewMode.id);
 
-  private async savePreviousFeedback() {
-    try {
-      const feedbackArray = Array.from(this.previousFeedback.entries());
-      await AsyncStorage.setItem('previous_feedback', JSON.stringify(feedbackArray));
-    } catch (error) {
-      console.warn('Failed to save previous feedback:', error);
-    }
-  }
+  // Let the AI interviewer start with personalized questions
+  setTimeout(async () => {
+    console.log('💬 Triggering PERSONALIZED interview start');
+    await sendMessageToClaude("");
+  }, 500);
+};
 
-  // Real-time feedback during conversation
-  startRealTimeFeedback(conversationMode: string) {
-    this.realtimeFeedback = [];
-    this.currentMetrics = this.initializeMetrics();
-    
-    // Start monitoring interval
-    const monitoringInterval = setInterval(() => {
-      if (this.currentMetrics) {
-        const feedback = this.generateRealTimeFeedback(this.currentMetrics, conversationMode);
-        if (feedback) {
-          this.realtimeFeedback.push(feedback);
-          console.log('Real-time feedback:', feedback);
-        }
-      }
-    }, 30000); // Check every 30 seconds
-    
-    return monitoringInterval;
-  }
+// Add a new function for quick start (to be called from the quick start button)
+const handleInterviewQuickStart = async () => {
+  const mode = conversationModes.find(m => m.id === 'interview-practice');
+  if (!mode) return;
+  
+  console.log('⚡ Quick Start Interview - no document analysis');
 
-  stopRealTimeFeedback(monitoringInterval: NodeJS.Timeout) {
-    clearInterval(monitoringInterval);
-    return this.realtimeFeedback;
-  }
+  // Configuration for quick start (no customSettings = standard interview)
+  const configuration: ModeConfiguration = {
+    modeId: 'interview-practice',
+    difficulty: 'beginner' as any,
+    sessionType: 'quick',
+    selectedTopics: mode.topics.slice(0, 2), // Fewer topics for quick session
+    aiPersonality: 'Friendly',
+    // NO customSettings = standard interview questions
+  };
 
-  // Update metrics during conversation
-  updateMetrics(metrics: Partial<FeedbackMetrics>) {
-    if (!this.currentMetrics) {
-      this.currentMetrics = this.initializeMetrics();
-    }
-    
-    this.currentMetrics = {
-      ...this.currentMetrics,
-      ...metrics,
+  // Start conversation
+  startConversation(mode, configuration);
+  setShowInterviewSetup(false);
+  setError(null);
+  setConversationMessages([]);
+  generateQuickRepliesForMode(mode.id);
+
+  // Let AI start with standard interview questions
+  setTimeout(async () => {
+    console.log('💬 Triggering STANDARD interview start');
+    await sendMessageToClaude("");
+  }, 500);
+};
+
+  const handleInterviewDocumentSelect = (type: 'job' | 'cv') => {
+    setActiveDocument(type);
+    setTextInputVisible(true);
+  };
+
+  const [activeDocument, setActiveDocument] = useState<'job' | 'cv' | null>(null);
+
+  const generateQuickRepliesForMode = (modeId: string) => {
+    const modeQuickReplies = {
+      'general-chat': [
+        "Tell me about yourself",
+        "What's your favorite hobby?",
+        "How was your day?",
+      ],
+      'debate-challenge': [
+        "I believe climate change is urgent",
+        "Technology will solve our problems",
+        "Education should be free for all",
+      ],
+      'idea-brainstorm': [
+        "Let's solve traffic congestion",
+        "How can we improve remote work?",
+        "What's the future of entertainment?",
+      ],
+      'interview-practice': [
+        "Tell me about yourself",
+        "What are your strengths?",
+        "Why do you want this job?",
+      ],
+      'presentation-prep': [
+        "I want to present quarterly results",
+        "Help me pitch a new product",
+        "I need to explain our strategy",
+      ],
+      'language-learning': [
+        "Let's practice basic conversation",
+        "Help me with pronunciation",
+        "Teach me common phrases",
+      ],
     };
-    
-    return this.currentMetrics;
-  }
 
-  // Generate comprehensive feedback after conversation
-  async generateFeedback(conversation: Conversation): Promise<FeedbackData> {
-    console.log('Generating feedback for conversation:', conversation.id);
-    
-    // Calculate metrics from conversation
-    const metrics = this.calculateMetricsFromConversation(conversation);
-    
-    // Generate mode-specific feedback
-    const modeSpecific = this.generateModeSpecificFeedback(conversation.mode.id, metrics, conversation);
-    
-    // Generate general feedback
-    const generalFeedback = this.generateGeneralFeedback(metrics, conversation);
-    
-    // Combine feedback
-    const feedback: FeedbackData = {
-      scores: {
-        ...generalFeedback.scores,
-        ...modeSpecific.scores,
-      },
-      strengths: [...generalFeedback.strengths, ...modeSpecific.strengths],
-      improvements: [...generalFeedback.improvements, ...modeSpecific.improvements],
-      analytics: {
-        ...generalFeedback.analytics,
-        ...modeSpecific.analytics,
-      },
-      modeSpecific: {
-        [conversation.mode.id]: modeSpecific.modeSpecific,
-      },
-      tips: [...generalFeedback.tips, ...modeSpecific.tips],
-      nextSteps: [...generalFeedback.nextSteps, ...modeSpecific.nextSteps],
-    };
-    
-    // Add progress tracking if we have previous feedback
-    const previousFeedback = this.previousFeedback.get(conversation.mode.id);
-    if (previousFeedback) {
-      feedback.progressTracking = this.generateProgressTracking(previousFeedback, feedback);
-    }
-    
-    // Save this feedback for future comparison
-    this.previousFeedback.set(conversation.mode.id, feedback);
-    await this.savePreviousFeedback();
-    
-    return feedback;
-  }
+    setQuickReplies(modeQuickReplies[modeId as keyof typeof modeQuickReplies] || []);
+  };
 
-  // Generate a summary of the feedback
-  generateFeedbackSummary(feedback: FeedbackData, conversationMode: string): FeedbackSummary {
-    const summary: FeedbackSummary = {
-      overallScore: feedback.scores.overall,
-      keyStrengths: feedback.strengths.slice(0, 3),
-      improvementAreas: feedback.improvements.slice(0, 3),
-      modeSpecificInsights: this.getModeSpecificInsights(conversationMode, feedback),
-      nextStepSuggestions: feedback.nextSteps.slice(0, 3),
-    };
-    
-    // Add comparison to previous if available
-    if (feedback.progressTracking) {
-      summary.compareToPrevious = {
-        overallChange: feedback.progressTracking.improvement || 0,
-        improvedAreas: feedback.progressTracking.consistentStrengths,
-        declinedAreas: feedback.progressTracking.persistentChallenges,
-      };
-    }
-    
-    return summary;
-  }
-
-  // Private helper methods
-  private initializeMetrics(): FeedbackMetrics {
+  const createConversationContext = (): ConversationContext => {
     return {
-      speakingPace: 0,
-      pauseFrequency: 0,
-      fillerWordFrequency: 0,
-      responseTime: 0,
-      questionFrequency: 0,
-      sentenceComplexity: 0,
-      vocabularyDiversity: 0,
-      topicRelevance: 0,
-      emotionalTone: 0,
-      engagementLevel: 0,
-      speakingListeningRatio: 0,
+      messages: conversationMessages,
+      mode: currentMode?.id || 'general-chat',
+      sessionId: currentConversation?.id || Date.now().toString(),
+      metadata: {
+        startTime: currentConversation?.createdAt || new Date(),
+        lastActivity: new Date(),
+        messageCount: conversationMessages.length,
+        totalTokens: 0,
+      },
     };
-  }
+  };
 
-  private generateRealTimeFeedback(metrics: FeedbackMetrics, conversationMode: string): RealTimeFeedback | null {
-    // Check various metrics and return feedback if needed
-    
-    // Check speaking pace
-    if (metrics.speakingPace > this.feedbackThresholds.pace.fast) {
-      return {
-        type: 'pace',
-        message: 'Try slowing down a bit for better clarity',
-        severity: 'suggestion',
-        timestamp: new Date(),
-      };
-    }
-    
-    if (metrics.speakingPace < this.feedbackThresholds.pace.slow) {
-      return {
-        type: 'pace',
-        message: 'Try speaking a bit faster to maintain engagement',
-        severity: 'suggestion',
-        timestamp: new Date(),
-      };
-    }
-    
-    // Check filler words
-    if (metrics.fillerWordFrequency > this.feedbackThresholds.fillerWordFrequency.high) {
-      return {
-        type: 'filler',
-        message: `Try to reduce filler words like "um" and "uh"`,
-        severity: 'suggestion',
-        timestamp: new Date(),
-      };
-    }
-    
-    // Check engagement
-    if (metrics.engagementLevel < this.feedbackThresholds.engagementLevel.low) {
-      return {
-        type: 'engagement',
-        message: 'Try to be more engaged in the conversation',
-        severity: 'suggestion',
-        timestamp: new Date(),
-      };
-    }
-    
-    // Mode-specific feedback
-    switch (conversationMode) {
-      case 'debate-challenge':
-        if (metrics.questionFrequency < this.feedbackThresholds.questionFrequency.low) {
-          return {
-            type: 'question',
-            message: 'Try asking more questions to challenge the other perspective',
-            severity: 'suggestion',
-            timestamp: new Date(),
-          };
-        }
-        break;
-        
-      case 'interview-practice':
-        if (metrics.responseTime > this.feedbackThresholds.responseTime.slow) {
-          return {
-            type: 'clarity',
-            message: 'Try to be more concise in your responses',
-            severity: 'suggestion',
-            timestamp: new Date(),
-          };
-        }
-        break;
-        
-      case 'presentation-prep':
-        if (metrics.pauseFrequency < this.feedbackThresholds.pauseFrequency.low) {
-          return {
-            type: 'pace',
-            message: 'Try adding more strategic pauses for emphasis',
-            severity: 'suggestion',
-            timestamp: new Date(),
-          };
-        }
-        break;
-    }
-    
-    // No feedback needed at this time
-    return null;
-  }
-
-  private calculateMetricsFromConversation(conversation: Conversation): FeedbackMetrics {
-    const userMessages = conversation.messages.filter(msg => msg.role === 'user');
-    const aiMessages = conversation.messages.filter(msg => msg.role === 'assistant');
-    
-    // Calculate total words in user messages
-    const userWords = userMessages.reduce((total, msg) => {
-      return total + msg.content.split(/\s+/).length;
-    }, 0);
-    
-    // Calculate unique words in user messages
-    const uniqueWords = new Set<string>();
-    userMessages.forEach(msg => {
-      msg.content.split(/\s+/).forEach(word => {
-        uniqueWords.add(word.toLowerCase().replace(/[^a-z0-9]/g, ''));
-      });
+  const sendMessageToClaude = async (content: string) => {
+    if (!currentMode || !isSupabaseConfigured) return;
+  
+    const isInterviewInitialization = currentMode.id === 'interview-practice' && 
+                                     !content.trim() && 
+                                     conversationMessages.length === 0;
+  
+    console.log('📨 sendMessageToClaude:', {
+      mode: currentMode.id,
+      isInitialization: isInterviewInitialization,
+      contentLength: content.length,
+      hasCurrentConversation: !!currentConversation
     });
-    
-    // Calculate total sentences in user messages
-    const userSentences = userMessages.reduce((total, msg) => {
-      return total + msg.content.split(/[.!?]+/).filter(Boolean).length;
-    }, 0);
-    
-    // Calculate filler words
-    const fillerWords = ['um', 'uh', 'like', 'you know', 'sort of', 'kind of', 'basically'];
-    let fillerCount = 0;
-    userMessages.forEach(msg => {
-      const words = msg.content.toLowerCase().split(/\s+/);
-      words.forEach(word => {
-        if (fillerWords.includes(word)) {
-          fillerCount++;
-        }
-      });
-    });
-    
-    // Calculate questions asked by user
-    const questionCount = userMessages.reduce((total, msg) => {
-      return total + (msg.content.match(/\?/g) || []).length;
-    }, 0);
-    
-    // Calculate response times
-    const responseTimes: number[] = [];
-    for (let i = 1; i < conversation.messages.length; i++) {
-      const currentMsg = conversation.messages[i];
-      const prevMsg = conversation.messages[i - 1];
+  
+    setIsLoadingResponse(true);
+    setError(null);
+  
+    try {
+      let updatedMessages = [...conversationMessages];
       
-      if (currentMsg.role === 'user' && prevMsg.role === 'assistant') {
-        const responseTime = (currentMsg.timestamp.getTime() - prevMsg.timestamp.getTime()) / 1000;
-        responseTimes.push(responseTime);
-      }
-    }
-    
-    // Calculate average response time
-    const avgResponseTime = responseTimes.length > 0
-      ? responseTimes.reduce((sum, time) => sum + time, 0) / responseTimes.length
-      : 0;
-    
-    // Calculate speaking time (approximation based on word count)
-    const avgWordsPerMinute = 150; // Average speaking rate
-    const speakingTime = userWords / avgWordsPerMinute;
-    
-    // Calculate listening time (approximation based on AI message length)
-    const aiWords = aiMessages.reduce((total, msg) => {
-      return total + msg.content.split(/\s+/).length;
-    }, 0);
-    const listeningTime = aiWords / avgWordsPerMinute;
-    
-    // Calculate speaking/listening ratio
-    const speakingListeningRatio = listeningTime > 0 ? speakingTime / listeningTime : 1;
-    
-    // Calculate words per minute
-    const durationInMinutes = conversation.duration / 60;
-    const wordsPerMinute = durationInMinutes > 0 ? userWords / durationInMinutes : 0;
-    
-    // Calculate pauses (approximation based on punctuation)
-    const pauseCount = userMessages.reduce((total, msg) => {
-      return total + (msg.content.match(/[,.;:]/g) || []).length;
-    }, 0);
-    
-    // Calculate pause frequency
-    const pauseFrequency = durationInMinutes > 0 ? pauseCount / durationInMinutes : 0;
-    
-    // Calculate filler word frequency
-    const fillerFrequency = durationInMinutes > 0 ? fillerCount / durationInMinutes : 0;
-    
-    // Calculate question frequency
-    const questionFrequency = durationInMinutes > 0 ? questionCount / durationInMinutes : 0;
-    
-    // Calculate sentence complexity
-    const sentenceComplexity = userSentences > 0 ? userWords / userSentences : 0;
-    
-    // Calculate vocabulary diversity
-    const vocabularyDiversity = userWords > 0 ? uniqueWords.size / userWords : 0;
-    
-    // Estimate topic relevance and engagement level
-    // In a real implementation, these would be calculated using NLP
-    const topicRelevance = 85; // Placeholder
-    const engagementLevel = 75; // Placeholder
-    const emotionalTone = 20; // Placeholder (positive)
-    
-    return {
-      speakingPace: wordsPerMinute,
-      pauseFrequency,
-      fillerWordFrequency: fillerFrequency,
-      responseTime: avgResponseTime,
-      questionFrequency,
-      sentenceComplexity,
-      vocabularyDiversity,
-      topicRelevance,
-      emotionalTone,
-      engagementLevel,
-      speakingListeningRatio,
-    };
-  }
-
-  private generateGeneralFeedback(metrics: FeedbackMetrics, conversation: Conversation): Partial<FeedbackData> {
-    const strengths: string[] = [];
-    const improvements: string[] = [];
-    const tips: string[] = [];
-    const nextSteps: string[] = [];
-    
-    // Analyze speaking pace
-    if (metrics.speakingPace > this.feedbackThresholds.pace.slow && 
-        metrics.speakingPace < this.feedbackThresholds.pace.fast) {
-      strengths.push(`Good speaking pace that\'s easy to follow`);
-    } else if (metrics.speakingPace > this.feedbackThresholds.pace.fast) {
-      improvements.push(`Speaking pace is a bit fast at times`);
-      tips.push(`Try to slow down slightly and add strategic pauses for emphasis`);
-    } else if (metrics.speakingPace < this.feedbackThresholds.pace.slow) {
-      improvements.push(`Speaking pace could be more energetic`);
-      tips.push(`Try to increase your speaking pace slightly to maintain engagement`);
-    }
-    
-    // Analyze filler words
-    if (metrics.fillerWordFrequency < this.feedbackThresholds.fillerWordFrequency.low) {
-      strengths.push(`Minimal use of filler words`);
-    } else if (metrics.fillerWordFrequency > this.feedbackThresholds.fillerWordFrequency.high) {
-      improvements.push(`Frequent use of filler words like "um" and "uh"`);
-      tips.push(`Practice replacing filler words with brief pauses`);
-    }
-    
-    // Analyze question frequency
-    if (metrics.questionFrequency > this.feedbackThresholds.questionFrequency.low) {
-      strengths.push(`Good use of questions to drive conversation`);
-    } else {
-      improvements.push(`Could ask more questions to engage the other speaker`);
-      tips.push(`Try to include more open-ended questions to encourage deeper discussion`);
-    }
-    
-    // Analyze vocabulary diversity
-    if (metrics.vocabularyDiversity > this.feedbackThresholds.vocabularyDiversity.high) {
-      strengths.push(`Excellent vocabulary diversity`);
-    } else if (metrics.vocabularyDiversity < this.feedbackThresholds.vocabularyDiversity.low) {
-      improvements.push(`Limited vocabulary range`);
-      tips.push(`Try to incorporate more varied vocabulary in your responses`);
-    }
-    
-    // Analyze engagement level
-    if (metrics.engagementLevel > this.feedbackThresholds.engagementLevel.high) {
-      strengths.push(`High level of engagement throughout the conversation`);
-    } else if (metrics.engagementLevel < this.feedbackThresholds.engagementLevel.low) {
-      improvements.push(`Could show more engagement in the conversation`);
-      tips.push(`Try to respond more directly to points made and show more interest`);
-    }
-    
-    // Analyze speaking/listening ratio
-    if (metrics.speakingListeningRatio > 0.7 && metrics.speakingListeningRatio < 1.3) {
-      strengths.push(`Good balance between speaking and listening`);
-    } else if (metrics.speakingListeningRatio > this.feedbackThresholds.speakingListeningRatio.highSpeaking) {
-      improvements.push(`Dominated the conversation at times`);
-      tips.push(`Try to allow more space for the other speaker`);
-    } else if (metrics.speakingListeningRatio < this.feedbackThresholds.speakingListeningRatio.lowSpeaking) {
-      improvements.push(`Could contribute more to the conversation`);
-      tips.push(`Try to elaborate more on your responses and share your thoughts`);
-    }
-    
-    // Generate next steps
-    nextSteps.push(`Practice with different conversation topics to build versatility`);
-    nextSteps.push(`Review your strongest moments in this conversation`);
-    
-    // Calculate overall scores
-    const fluency = this.calculateScore([
-      metrics.speakingPace, 
-      100 - metrics.fillerWordFrequency * 10,
-      metrics.sentenceComplexity * 5
-    ]);
-    
-    const clarity = this.calculateScore([
-      100 - metrics.fillerWordFrequency * 20,
-      metrics.sentenceComplexity * 3,
-      metrics.topicRelevance
-    ]);
-    
-    const confidence = this.calculateScore([
-      metrics.speakingPace,
-      metrics.vocabularyDiversity * 100,
-      metrics.engagementLevel
-    ]);
-    
-    const pace = this.calculateScore([
-      100 - Math.abs(metrics.speakingPace - 150) * 0.5,
-      100 - metrics.pauseFrequency * 5,
-      100 - metrics.fillerWordFrequency * 10
-    ]);
-    
-    const engagement = this.calculateScore([
-      metrics.questionFrequency * 20,
-      metrics.engagementLevel,
-      metrics.emotionalTone > 0 ? 70 + metrics.emotionalTone : 70 + metrics.emotionalTone/2
-    ]);
-    
-    // Calculate overall score
-    const overall = this.calculateScore([
-      fluency,
-      clarity,
-      confidence,
-      pace,
-      engagement
-    ]);
-    
-    return {
-      scores: {
-        fluency,
-        clarity,
-        confidence,
-        pace,
-        overall,
-        engagement
-      },
-      strengths,
-      improvements,
-      analytics: {
-        wordsPerMinute: Math.round(metrics.speakingPace),
-        pauseCount: Math.round(metrics.pauseFrequency * (conversation.duration / 60)),
-        fillerWords: Math.round(metrics.fillerWordFrequency * (conversation.duration / 60)),
-        questionCount: Math.round(metrics.questionFrequency * (conversation.duration / 60)),
-        responseTime: Math.round(metrics.responseTime * 10) / 10,
-        speakingTime: Math.round(metrics.speakingPace * (conversation.duration / 60) / 150),
-        listeningTime: Math.round(conversation.duration / 60 - (metrics.speakingPace * (conversation.duration / 60) / 150)),
-      },
-      tips,
-      nextSteps,
-    };
-  }
-
-  private generateModeSpecificFeedback(
-    mode: string, 
-    metrics: FeedbackMetrics, 
-    conversation: Conversation
-  ): Partial<FeedbackData> {
-    const strengths: string[] = [];
-    const improvements: string[] = [];
-    const tips: string[] = [];
-    const nextSteps: string[] = [];
-    let modeSpecific: any = {};
-    let scores: Record<string, number> = {};
-    let analytics: Record<string, number | string> = {};
-    
-    switch (mode) {
-      case 'general-chat':
-        return this.generateGeneralChatFeedback(metrics, conversation);
-      
-      case 'debate-challenge':
-        return this.generateDebateFeedback(metrics, conversation);
-      
-      case 'idea-brainstorm':
-        return this.generateBrainstormFeedback(metrics, conversation);
-      
-      case 'interview-practice':
-        return this.generateInterviewFeedback(metrics, conversation);
-      
-      case 'presentation-prep':
-        return this.generatePresentationFeedback(metrics, conversation);
-      
-      case 'language-learning':
-        return this.generateLanguageLearningFeedback(metrics, conversation);
-      
-      default:
-        return {
-          strengths,
-          improvements,
-          tips,
-          nextSteps,
-          scores,
-          analytics,
-          modeSpecific,
+      // Only add user message if there's actual content
+      if (content.trim()) {
+        const userMessage: ConversationMessage = {
+          id: Date.now().toString(),
+          role: 'user',
+          content: content.trim(),
+          timestamp: new Date(),
         };
+        updatedMessages = [...updatedMessages, userMessage];
+        setConversationMessages(updatedMessages);
+        addMessage(userMessage);
+      }
+  
+      // Create conversation context
+      let context: ConversationContext = {
+        messages: updatedMessages,
+        mode: currentMode.id,
+        sessionId: currentConversation?.id || Date.now().toString(),
+        metadata: {
+          startTime: currentConversation?.createdAt || new Date(),
+          lastActivity: new Date(),
+          messageCount: updatedMessages.length,
+          totalTokens: 0,
+        },
+      };
+  
+      // For interview mode, check if this conversation was started with personalized data
+      if (currentMode.id === 'interview-practice') {
+        // Check if the current conversation has document analysis data
+        const hasPersonalizedData = !!(
+          currentConversation?.configuration?.customSettings?.documentAnalysis ||
+          documentData.analysisResult
+        );
+  
+        if (hasPersonalizedData) {
+          console.log('🎯 Using PERSONALIZED interview questions');
+          
+          // Add custom settings to context for personalized interview
+          (context as any).customSettings = {
+            documentAnalysis: currentConversation?.configuration?.customSettings?.documentAnalysis || documentData.analysisResult,
+            jobDescription: currentConversation?.configuration?.customSettings?.jobDescription || documentData.jobDescription,
+            cvContent: currentConversation?.configuration?.customSettings?.cvContent || documentData.cvContent
+          };
+  
+          const options: any = { maxTokens: 500 };
+          const messageToSend = isInterviewInitialization ? "" : content;
+          
+          const response = await supabaseClaudeAPI.sendMessage(messageToSend, context, options);
+          await handleApiResponse(response, context);
+        } else {
+          console.log('⚡ Using STANDARD interview questions');
+          
+          // Standard interview (quick start path)
+          const response = await supabaseClaudeAPI.sendMessage(content, context);
+          await handleApiResponse(response, context);
+        }
+      } else {
+        // Non-interview modes
+        console.log('💬 Regular conversation mode:', currentMode.id);
+        const response = await supabaseClaudeAPI.sendMessage(content, context);
+        await handleApiResponse(response, context);
+      }
+    } catch (error) {
+      console.error('Error sending message to Claude:', error);
+      setError(error instanceof Error ? error.message : 'Failed to send message');
+    } finally {
+      setIsLoadingResponse(false);
     }
-  }
-
-  private generateGeneralChatFeedback(metrics: FeedbackMetrics, conversation: Conversation): Partial<FeedbackData> {
-    const strengths: string[] = [];
-    const improvements: string[] = [];
-    const tips: string[] = [];
-    const nextSteps: string[] = [];
-    
-    // Analyze conversation flow
-    const conversationFlow = this.calculateScore([
-      metrics.responseTime > 0 ? 100 - (metrics.responseTime - 2) * 10 : 50,
-      metrics.topicRelevance,
-      metrics.engagementLevel
-    ]);
-    
-    // Analyze topic exploration
-    const topicExploration = this.calculateScore([
-      metrics.questionFrequency * 25,
-      metrics.sentenceComplexity * 3,
-      metrics.vocabularyDiversity * 100
-    ]);
-    
-    // Analyze empathy score
-    const empathyScore = this.calculateScore([
-      metrics.emotionalTone > 0 ? 70 + metrics.emotionalTone : 50,
-      metrics.questionFrequency * 20,
-      metrics.engagementLevel
-    ]);
-    
-    // Analyze curiosity level
-    const curiosityLevel = this.calculateScore([
-      metrics.questionFrequency * 30,
-      metrics.topicRelevance,
-      metrics.engagementLevel
-    ]);
-    
-    // Generate strengths
-    if (conversationFlow > 80) {
-      strengths.push(`Excellent conversation flow and natural transitions`);
-    } else if (conversationFlow > 60) {
-      strengths.push(`Good conversation flow with smooth exchanges`);
+  };
+  
+  // Helper function to handle API responses (DRY principle)
+  const handleApiResponse = async (response: any, context: ConversationContext) => {
+    if (response.error) {
+      throw new Error(response.error);
     }
-    
-    if (topicExploration > 80) {
-      strengths.push(`Explored topics in depth with insightful questions`);
-    } else if (topicExploration > 60) {
-      strengths.push(`Good exploration of conversation topics`);
-    }
-    
-    if (empathyScore > 80) {
-      strengths.push(`Showed strong empathy and understanding`);
-    } else if (empathyScore > 60) {
-      strengths.push(`Demonstrated good empathy in responses`);
-    }
-    
-    if (curiosityLevel > 80) {
-      strengths.push(`Excellent curiosity with thoughtful follow-up questions`);
-    } else if (curiosityLevel > 60) {
-      strengths.push(`Good curiosity about the topics discussed`);
-    }
-    
-    // Generate improvements
-    if (conversationFlow < 60) {
-      improvements.push(`Conversation flow could be more natural`);
-      tips.push(`Practice smoother transitions between topics`);
-    }
-    
-    if (topicExploration < 60) {
-      improvements.push(`Could explore topics in more depth`);
-      tips.push(`Try asking more follow-up questions to dig deeper into topics`);
-    }
-    
-    if (empathyScore < 60) {
-      improvements.push(`Could show more empathy in responses`);
-      tips.push(`Try acknowledging feelings and perspectives more explicitly`);
-    }
-    
-    if (curiosityLevel < 60) {
-      improvements.push(`Could show more curiosity about the other speaker`);
-      tips.push(`Ask more open-ended questions to learn more about the other person`);
-    }
-    
-    // Generate next steps
-    nextSteps.push(`Practice active listening techniques in your next conversation`);
-    nextSteps.push(`Try to ask at least one follow-up question for each topic discussed`);
-    
-    return {
-      strengths,
-      improvements,
-      tips,
-      nextSteps,
-      scores: {
-        relevance: metrics.topicRelevance,
-        emotionalIntelligence: empathyScore,
-      },
-      analytics: {
-        questionCount: Math.round(metrics.questionFrequency * (conversation.duration / 60)),
-        topicChanges: Math.round(conversation.messages.filter(m => m.role === 'user').length / 3),
-      },
-      modeSpecific: {
-        generalChat: {
-          conversationFlow,
-          topicExploration,
-          empathyScore,
-          curiosityLevel,
+  
+    if (response.data) {
+      const assistantMessage = response.data;
+      setConversationMessages(prev => [...prev, assistantMessage]);
+      addMessage(assistantMessage);
+  
+      console.log('✅ Received response:', {
+        responseLength: assistantMessage.content.length,
+        mode: currentMode?.id
+      });
+  
+      // Generate and play voice response if enabled
+      if (voicePlaybackEnabled && isElevenLabsConfigured) {
+        try {
+          await generateAndPlaySpeech(
+            assistantMessage.content,
+            `${currentMode?.name} Response`
+          );
+        } catch (voiceError) {
+          console.warn('Voice generation failed:', voiceError);
         }
       }
-    };
-  }
+  
+      // Generate contextual quick replies
+      await generateContextualQuickReplies(context, assistantMessage.content);
+    }
+  };
+  
+  // Fix the generateContextualQuickReplies function
+  const generateContextualQuickReplies = async (context: ConversationContext, lastResponse: string) => {
+    try {
+      const replies = await supabaseClaudeAPI.generateQuickReplies(context, 3);
+      setQuickReplies(replies);
+    } catch (error) {
+      console.warn('Failed to generate quick replies:', error);
+      // Fallback to mode-specific quick replies
+      generateQuickRepliesForMode(context.mode);
+    }
+  };
+  
+  const handleVoiceRecord = async () => {
+    if (!currentConversation || !isSupabaseConfigured) return;
 
-  private generateDebateFeedback(metrics: FeedbackMetrics, conversation: Conversation): Partial<FeedbackData> {
-    const strengths: string[] = [];
-    const improvements: string[] = [];
-    const tips: string[] = [];
-    const nextSteps: string[] = [];
-    
-    // Analyze argument strength
-    const argumentStrength = this.calculateScore([
-      metrics.sentenceComplexity * 4,
-      metrics.vocabularyDiversity * 100,
-      metrics.topicRelevance
-    ]);
-    
-    // Analyze evidence usage
-    const evidenceUsage = this.calculateScore([
-      metrics.sentenceComplexity * 3,
-      metrics.topicRelevance,
-      metrics.vocabularyDiversity * 80
-    ]);
-    
-    // Analyze counter-argument handling
-    const counterArgumentHandling = this.calculateScore([
-      metrics.responseTime > 0 ? 100 - (metrics.responseTime - 2) * 10 : 50,
-      metrics.topicRelevance,
-      metrics.sentenceComplexity * 3
-    ]);
-    
-    // Analyze logical consistency
-    const logicalConsistency = this.calculateScore([
-      metrics.topicRelevance,
-      100 - metrics.fillerWordFrequency * 10,
-      metrics.sentenceComplexity * 3
-    ]);
-    
-    // Generate strengths
-    if (argumentStrength > 80) {
-      strengths.push(`Excellent argument construction with strong logical flow`);
-    } else if (argumentStrength > 60) {
-      strengths.push(`Good argument structure and reasoning`);
-    }
-    
-    if (evidenceUsage > 80) {
-      strengths.push(`Strong use of evidence to support arguments`);
-    } else if (evidenceUsage > 60) {
-      strengths.push(`Good incorporation of supporting evidence`);
-    }
-    
-    if (counterArgumentHandling > 80) {
-      strengths.push(`Excellent handling of counter-arguments`);
-    } else if (counterArgumentHandling > 60) {
-      strengths.push(`Good responses to opposing viewpoints`);
-    }
-    
-    if (logicalConsistency > 80) {
-      strengths.push(`Highly consistent logical reasoning throughout`);
-    } else if (logicalConsistency > 60) {
-      strengths.push(`Generally consistent logical approach`);
-    }
-    
-    // Generate improvements
-    if (argumentStrength < 60) {
-      improvements.push(`Argument structure could be stronger`);
-      tips.push(`Try organizing your points in a clearer logical sequence`);
-    }
-    
-    if (evidenceUsage < 60) {
-      improvements.push(`Could use more evidence to support claims`);
-      tips.push(`Incorporate specific examples or data to strengthen your arguments`);
-    }
-    
-    if (counterArgumentHandling < 60) {
-      improvements.push(`Could improve handling of counter-arguments`);
-      tips.push(`Practice anticipating and addressing potential objections to your position`);
-    }
-    
-    if (logicalConsistency < 60) {
-      improvements.push(`Logical consistency could be improved`);
-      tips.push(`Check for contradictions in your arguments and ensure consistent reasoning`);
-    }
-    
-    // Generate next steps
-    nextSteps.push(`Practice structuring arguments with clear premises and conclusions`);
-    nextSteps.push(`Research and prepare evidence for common debate topics`);
-    
-    return {
-      strengths,
-      improvements,
-      tips,
-      nextSteps,
-      scores: {
-        criticalThinking: this.calculateScore([argumentStrength, logicalConsistency]),
-        persuasiveness: this.calculateScore([argumentStrength, evidenceUsage, counterArgumentHandling]),
-      },
-      analytics: {
-        complexSentences: Math.round(metrics.sentenceComplexity),
-      },
-      modeSpecific: {
-        debate: {
-          argumentStrength,
-          evidenceUsage,
-          counterArgumentHandling,
-          logicalConsistency,
+    try {
+      if (!isRecording) {
+        // Start recording and speech recognition
+        setRecordButtonState('recording');
+        setIsRecording(true);
+        setError(null);
+        setTranscriptionText('');
+
+        // Check if speech recognition is supported
+        if (!speechRecognitionService.isSupported()) {
+          console.warn('Speech recognition not supported, using audio recording only');
+          // Fall back to audio recording without transcription
+          await startAudioRecordingOnly();
+          return;
         }
-      }
-    };
-  }
 
-  private generateBrainstormFeedback(metrics: FeedbackMetrics, conversation: Conversation): Partial<FeedbackData> {
-    const strengths: string[] = [];
-    const improvements: string[] = [];
-    const tips: string[] = [];
-    const nextSteps: string[] = [];
-    
-    // Count ideas (approximation based on user messages)
-    const userMessages = conversation.messages.filter(m => m.role === 'user');
-    const ideaCount = Math.max(1, Math.round(userMessages.length * 0.8));
-    
-    // Estimate unique ideas (approximation)
-    const uniqueIdeas = Math.max(1, Math.round(ideaCount * metrics.vocabularyDiversity));
-    
-    // Analyze idea quality
-    const ideaQuality = this.calculateScore([
-      metrics.sentenceComplexity * 3,
-      metrics.vocabularyDiversity * 100,
-      metrics.topicRelevance
-    ]);
-    
-    // Analyze building on ideas
-    const buildingOnIdeas = this.calculateScore([
-      metrics.topicRelevance,
-      metrics.responseTime > 0 ? 100 - (metrics.responseTime - 1) * 10 : 50,
-      metrics.engagementLevel
-    ]);
-    
-    // Generate strengths
-    if (ideaCount > 10) {
-      strengths.push(`Generated an impressive ${ideaCount} ideas during the session`);
-    } else if (ideaCount > 5) {
-      strengths.push(`Contributed ${ideaCount} ideas to the brainstorming session`);
-    }
-    
-    if (uniqueIdeas > 8) {
-      strengths.push(`Excellent variety of unique concepts`);
-    } else if (uniqueIdeas > 4) {
-      strengths.push(`Good range of different ideas`);
-    }
-    
-    if (ideaQuality > 80) {
-      strengths.push(`High-quality ideas with excellent development`);
-    } else if (ideaQuality > 60) {
-      strengths.push(`Good quality ideas with solid potential`);
-    }
-    
-    if (buildingOnIdeas > 80) {
-      strengths.push(`Excellent at building upon and expanding ideas`);
-    } else if (buildingOnIdeas > 60) {
-      strengths.push(`Good collaboration in developing concepts further`);
-    }
-    
-    // Generate improvements
-    if (ideaCount < 5) {
-      improvements.push(`Could generate more ideas during brainstorming`);
-      tips.push(`Try rapid ideation techniques like timed idea sprints`);
-    }
-    
-    if (uniqueIdeas < 4) {
-      improvements.push(`Could explore a wider variety of concepts`);
-      tips.push(`Try using different perspectives or constraints to spark diverse ideas`);
-    }
-    
-    if (ideaQuality < 60) {
-      improvements.push(`Could develop ideas in more depth`);
-      tips.push(`Spend more time exploring the potential of each idea`);
-    }
-    
-    if (buildingOnIdeas < 60) {
-      improvements.push(`Could build more effectively on existing ideas`);
-      tips.push(`Practice the "Yes, and..." technique to expand on concepts`);
-    }
-    
-    // Generate next steps
-    nextSteps.push(`Try brainstorming with constraints to spark creative solutions`);
-    nextSteps.push(`Practice combining different ideas to create hybrid concepts`);
-    
-    return {
-      strengths,
-      improvements,
-      tips,
-      nextSteps,
-      scores: {
-        creativity: this.calculateScore([ideaQuality, uniqueIdeas * 10]),
-      },
-      analytics: {
-        topicChanges: uniqueIdeas,
-      },
-      modeSpecific: {
-        brainstorm: {
-          ideaCount,
-          uniqueIdeas,
-          ideaQuality,
-          buildingOnIdeas,
+        // Request speech recognition permissions
+        const hasPermission = await speechRecognitionService.requestPermissions();
+        if (!hasPermission) {
+          console.warn('Speech recognition permission denied, using audio recording only');
+          await startAudioRecordingOnly();
+          return;
         }
-      }
-    };
-  }
 
-  private generateInterviewFeedback(metrics: FeedbackMetrics, conversation: Conversation): Partial<FeedbackData> {
-    const strengths: string[] = [];
-    const improvements: string[] = [];
-    const tips: string[] = [];
-    const nextSteps: string[] = [];
-    
-    // Analyze question relevance
-    const questionRelevance = this.calculateScore([
-      metrics.topicRelevance,
-      metrics.sentenceComplexity * 3,
-      metrics.vocabularyDiversity * 80
-    ]);
-    
-    // Analyze answer completeness
-    const answerCompleteness = this.calculateScore([
-      metrics.sentenceComplexity * 4,
-      metrics.speakingPace > 0 ? 100 - Math.abs(metrics.speakingPace - 150) * 0.5 : 50,
-      metrics.vocabularyDiversity * 100
-    ]);
-    
-    // Analyze professional demeanor
-    const professionalDemeanor = this.calculateScore([
-      100 - metrics.fillerWordFrequency * 15,
-      metrics.emotionalTone > 0 ? 70 + metrics.emotionalTone/2 : 50,
-      metrics.engagementLevel
-    ]);
-    
-    // Analyze technical accuracy (placeholder - would need domain knowledge)
-    const technicalAccuracy = this.calculateScore([
-      metrics.topicRelevance,
-      metrics.vocabularyDiversity * 100,
-      metrics.sentenceComplexity * 3
-    ]);
-    
-    // Generate strengths
-    if (questionRelevance > 80) {
-      strengths.push(`Excellent understanding of interview questions`);
-    } else if (questionRelevance > 60) {
-      strengths.push(`Good comprehension of interview questions`);
-    }
-    
-    if (answerCompleteness > 80) {
-      strengths.push(`Thorough and comprehensive answers`);
-    } else if (answerCompleteness > 60) {
-      strengths.push(`Answers covered key points effectively`);
-    }
-    
-    if (professionalDemeanor > 80) {
-      strengths.push(`Excellent professional communication style`);
-    } else if (professionalDemeanor > 60) {
-      strengths.push(`Good professional demeanor throughout`);
-    }
-    
-    if (technicalAccuracy > 80) {
-      strengths.push(`Strong technical knowledge demonstrated`);
-    } else if (technicalAccuracy > 60) {
-      strengths.push(`Good technical understanding shown`);
-    }
-    
-    // Generate improvements
-    if (questionRelevance < 60) {
-      improvements.push(`Could better address the specific questions asked`);
-      tips.push(`Listen carefully to each question and ensure your answer directly addresses it`);
-    }
-    
-    if (answerCompleteness < 60) {
-      improvements.push(`Answers could be more comprehensive`);
-      tips.push(`Use the STAR method (Situation, Task, Action, Result) for behavioral questions`);
-    }
-    
-    if (professionalDemeanor < 60) {
-      improvements.push(`Could present a more professional demeanor`);
-      tips.push(`Reduce casual language and filler words in professional contexts`);
-    }
-    
-    if (technicalAccuracy < 60) {
-      improvements.push(`Technical explanations could be clearer`);
-      tips.push(`Practice explaining technical concepts concisely and accurately`);
-    }
-    
-    // Generate next steps
-    nextSteps.push(`Research common interview questions for your target role`);
-    nextSteps.push(`Practice the STAR method for behavioral questions`);
-    
-    return {
-      strengths,
-      improvements,
-      tips,
-      nextSteps,
-      scores: {
-        professionalCommunication: this.calculateScore([professionalDemeanor, answerCompleteness]),
-      },
-      analytics: {
-        responseTime: Math.round(metrics.responseTime * 10) / 10,
-      },
-      modeSpecific: {
-        interview: {
-          questionRelevance,
-          answerCompleteness,
-          professionalDemeanor,
-          technicalAccuracy,
+        // Start speech recognition
+        setIsTranscribing(true);
+        speechRecognitionService.clearTranscript();
+        
+        const recognitionStarted = await speechRecognitionService.startListening(
+          (result) => {
+            console.log('Speech recognition result:', result);
+            setTranscriptionText(result.transcript);
+            
+            // Don't auto-stop on final result, let user control when to stop
+            if (result.isFinal) {
+              console.log('Final speech result received:', result.transcript);
+            }
+          },
+          (error) => {
+            console.error('Speech recognition error:', error);
+            setError(`Speech recognition failed: ${error}`);
+            setRecordButtonState('error');
+            setIsRecording(false);
+            setIsTranscribing(false);
+            resetVoiceState();
+          },
+          {
+            language: 'en-US',
+            continuous: true,
+            interimResults: true,
+             // 30 second timeout
+          }
+        );
+
+        if (!recognitionStarted) {
+          throw new Error('Failed to start speech recognition');
         }
-      }
-    };
-  }
 
-  private generatePresentationFeedback(metrics: FeedbackMetrics, conversation: Conversation): Partial<FeedbackData> {
-    const strengths: string[] = [];
-    const improvements: string[] = [];
-    const tips: string[] = [];
-    const nextSteps: string[] = [];
-    
-    // Analyze structure quality
-    const structureQuality = this.calculateScore([
-      metrics.topicRelevance,
-      metrics.sentenceComplexity * 3,
-      100 - metrics.fillerWordFrequency * 10
-    ]);
-    
-    // Analyze audience engagement
-    const audienceEngagement = this.calculateScore([
-      metrics.emotionalTone > 0 ? 70 + metrics.emotionalTone/2 : 50,
-      metrics.speakingPace > 0 ? 100 - Math.abs(metrics.speakingPace - 140) * 0.5 : 50,
-      metrics.engagementLevel
-    ]);
-    
-    // Analyze message clarity
-    const messageClarity = this.calculateScore([
-      100 - metrics.fillerWordFrequency * 15,
-      metrics.sentenceComplexity > 0 ? 100 - Math.abs(metrics.sentenceComplexity - 15) * 3 : 50,
-      metrics.topicRelevance
-    ]);
-    
-    // Analyze delivery style
-    const deliveryStyle = this.calculateScore([
-      metrics.speakingPace > 0 ? 100 - Math.abs(metrics.speakingPace - 140) * 0.5 : 50,
-      metrics.pauseFrequency * 5,
-      metrics.emotionalTone > 0 ? 70 + metrics.emotionalTone/2 : 50
-    ]);
-    
-    // Generate strengths
-    if (structureQuality > 80) {
-      strengths.push(`Excellent presentation structure with clear organization`);
-    } else if (structureQuality > 60) {
-      strengths.push(`Good presentation structure with logical flow`);
-    }
-    
-    if (audienceEngagement > 80) {
-      strengths.push(`Highly engaging presentation style`);
-    } else if (audienceEngagement > 60) {
-      strengths.push(`Good audience engagement techniques`);
-    }
-    
-    if (messageClarity > 80) {
-      strengths.push(`Exceptionally clear and concise messaging`);
-    } else if (messageClarity > 60) {
-      strengths.push(`Clear communication of key points`);
-    }
-    
-    if (deliveryStyle > 80) {
-      strengths.push(`Excellent delivery with effective pacing and emphasis`);
-    } else if (deliveryStyle > 60) {
-      strengths.push(`Good presentation delivery style`);
-    }
-    
-    // Generate improvements
-    if (structureQuality < 60) {
-      improvements.push(`Presentation structure could be more organized`);
-      tips.push(`Use a clear introduction, body, and conclusion structure`);
-    }
-    
-    if (audienceEngagement < 60) {
-      improvements.push(`Could be more engaging for the audience`);
-      tips.push(`Incorporate rhetorical questions or interactive elements`);
-    }
-    
-    if (messageClarity < 60) {
-      improvements.push(`Main message could be clearer`);
-      tips.push(`Focus on simplifying complex ideas and emphasizing key points`);
-    }
-    
-    if (deliveryStyle < 60) {
-      improvements.push(`Delivery style could be more dynamic`);
-      tips.push(`Vary your pace, volume, and tone for emphasis`);
-    }
-    
-    // Generate next steps
-    nextSteps.push(`Practice your presentation with a timer to improve pacing`);
-    nextSteps.push(`Record yourself presenting and review for areas to improve`);
-    
-    return {
-      strengths,
-      improvements,
-      tips,
-      nextSteps,
-      scores: {
-        structure: structureQuality,
-      },
-      analytics: {
-        pauseCount: Math.round(metrics.pauseFrequency * (conversation.duration / 60)),
-      },
-      modeSpecific: {
-        presentation: {
-          structureQuality,
-          audienceEngagement,
-          messageClarity,
-          deliveryStyle,
+        // Also start audio recording for visual feedback
+        if (permissions.microphone === 'granted') {
+          const recording = await voiceService.startRecording(
+            (level) => setAudioLevel(level),
+            (detected) => {
+              // Voice activity detection logic
+              if (voiceSettings.enableVoiceActivityDetection) {
+                // Auto-stop after silence if enabled
+                if (!detected && voiceSettings.autoStopAfterSilence) {
+                  setTimeout(() => {
+                    if (isRecording) {
+                      handleVoiceRecord(); // Stop recording
+                    }
+                  }, voiceSettings.silenceThreshold);
+                }
+              }
+            }
+          );
+          if (recording) {
+            setRecording(recording);
+          }
         }
-      }
-    };
-  }
 
-  private generateLanguageLearningFeedback(metrics: FeedbackMetrics, conversation: Conversation): Partial<FeedbackData> {
-    const strengths: string[] = [];
-    const improvements: string[] = [];
-    const tips: string[] = [];
-    const nextSteps: string[] = [];
-    
-    // Analyze grammar accuracy (placeholder - would need NLP)
-    const grammarAccuracy = this.calculateScore([
-      metrics.sentenceComplexity > 0 ? 100 - Math.abs(metrics.sentenceComplexity - 12) * 3 : 50,
-      metrics.vocabularyDiversity * 80,
-      metrics.topicRelevance
-    ]);
-    
-    // Analyze vocabulary range
-    const vocabularyRange = this.calculateScore([
-      metrics.vocabularyDiversity * 120,
-      metrics.sentenceComplexity * 3,
-      metrics.topicRelevance
-    ]);
-    
-    // Analyze pronunciation score (placeholder - would need audio analysis)
-    const pronunciationScore = this.calculateScore([
-      100 - metrics.fillerWordFrequency * 10,
-      metrics.speakingPace > 0 ? 100 - Math.abs(metrics.speakingPace - 130) * 0.5 : 50,
-      metrics.pauseFrequency * 5
-    ]);
-    
-    // Analyze fluency progress
-    const fluencyProgress = this.calculateScore([
-      metrics.speakingPace > 0 ? 100 - Math.abs(metrics.speakingPace - 130) * 0.5 : 50,
-      100 - metrics.fillerWordFrequency * 15,
-      metrics.pauseFrequency * 3
-    ]);
-    
-    // Generate strengths
-    if (grammarAccuracy > 80) {
-      strengths.push(`Excellent grammar usage throughout the conversation`);
-    } else if (grammarAccuracy > 60) {
-      strengths.push(`Good grammatical structure in most sentences`);
-    }
-    
-    if (vocabularyRange > 80) {
-      strengths.push(`Impressive vocabulary range and usage`);
-    } else if (vocabularyRange > 60) {
-      strengths.push(`Good variety of vocabulary`);
-    }
-    
-    if (pronunciationScore > 80) {
-      strengths.push(`Clear and accurate pronunciation`);
-    } else if (pronunciationScore > 60) {
-      strengths.push(`Generally good pronunciation`);
-    }
-    
-    if (fluencyProgress > 80) {
-      strengths.push(`Excellent conversational fluency`);
-    } else if (fluencyProgress > 60) {
-      strengths.push(`Good speaking flow and fluency`);
-    }
-    
-    // Generate improvements
-    if (grammarAccuracy < 60) {
-      improvements.push(`Some grammatical structures could be improved`);
-      tips.push(`Focus on practicing specific grammar patterns that challenge you`);
-    }
-    
-    if (vocabularyRange < 60) {
-      improvements.push(`Could use a wider range of vocabulary`);
-      tips.push(`Try to incorporate new words into each conversation`);
-    }
-    
-    if (pronunciationScore < 60) {
-      improvements.push(`Pronunciation could be clearer in some words`);
-      tips.push(`Practice difficult sounds and words by recording and listening to yourself`);
-    }
-    
-    if (fluencyProgress < 60) {
-      improvements.push(`Conversational fluency could be smoother`);
-      tips.push(`Regular speaking practice will help improve your overall fluency`);
-    }
-    
-    // Generate next steps
-    nextSteps.push(`Practice with different conversation topics to expand vocabulary`);
-    nextSteps.push(`Focus on using more complex sentence structures`);
-    
-    return {
-      strengths,
-      improvements,
-      tips,
-      nextSteps,
-      scores: {
-        grammarAccuracy,
-        vocabularyUsage: vocabularyRange,
-      },
-      analytics: {
-        complexSentences: Math.round(metrics.sentenceComplexity),
-      },
-      modeSpecific: {
-        languageLearning: {
-          grammarAccuracy,
-          vocabularyRange,
-          pronunciationScore,
-          fluencyProgress,
+      } else {
+        // Stop recording and speech recognition
+        setRecordButtonState('processing');
+        setIsRecording(false);
+        setIsTranscribing(false);
+
+        // Stop speech recognition and get final transcript
+        speechRecognitionService.stopListening();
+        
+        // Get the final transcript
+        const finalTranscript = speechRecognitionService.getFinalTranscript() || 
+                               speechRecognitionService.getCurrentTranscript() ||
+                               transcriptionText.trim();
+
+        // Stop audio recording
+        if (permissions.microphone === 'granted') {
+          await voiceService.stopRecording();
         }
-      }
-    };
-  }
 
-  private generateProgressTracking(
-    previousFeedback: FeedbackData, 
-    currentFeedback: FeedbackData
-  ): FeedbackData['progressTracking'] {
-    const previousScore = previousFeedback.scores.overall;
-    const currentScore = currentFeedback.scores.overall;
-    const improvement = currentScore - previousScore;
+        console.log('Final transcript captured:', finalTranscript);
+
+        if (finalTranscript) {
+          console.log('Using transcribed text:', finalTranscript);
+          await sendMessageToClaude(finalTranscript);
+        } else {
+          // No transcription was captured
+          console.warn('No transcription captured');
+          setError('No speech was detected. Please try speaking more clearly or use text input.');
+        }
+
+        setRecordButtonState('idle');
+        setProcessing(false);
+        resetVoiceState();
+        setTranscriptionText('');
+      }
+    } catch (error) {
+      console.error('Voice recording error:', error);
+      setRecordButtonState('error');
+      setError(error instanceof Error ? error.message : 'Failed to process voice input');
+      setIsRecording(false);
+      setIsTranscribing(false);
+      setProcessing(false);
+      resetVoiceState();
+      setTranscriptionText('');
+      
+      // Stop speech recognition on error
+      speechRecognitionService.stopListening();
+    }
+  };
+
+  const startAudioRecordingOnly = async () => {
+    // Fallback for when speech recognition is not available
+    if (permissions.microphone === 'granted') {
+      const recording = await voiceService.startRecording(
+        (level) => setAudioLevel(level),
+        (detected) => {
+          if (voiceSettings.enableVoiceActivityDetection) {
+            if (!detected && voiceSettings.autoStopAfterSilence) {
+              setTimeout(() => {
+                if (isRecording) {
+                  handleVoiceRecord();
+                }
+              }, voiceSettings.silenceThreshold);
+            }
+          }
+        }
+      );
+      if (recording) {
+        setRecording(recording);
+      }
+    } else {
+      // Mock recording for demo when no microphone access
+      setTimeout(() => {
+        if (isRecording) {
+          handleVoiceRecord();
+        }
+      }, 3000);
+    }
+  };
+
+  const handleTextSend = async (text: string) => {
+    if (!currentConversation || !isSupabaseConfigured) return;
+
+    await sendMessageToClaude(text);
+  };
+
+  const handleQuickReply = async (reply: string) => {
+    if (!currentConversation || !isSupabaseConfigured) return;
+
+    await sendMessageToClaude(reply);
+  };
+
+  const handleVoicePlaybackToggle = async () => {
+    if (isPlayingVoice) {
+      if (voicePlaybackEnabled) {
+        await pauseCurrentPlayback();
+      } else {
+        await resumeCurrentPlayback();
+      }
+    }
+    setVoicePlaybackEnabled(!voicePlaybackEnabled);
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    // Simulate loading new challenges and data
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    loadDailyChallenges();
+    setRefreshing(false);
+  };
+
+  const filteredModes = conversationModes.filter(mode => {
+    if (filterCategory === 'all') return true;
+    if (filterCategory === 'favorites') return mode.id === favoriteMode;
+    if (filterCategory === 'recent') return recentModes.includes(mode.id);
+    return mode.category === filterCategory;
+  });
+
+  const categories = [
+    { id: 'all', name: 'All', icon: Target },
+    { id: 'favorites', name: 'Favorites', icon: Star },
+    { id: 'recent', name: 'Recent', icon: TrendingUp },
+    { id: 'social', name: 'Social', icon: null },
+    { id: 'professional', name: 'Professional', icon: null },
+    { id: 'creativity', name: 'Creative', icon: null },
+  ];
+
+  const handleEndConversation = async () => {
+    console.log('Starting end conversation process');
+    console.log('endConversation function exists:', typeof endConversation);
+    console.log('currentConversation:', currentConversation);
     
-    // Find consistent strengths (strengths in both feedback reports)
-    const consistentStrengths = currentFeedback.strengths.filter(strength => 
-      previousFeedback.strengths.some(prevStrength => 
-        this.areStringsRelated(strength, prevStrength)
-      )
+    try {
+      setIsGeneratingFeedback(true);
+      // End conversation and generate feedback
+      const feedback = await endConversation();
+      console.log('End conversation completed, feedback:', feedback);
+      
+      // Clear conversation state
+      setConversationMessages([]);
+      setQuickReplies([]);
+      stopCurrentPlayback();
+      
+      // Show feedback modal if feedback was generated
+      if (feedback) {
+        console.log('Showing feedback modal');
+        setShowFeedbackModal(true);
+      } else {
+        console.log('No feedback generated');
+      }
+    } catch (error) {
+      console.error('Error ending conversation:', error);
+      // Still clear the conversation state even if feedback generation failed
+      setConversationMessages([]);
+      setQuickReplies([]);
+      stopCurrentPlayback();
+    } finally {
+      setIsGeneratingFeedback(false);
+    }
+  };
+
+  const handleGenerateFeedback = async () => {
+    if (!currentConversation) {
+      console.log('No current conversation found');
+      return;
+    }
+    
+    console.log('Starting feedback generation for conversation:', currentConversation.id);
+    console.log('generateFeedback function exists:', typeof generateFeedback);
+    console.log('currentConversation:', currentConversation);
+    
+    try {
+      setIsGeneratingFeedback(true);
+      const feedback = await generateFeedback(currentConversation);
+      console.log('Feedback generated successfully:', feedback);
+      if (feedback) {
+        setShowFeedbackModal(true);
+      }
+    } catch (error) {
+      console.error('Error generating feedback:', error);
+    } finally {
+      setIsGeneratingFeedback(false);
+    }
+  };
+
+  if (showPermissionHandler) {
+    return (
+      <PermissionHandler
+        onPermissionGranted={() => setShowPermissionHandler(false)}
+        onPermissionDenied={() => {
+          setShowPermissionHandler(false);
+          setInputMode('text');
+        }}
+      />
     );
-    
-    // Find persistent challenges (improvements in both feedback reports)
-    const persistentChallenges = currentFeedback.improvements.filter(improvement => 
-      previousFeedback.improvements.some(prevImprovement => 
-        this.areStringsRelated(improvement, prevImprovement)
-      )
+  }
+
+  if (currentConversation) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <GestureHandler
+          onSwipeUp={() => setTextInputVisible(true)}
+          onSwipeLeft={() => {}}
+          onSwipeRight={() => {}}
+          onDoubleTap={handleVoiceRecord}
+          onPinch={() => {}}
+          onShake={() => {
+            Alert.alert(
+              'Clear Conversation',
+              'Are you sure you want to clear the current conversation?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Clear', style: 'destructive', onPress: () => {
+                  handleEndConversation();
+                }},
+              ]
+            );
+          }}
+        >
+          <LinearGradient
+            colors={isDark ? ['#1E293B', '#0F172A'] : ['#F8FAFC', '#E2E8F0']}
+            style={styles.conversationContainer}
+          >
+            <View style={styles.conversationHeader}>
+              <View style={styles.conversationTitleContainer}>
+                <Text style={[styles.conversationTitle, { color: colors.text }]}>
+                  {currentMode?.name}
+                </Text>
+                {currentPersonality && (
+                  <Text style={[styles.voicePersonalityText, { color: colors.textSecondary }]}>
+                    Voice: {currentPersonality.name}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.conversationActions}>
+                <TouchableOpacity
+                  style={[styles.voiceToggleButton, { backgroundColor: colors.surface }]}
+                  onPress={handleVoicePlaybackToggle}
+                >
+                  {voicePlaybackEnabled ? (
+                    <Volume2 size={20} color={isPlayingVoice ? colors.primary : colors.textSecondary} />
+                  ) : (
+                    <VolumeX size={20} color={colors.textSecondary} />
+                  )}
+                </TouchableOpacity>
+                
+                {isElevenLabsConfigured && (
+                  <TouchableOpacity
+                    style={[styles.voiceSettingsButton, { backgroundColor: colors.surface }]}
+                    onPress={() => setShowVoicePersonalitySelector(true)}
+                  >
+                    <Settings size={20} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                )}
+
+                {isPlayingVoice && (
+                  <TouchableOpacity
+                    style={[styles.audioControlButton, { backgroundColor: colors.surface }]}
+                    onPress={() => setShowAudioPlayerControls(true)}
+                  >
+                    <Play size={20} color={colors.primary} />
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  style={[styles.endButton, { backgroundColor: colors.error }]}
+                  onPress={handleEndConversation}
+                  accessibilityLabel="End conversation"
+                >
+                  <Text style={styles.endButtonText}>End</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Configuration Warning */}
+            {!isSupabaseConfigured && (
+              <View style={[styles.warningBanner, { backgroundColor: colors.warning + '20' }]}>
+                <Text style={[styles.warningText, { color: colors.warning }]}>
+                  Supabase not configured. Please check your environment variables.
+                </Text>
+              </View>
+            )}
+
+            {/* ElevenLabs Status */}
+            {!isElevenLabsConfigured && (
+              <View style={[styles.warningBanner, { backgroundColor: colors.warning + '20' }]}>
+                <Text style={[styles.warningText, { color: colors.warning }]}>
+                  ElevenLabs not configured. Voice responses disabled.
+                </Text>
+              </View>
+            )}
+
+            {/* Speech Recognition Status */}
+            {!speechRecognitionSupported && (
+              <View style={[styles.warningBanner, { backgroundColor: colors.warning + '20' }]}>
+                <Text style={[styles.warningText, { color: colors.warning }]}>
+                  Speech recognition not supported in this browser. Voice recording available but no transcription.
+                </Text>
+              </View>
+            )}
+
+            {/* Voice Generation Status */}
+            {isGeneratingVoice && (
+              <View style={[styles.statusBanner, { backgroundColor: colors.primary + '20' }]}>
+                <Text style={[styles.statusText, { color: colors.primary }]}>
+                  Generating voice response...
+                </Text>
+              </View>
+            )}
+
+            {/* Feedback Generation Status */}
+            {isGeneratingFeedback && (
+              <View style={[styles.statusBanner, { backgroundColor: colors.secondary + '20' }]}>
+                <Text style={[styles.statusText, { color: colors.secondary }]}>
+                  Generating conversation feedback...
+                </Text>
+              </View>
+            )}
+
+            {/* Transcription Display */}
+            {isTranscribing && (
+              <View style={[styles.transcriptionBanner, { backgroundColor: colors.primary + '20' }]}>
+                <Text style={[styles.transcriptionLabel, { color: colors.primary }]}>
+                  {transcriptionText ? 'Transcribing...' : 'Listening for speech...'}
+                </Text>
+                {transcriptionText && (
+                  <Text style={[styles.transcriptionText, { color: colors.text }]}>
+                    "{transcriptionText}"
+                  </Text>
+                )}
+              </View>
+            )}
+
+            <ScrollView style={styles.messagesContainer} showsVerticalScrollIndicator={false}>
+              {conversationMessages.map((message) => (
+                <View
+                  key={message.id}
+                  style={[
+                    styles.messageBubble,
+                    message.role === 'user' ? styles.userMessage : styles.aiMessage,
+                    {
+                      backgroundColor: message.role === 'user' ? colors.primary : colors.surface,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.messageText,
+                      {
+                        color: message.role === 'user' ? 'white' : colors.text,
+                      },
+                    ]}
+                  >
+                    {message.content}
+                  </Text>
+                  
+                  <Text
+                    style={[
+                      styles.messageTime,
+                      {
+                        color: message.role === 'user' 
+                          ? 'rgba(255,255,255,0.7)' 
+                          : colors.textTertiary,
+                      },
+                    ]}
+                  >
+                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </View>
+              ))}
+
+              {(isLoadingResponse || isGeneratingVoice) && (
+                <View style={[styles.messageBubble, styles.aiMessage, { backgroundColor: colors.surface }]}>
+                  <View style={styles.typingIndicator}>
+                    <View style={[styles.typingDot, { backgroundColor: colors.primary }]} />
+                    <View style={[styles.typingDot, { backgroundColor: colors.primary }]} />
+                    <View style={[styles.typingDot, { backgroundColor: colors.primary }]} />
+                  </View>
+                  <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+                    {isGeneratingVoice ? 'Generating voice...' : 'Thinking...'}
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+
+            {/* Quick Replies */}
+            {quickReplies.length > 0 && !isLoadingResponse && (
+              <View style={styles.quickRepliesContainer}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.quickRepliesScroll}
+                >
+                  {quickReplies.map((reply, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={[styles.quickReplyButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                      onPress={() => handleQuickReply(reply)}
+                      disabled={!isSupabaseConfigured}
+                    >
+                      <Zap size={14} color={colors.primary} />
+                      <Text style={[styles.quickReplyText, { color: colors.text }]}>{reply}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            <View style={styles.inputArea}>
+              <VoiceRecordButton
+                onPress={handleVoiceRecord}
+                state={recordButtonState}
+                error={error}
+                disabled={!isSupabaseConfigured}
+              />
+              
+              {/* Speech Recognition Status */}
+              {isTranscribing && (
+                <Text style={[styles.statusText, { color: colors.primary }]}>
+                  {transcriptionText ? 'Processing speech...' : 'Listening for speech...'}
+                </Text>
+              )}
+
+              {/* Speech Recognition Support Info */}
+              {!speechRecognitionSupported && (
+                <Text style={[styles.statusText, { color: colors.textSecondary }]}>
+                  Voice recording only (no transcription available)
+                </Text>
+              )}
+            </View>
+
+            <FloatingActionButtons
+              onTextInputToggle={() => setTextInputVisible(true)}
+              onVoiceSettings={() => setShowVoicePersonalitySelector(true)}
+              onModeSwitch={() => {
+                // Show mode selection modal
+              }}
+              onHelp={() => {
+                // Show help modal
+              }}
+            />
+
+            {/* Manual Feedback Button for Testing */}
+            {currentConversation && conversationMessages.length > 0 && (
+              <TouchableOpacity
+                style={[styles.feedbackTestButton, { backgroundColor: colors.secondary }]}
+                onPress={handleGenerateFeedback}
+                disabled={isGeneratingFeedback}
+              >
+                <BarChart3 size={20} color="white" />
+                <Text style={styles.feedbackTestButtonText}>
+                  {isGeneratingFeedback ? 'Generating...' : 'Generate Feedback'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </LinearGradient>
+        </GestureHandler>
+
+        <TextInputSystem
+          visible={isTextInputVisible}
+          onClose={() => setTextInputVisible(false)}
+          onSend={handleTextSend}
+          onVoiceToggle={() => {
+            setTextInputVisible(false);
+            setInputMode('voice');
+          }}
+          placeholder="Type your message..."
+        />
+
+        <VoicePersonalitySelector
+          visible={showVoicePersonalitySelector}
+          onClose={() => setShowVoicePersonalitySelector(false)}
+          selectedMode={currentMode?.id || 'general-chat'}
+          onPersonalityChange={(personality) => {
+            console.log('Voice personality changed:', personality.name);
+          }}
+        />
+
+        <AudioPlayerControls
+          visible={showAudioPlayerControls}
+          onClose={() => setShowAudioPlayerControls(false)}
+        />
+
+        {/* Feedback Modal */}
+        {lastFeedback && (
+          <ClaudeFeedbackModal
+            visible={showFeedbackModal}
+            onClose={() => {
+              setShowFeedbackModal(false);
+              clearLastFeedback();
+            }}
+            conversation={currentConversation || {
+              id: 'ended-conversation',
+              mode: { 
+                id: 'general-chat', 
+                name: 'General Chat', 
+                description: '', 
+                icon: '', 
+                systemPrompt: '', 
+                category: 'social', 
+                difficulty: 'beginner', 
+                estimatedDuration: 0, 
+                color: { primary: '', secondary: '', gradient: [] }, 
+                features: [], 
+                topics: [], 
+                aiPersonalities: [], 
+                sessionTypes: { 
+                  quick: { duration: 0, description: '' }, 
+                  standard: { duration: 0, description: '' }, 
+                  extended: { duration: 0, description: '' } 
+                } 
+              },
+              title: 'Ended Conversation',
+              duration: 0,
+              messages: [],
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            }}
+          />
+        )}
+      </SafeAreaView>
     );
-    
-    return {
-      previousScore,
-      improvement,
-      consistentStrengths,
-      persistentChallenges,
-    };
   }
 
-  private getModeSpecificInsights(mode: string, feedback: FeedbackData): string[] {
-    const insights: string[] = [];
-    
-    switch (mode) {
-      case 'general-chat':
-        if (feedback.modeSpecific?.generalChat) {
-          const { conversationFlow, topicExploration, empathyScore, curiosityLevel } = feedback.modeSpecific.generalChat;
-          
-          if (conversationFlow > 80) {
-            insights.push(`Excellent natural conversation flow`);
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <LinearGradient
+        colors={isDark ? ['#1E293B', '#0F172A'] : ['#F8FAFC', '#FFFFFF']}
+        style={styles.gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={colors.primary}
+            />
           }
-          
-          if (curiosityLevel > 80) {
-            insights.push(`Asked ${feedback.analytics.questionCount} thoughtful questions`);
-          }
-          
-          if (empathyScore > 80) {
-            insights.push(`Showed strong empathy and understanding`);
-          }
-        }
-        break;
-        
-      case 'debate-challenge':
-        if (feedback.modeSpecific?.debate) {
-          const { argumentStrength, evidenceUsage, counterArgumentHandling, logicalConsistency } = feedback.modeSpecific.debate;
-          
-          if (argumentStrength > 80) {
-            insights.push(`Strong, well-structured arguments`);
-          }
-          
-          if (counterArgumentHandling > 80) {
-            insights.push(`Excellent handling of opposing viewpoints`);
-          }
-          
-          if (logicalConsistency > 80) {
-            insights.push(`Highly consistent logical reasoning`);
-          }
-        }
-        break;
-        
-      case 'idea-brainstorm':
-        if (feedback.modeSpecific?.brainstorm) {
-          const { ideaCount, uniqueIdeas, ideaQuality, buildingOnIdeas } = feedback.modeSpecific.brainstorm;
-          
-          insights.push(`Generated ${ideaCount} ideas (${uniqueIdeas} unique concepts)`);
-          
-          if (ideaQuality > 80) {
-            insights.push(`High-quality, well-developed ideas`);
-          }
-          
-          if (buildingOnIdeas > 80) {
-            insights.push(`Excellent at expanding and building on concepts`);
-          }
-        }
-        break;
-        
-      case 'interview-practice':
-        if (feedback.modeSpecific?.interview) {
-          const { questionRelevance, answerCompleteness, professionalDemeanor, technicalAccuracy } = feedback.modeSpecific.interview;
-          
-          if (answerCompleteness > 80) {
-            insights.push(`Comprehensive, well-structured answers`);
-          }
-          
-          if (professionalDemeanor > 80) {
-            insights.push(`Excellent professional communication style`);
-          }
-          
-          if (technicalAccuracy > 80) {
-            insights.push(`Strong technical knowledge demonstrated`);
-          }
-        }
-        break;
-        
-      case 'presentation-prep':
-        if (feedback.modeSpecific?.presentation) {
-          const { structureQuality, audienceEngagement, messageClarity, deliveryStyle } = feedback.modeSpecific.presentation;
-          
-          if (structureQuality > 80) {
-            insights.push(`Clear, well-organized presentation structure`);
-          }
-          
-          if (audienceEngagement > 80) {
-            insights.push(`Highly engaging presentation style`);
-          }
-          
-          if (deliveryStyle > 80) {
-            insights.push(`Excellent delivery with effective pacing`);
-          }
-        }
-        break;
-        
-      case 'language-learning':
-        if (feedback.modeSpecific?.languageLearning) {
-          const { grammarAccuracy, vocabularyRange, pronunciationScore, fluencyProgress } = feedback.modeSpecific.languageLearning;
-          
-          if (grammarAccuracy > 80) {
-            insights.push(`${grammarAccuracy}% grammar accuracy - excellent!`);
-          } else {
-            insights.push(`${grammarAccuracy}% grammar accuracy`);
-          }
-          
-          if (vocabularyRange > 80) {
-            insights.push(`Impressive vocabulary range and usage`);
-          }
-          
-          if (fluencyProgress > 80) {
-            insights.push(`Excellent conversational fluency`);
-          }
-        }
-        break;
-    }
-    
-    return insights;
-  }
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.headerTop}>
+              <View>
+                <Text style={[styles.greeting, { color: colors.text }]}>
+                  Ready to practice?
+                </Text>
+                <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+                  Choose a conversation mode to get started
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.settingsButton, { backgroundColor: colors.surface }]}
+                onPress={() => {
+                  // Navigate to settings
+                }}
+              >
+                <Settings size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
 
-  // Utility methods
-  private calculateScore(values: number[]): number {
-    // Filter out any NaN or undefined values
-    const validValues = values.filter(v => !isNaN(v) && v !== undefined);
-    
-    if (validValues.length === 0) return 50; // Default score
-    
-    // Calculate average and round to nearest integer
-    const average = validValues.reduce((sum, value) => sum + value, 0) / validValues.length;
-    return Math.round(Math.min(100, Math.max(0, average)));
-  }
+            {/* Configuration Warning */}
+            {!isSupabaseConfigured && (
+              <View style={[styles.warningBanner, { backgroundColor: colors.warning + '20' }]}>
+                <Text style={[styles.warningText, { color: colors.warning }]}>
+                  Supabase not configured. Please check your environment variables to use AI features.
+                </Text>
+              </View>
+            )}
 
-  private areStringsRelated(str1: string, str2: string): boolean {
-    // Simple check for string similarity
-    const words1 = str1.toLowerCase().split(/\s+/);
-    const words2 = str2.toLowerCase().split(/\s+/);
-    
-    // Count matching words
-    const matchingWords = words1.filter(word => 
-      words2.includes(word) && word.length > 3
-    ).length;
-    
-    // Calculate similarity score
-    const totalWords = Math.max(words1.length, words2.length);
-    const similarityScore = matchingWords / totalWords;
-    
-    return similarityScore > 0.3; // Threshold for considering strings related
-  }
+            {/* ElevenLabs Status */}
+            {!isElevenLabsConfigured && (
+              <View style={[styles.warningBanner, { backgroundColor: colors.warning + '20' }]}>
+                <Text style={[styles.warningText, { color: colors.warning }]}>
+                  ElevenLabs not configured. Voice responses will be disabled.
+                </Text>
+              </View>
+            )}
+
+            {/* Speech Recognition Support Info */}
+            {!speechRecognitionSupported && (
+              <View style={[styles.warningBanner, { backgroundColor: colors.warning + '20' }]}>
+                <Text style={[styles.warningText, { color: colors.warning }]}>
+                  Speech recognition not supported in this browser. Voice recording available but no transcription.
+                </Text>
+              </View>
+            )}
+
+            {permissions.microphone === 'denied' && (
+              <View style={[styles.warningBanner, { backgroundColor: colors.warning + '20' }]}>
+                <Text style={[styles.warningText, { color: colors.warning }]}>
+                  Voice features disabled. Using text-only mode.
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Daily Challenges */}
+          {dailyChallenges.length > 0 && (
+            <View style={styles.challengesSection}>
+              <View style={styles.sectionHeader}>
+                <Trophy size={20} color={colors.warning} />
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                  Daily Challenges
+                </Text>
+              </View>
+              
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.challengesScroll}
+              >
+                {dailyChallenges.map((challenge) => (
+                  <TouchableOpacity
+                    key={challenge.id}
+                    style={[styles.challengeCard, { backgroundColor: colors.surface }]}
+                    onPress={() => {
+                      const mode = conversationModes.find(m => m.id === challenge.modeId);
+                      if (mode) handleModeSelect(mode);
+                    }}
+                    disabled={!isSupabaseConfigured}
+                  >
+                    <View style={styles.challengeHeader}>
+                      <Calendar size={16} color={colors.warning} />
+                      <Text style={[styles.challengePoints, { color: colors.warning }]}>
+                        +{challenge.reward.points}
+                      </Text>
+                    </View>
+                    <Text style={[styles.challengeTitle, { color: colors.text }]}>
+                      {challenge.title}
+                    </Text>
+                    <Text style={[styles.challengeDescription, { color: colors.textSecondary }]}>
+                      {challenge.description}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Category Filter */}
+          <View style={styles.filterSection}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterScroll}
+            >
+              {categories.map((category) => {
+                const IconComponent = category.icon;
+                return (
+                  <TouchableOpacity
+                    key={category.id}
+                    style={[
+                      styles.filterButton,
+                      filterCategory === category.id && { backgroundColor: colors.primary },
+                      { borderColor: colors.border },
+                    ]}
+                    onPress={() => setFilterCategory(category.id)}
+                  >
+                    {IconComponent && (
+                      <IconComponent
+                        size={16}
+                        color={filterCategory === category.id ? 'white' : colors.textSecondary}
+                      />
+                    )}
+                    <Text
+                      style={[
+                        styles.filterText,
+                        {
+                          color: filterCategory === category.id ? 'white' : colors.textSecondary,
+                        },
+                      ]}
+                    >
+                      {category.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          {/* Conversation Modes */}
+          <View style={styles.modesContainer}>
+            {filteredModes.map((mode) => (
+              <ModeSelectionCard
+                key={mode.id}
+                mode={mode}
+                onPress={handleModeSelect}
+                onConfigure={(mode) => {
+                  setSelectedMode(mode);
+                  setShowConfigModal(true);
+                }}
+                isFavorite={mode.id === favoriteMode}
+                isRecentlyUsed={recentModes.includes(mode.id)}
+                lastUsed={recentModes.includes(mode.id) ? new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000) : undefined}
+              />
+            ))}
+          </View>
+
+          {/* Quick Stats */}
+          {analytics && (
+            <View style={[styles.statsSection, { backgroundColor: colors.surface }]}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Your Progress
+              </Text>
+              <View style={styles.statsGrid}>
+                <View style={styles.statItem}>
+                  <Text style={[styles.statValue, { color: colors.primary }]}>
+                    {analytics.totalConversations}
+                  </Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+                    Conversations
+                  </Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={[styles.statValue, { color: colors.secondary }]}>
+                    {analytics.streakDays}
+                  </Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+                    Day Streak
+                  </Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={[styles.statValue, { color: colors.success }]}>
+                    {analytics.averageScore.toFixed(1)}
+                  </Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+                    Avg Score
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+        </ScrollView>
+      </LinearGradient>
+
+      <ModeConfigurationModal
+        visible={showConfigModal}
+        mode={selectedMode}
+        onClose={() => setShowConfigModal(false)}
+        onStart={handleModeStart}
+      />
+
+      {/* Interview Setup Modal */}
+      {showInterviewSetup && (
+        <Modal
+          visible={showInterviewSetup}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setShowInterviewSetup(false)}
+        >
+          <View style={[styles.interviewSetupContainer, { backgroundColor: colors.background }]}>
+            <View style={styles.interviewSetupHeader}>
+              <TouchableOpacity
+                style={styles.interviewSetupCloseButton}
+                onPress={() => setShowInterviewSetup(false)}
+              >
+                <X size={24} color={colors.text} />
+              </TouchableOpacity>
+              <Text style={[styles.interviewSetupTitle, { color: colors.text }]}>
+                Interview Setup
+              </Text>
+            </View>
+            
+            <InterviewSetupScreen
+              onQuickStart={handleInterviewQuickStart}
+              onDocumentSelect={handleInterviewDocumentSelect}
+              onContinue={handleInterviewContinue}
+            />
+          </View>
+        </Modal>
+      )}
+
+      <TextInputSystem
+        visible={isTextInputVisible && activeDocument !== null}
+        onClose={() => {
+          setTextInputVisible(false);
+          setActiveDocument(null);
+        }}
+        onSend={(text) => {
+          if (activeDocument === 'job') {
+            updateDocumentData({ jobDescription: text });
+          } else if (activeDocument === 'cv') {
+            updateDocumentData({ cvContent: text });
+          }
+          setTextInputVisible(false);
+          setActiveDocument(null);
+        }}
+        onVoiceToggle={() => {
+          setTextInputVisible(false);
+          setActiveDocument(null);
+        }}
+        mode="document"
+        placeholder={activeDocument === 'job' 
+          ? "Paste the job description here..." 
+          : "Paste your CV/resume content here..."}
+        initialText={activeDocument === 'job' 
+          ? documentData.jobDescription 
+          : documentData.cvContent}
+      />
+    </SafeAreaView>
+  );
 }
 
-export const feedbackService = new FeedbackService();
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  gradient: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: spacing.lg,
+  },
+  header: {
+    marginBottom: spacing.xl,
+    paddingTop: spacing.md,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
+  },
+  greeting: {
+    fontSize: typography.sizes['3xl'],
+    fontWeight: typography.weights.bold,
+    marginBottom: spacing.sm,
+  },
+  subtitle: {
+    fontSize: typography.sizes.lg,
+    lineHeight: typography.sizes.lg * 1.4,
+  },
+  settingsButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  warningBanner: {
+    padding: spacing.md,
+    borderRadius: 8,
+    marginBottom: spacing.sm,
+  },
+  warningText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.medium,
+    textAlign: 'center',
+  },
+  statusBanner: {
+    padding: spacing.md,
+    borderRadius: 8,
+    marginBottom: spacing.md,
+  },
+  statusText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.medium,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
+  transcriptionBanner: {
+    padding: spacing.md,
+    borderRadius: 8,
+    marginBottom: spacing.md,
+  },
+  transcriptionLabel: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.semibold,
+    marginBottom: spacing.xs,
+  },
+  transcriptionText: {
+    fontSize: typography.sizes.base,
+    fontStyle: 'italic',
+  },
+  challengesSection: {
+    marginBottom: spacing.xl,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  sectionTitle: {
+    fontSize: typography.sizes.lg,
+    fontWeight: typography.weights.semibold,
+    marginLeft: spacing.sm,
+  },
+  challengesScroll: {
+    paddingRight: spacing.lg,
+  },
+  challengeCard: {
+    width: 200,
+    padding: spacing.md,
+    borderRadius: 12,
+    marginRight: spacing.md,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  challengeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  challengePoints: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.bold,
+  },
+  challengeTitle: {
+    fontSize: typography.sizes.base,
+    fontWeight: typography.weights.semibold,
+    marginBottom: spacing.xs,
+  },
+  challengeDescription: {
+    fontSize: typography.sizes.sm,
+    lineHeight: typography.sizes.sm * 1.3,
+  },
+  filterSection: {
+    marginBottom: spacing.lg,
+  },
+  filterScroll: {
+    paddingRight: spacing.lg,
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginRight: spacing.sm,
+    gap: spacing.xs,
+  },
+  filterText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.medium,
+  },
+  modesContainer: {
+    alignItems: 'center',
+    marginBottom: spacing.xl,
+  },
+  statsSection: {
+    padding: spacing.lg,
+    borderRadius: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: spacing.md,
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: typography.sizes['2xl'],
+    fontWeight: typography.weights.bold,
+    marginBottom: spacing.xs,
+  },
+  statLabel: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.medium,
+  },
+  conversationContainer: {
+    flex: 1,
+    padding: spacing.lg,
+  },
+  conversationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xl,
+    paddingTop: spacing.md,
+  },
+  conversationTitleContainer: {
+    flex: 1,
+  },
+  conversationTitle: {
+    fontSize: typography.sizes['2xl'],
+    fontWeight: typography.weights.bold,
+  },
+  voicePersonalityText: {
+    fontSize: typography.sizes.sm,
+    marginTop: spacing.xs,
+  },
+  conversationActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  voiceToggleButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voiceSettingsButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  audioControlButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  endButton: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: 20,
+  },
+  endButtonText: {
+    color: 'white',
+    fontWeight: typography.weights.semibold,
+  },
+  messagesContainer: {
+    flex: 1,
+    marginBottom: spacing.xl,
+  },
+  messageBubble: {
+    padding: spacing.md,
+    borderRadius: 16,
+    marginBottom: spacing.sm,
+    maxWidth: '80%',
+  },
+  userMessage: {
+    alignSelf: 'flex-end',
+  },
+  aiMessage: {
+    alignSelf: 'flex-start',
+  },
+  messageText: {
+    fontSize: typography.sizes.base,
+    lineHeight: typography.sizes.base * 1.4,
+    marginBottom: spacing.xs,
+  },
+  messageTime: {
+    fontSize: typography.sizes.xs,
+    alignSelf: 'flex-end',
+  },
+  typingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+  },
+  typingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    opacity: 0.6,
+  },
+  loadingText: {
+    fontSize: typography.sizes.sm,
+    fontStyle: 'italic',
+    marginTop: spacing.xs,
+  },
+  quickRepliesContainer: {
+    marginBottom: spacing.md,
+  },
+  quickRepliesScroll: {
+    paddingRight: spacing.lg,
+  },
+  quickReplyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginRight: spacing.sm,
+    gap: spacing.xs,
+  },
+  quickReplyText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.medium,
+  },
+  inputArea: {
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+  },
+  interviewSetupContainer: {
+    flex: 1,
+  },
+  interviewSetupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    paddingTop: Platform.OS === 'ios' ? 60 : 20,
+    position: 'relative',
+  },
+  interviewSetupCloseButton: {
+    position: 'absolute',
+    left: 20,
+    top: Platform.OS === 'ios' ? 60 : 20,
+    padding: 8,
+  },
+  interviewSetupTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  feedbackTestButton: {
+    position: 'absolute',
+    bottom: 120,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 25,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  feedbackTestButtonText: {
+    color: 'white',
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.semibold,
+    marginLeft: spacing.xs,
+  },
+});
