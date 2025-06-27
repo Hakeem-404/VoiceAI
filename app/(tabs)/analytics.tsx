@@ -8,14 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { 
-  TrendingUp, 
-  Target, 
-  Clock, 
-  Award,
-  BarChart3,
-  Star
-} from 'lucide-react-native';
+import { TrendingUp, Target, Clock, Award, ChartBar as BarChart3, Star } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useUserStore } from '@/src/stores/userStore';
 import { spacing, typography } from '@/src/constants/colors';
