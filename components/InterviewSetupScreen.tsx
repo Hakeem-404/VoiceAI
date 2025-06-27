@@ -94,6 +94,22 @@ export function InterviewSetupScreen({
     }
   };
 
+  const handleContinue = () => {
+    if (documentData.analysisResult) {
+      // Start interview with the analysis data
+      console.log('Starting personalized interview with analysis data');
+      setSelectedOption('personalized');
+      setSessionId(Date.now().toString());
+      setShowInterviewSetup(false);
+    } else {
+      // Start regular interview if no analysis
+      console.log('Starting regular interview without analysis');
+      setSelectedOption('quick');
+      setSessionId(Date.now().toString());
+      setShowInterviewSetup(false);
+    }
+  };
+
   return (
     <ScrollView 
       style={[styles.container, { backgroundColor: colors.background }]}
@@ -347,7 +363,7 @@ export function InterviewSetupScreen({
           styles.continueButton,
           { backgroundColor: canContinue ? colors.primary : colors.border }
         ]}
-        onPress={onContinue}
+        onPress={handleContinue}
         disabled={!canContinue}
       >
         <Text style={styles.continueButtonText}>Continue</Text>

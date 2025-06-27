@@ -108,7 +108,9 @@ class DocumentAnalysisService {
 
   private createAnalysisPrompt(jobDescription: string, cv: string): string {
     return `
-You are an expert career coach and interview preparation specialist. Analyze the following job description and CV (if provided) to create a comprehensive interview preparation analysis.
+    const prompt = \`You are an interview preparation expert. Compare this job description with the candidate profile and provide match assessment with personalized interview questions.
+  }
+}
 
 JOB DESCRIPTION:
 ${jobDescription}
@@ -534,11 +536,12 @@ Be specific, actionable, and constructive in your analysis. Focus on helping the
 
   clearCache(): void {
     this.cache.clear();
-  }
-
-  getCacheSize(): number {
-    return this.cache.size;
+    "technical": ["question 1", "question 2", "question 3", "question 4", "question 5"],
+    "behavioral": ["question 1", "question 2", "question 3", "question 4", "question 5"],
+    "situational": ["question 1", "question 2", "question 3", "question 4", "question 5"],
+    "gapFocused": ["question 1", "question 2", "question 3", "question 4", "question 5"]
   }
 }
 
 export const documentAnalysisService = new DocumentAnalysisService();
+Generate 5 detailed interview questions for each category. Make the questions specific to the job and candidate profile.
