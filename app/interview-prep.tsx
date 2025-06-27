@@ -41,6 +41,16 @@ export default function InterviewPrepScreen() {
     setActiveTab('analysis');
   };
 
+  const handleStartPersonalizedInterview = () => {
+  console.log('🎯 User clicked Start Personalized Interview - navigating back to home');
+  
+  // Navigate back to home with the callback parameter
+  router.push({
+    pathname: '/',
+    params: { startPersonalizedInterview: 'true' }
+  });
+};
+
   const handleStartInterview = () => {
     const interviewMode = conversationModes.find(mode => mode.id === 'interview-practice');
     if (!interviewMode) {
@@ -300,7 +310,7 @@ export default function InterviewPrepScreen() {
               {/* Start Interview Button */}
               <TouchableOpacity
                 style={[styles.startButton, { backgroundColor: colors.primary }]}
-                onPress={handleStartInterview}
+                onPress={handleStartPersonalizedInterview}
               >
                 <Play size={20} color="white" />
                 <Text style={styles.startButtonText}>
