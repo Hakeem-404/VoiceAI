@@ -378,9 +378,9 @@ class SupabaseClaudeAPIService {
 
   // Main conversation method
   async sendMessage(
-message: string,
-context: ConversationContext,
-options: APIRequestOptions = {}
+  message: string,
+  context: ConversationContext,
+  options: APIRequestOptions = {}
 ): Promise<APIResponse<ConversationMessage>> {
   console.log('📨 sendMessage called:', {
     mode: context.mode,
@@ -664,7 +664,7 @@ options: APIRequestOptions = {}
       'general-chat': 150,
       'debate-challenge': 200,
       'idea-brainstorm': 180,
-      'interview-practice': 300, // Increased for interview responses
+      'interview-practice': 120,
       'presentation-prep': 160,
       'language-learning': 140,
       'document-analysis': 1000 

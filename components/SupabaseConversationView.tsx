@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Send, RotateCcw, Copy, Bookmark, MoveHorizontal as MoreHorizontal, Wifi, WifiOff, Zap, ChartBar as BarChart3 } from 'lucide-react-native';
-import { CircleAlert as AlertCircle } from 'lucide-react-native';
+import { AlertCircle } from 'lucide-react-native';
 import { useSupabaseConversation } from '../hooks/useSupabaseConversation';
 import { ConversationMessage } from '../types/api';
 import { RealTimeFeedbackSystem } from './RealTimeFeedbackSystem';
@@ -65,7 +65,6 @@ export function SupabaseConversationView({
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const [initialMessageSent, setInitialMessageSent] = useState(false);
-  const [initialMessageSent, setInitialMessageSent] = useState(false);
 
   // Create conversation mode object for the store
   const conversationMode: ConversationMode = {
@@ -116,119 +115,6 @@ export function SupabaseConversationView({
       }, 100);
     }
   }, [messages.length]);
-
-  // Send initial system message for interview practice with document analysis
-  useEffect(() => {
-    if (mode === 'interview-practice' && 
-        documentData.analysisResult && 
-        messages.length === 0 && 
-        !initialMessageSent && 
-        isConfigured) {
-      
-      console.log('Starting personalized interview with analysis:', documentData.analysisResult);
-      setInitialMessageSent(true);
-      
-      // Create the system message with analysis data
-      const analysis = documentData.analysisResult;
-      const systemMessage = createInterviewSystemPrompt(
-        analysis, 
-        documentData.jobDescription, 
-        documentData.cvContent
-      );
-      
-      console.log('System message created, length:', systemMessage.length);
-      
-      // Send the system message to start the interview
-      sendSystemMessage(systemMessage);
-    }
-  }, [mode, documentData.analysisResult, messages.length, initialMessageSent, isConfigured]);
-
-  const createInterviewSystemPrompt = (
-    analysis: any,
-    jobDescription: string,
-    cvContent: string
-  ): string => {
-    // Get interview questions from analysis
-    const technicalQuestions = analysis.analysis.interviewQuestions?.technical || [];
-    const behavioralQuestions = analysis.analysis.interviewQuestions?.behavioral || [];
-    const situationalQuestions = analysis.analysis.interviewQuestions?.situational || [];
-    const gapFocusedQuestions = analysis.analysis.interviewQuestions?.gapFocused || [];
-    
-    // Combine all questions
-    const allQuestions = [
-      ...technicalQuestions,
-      ...behavioralQuestions,
-      ...situationalQuestions,
-      ...gapFocusedQuestions
-    ];
-    
-    // Format questions for the prompt
-    const formattedQuestions = allQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n');
-    
-    return `You are a professional interviewer conducting a job interview. 
-    
-Job Description: ${jobDescription || 'Not provided'}
-
-Candidate CV: ${cvContent || 'Not provided'}
-
-Analysis:
-- Match Score: ${analysis.analysis.matchScore}%
-- Candidate Strengths: ${analysis.analysis.strengths.join(', ')}
-- Gaps to Address: ${analysis.analysis.gaps.join(', ')}
-- Focus Areas: ${analysis.analysis.focusAreas.join(', ')}
-- Experience Level: ${analysis.analysis.difficulty}
-
-PERSONALIZED QUESTIONS TO ASK:
-${formattedQuestions}
-
-Your task is to conduct a realistic interview for this position. Ask relevant questions that:
-1. Explore the candidate's strengths mentioned in the analysis
-2. Tactfully probe the identified gaps
-3. Focus on the key areas relevant to the job
-4. Include a mix of technical, behavioral, and situational questions
-
-Start with a brief introduction and your first question. Be professional, thorough, and provide constructive feedback. Ask one question at a time and wait for complete answers.
-
-IMPORTANT: Begin the interview immediately with a brief introduction and your first question from the list above.`;
-  };
-
-  const sendSystemMessage = async (systemMessage: string) => {
-  console.log('Sending system message to start interview...');
-  
-  try {
-    // Create a context with custom settings that include the system message
-    const customContext = {
-      messages: [],
-      mode,
-      sessionId,
-      userId,
-      metadata: {
-        startTime: new Date(),
-        lastActivity: new Date(),
-        messageCount: 0,
-        totalTokens: 0,
-      },
-      customSettings: {
-        documentAnalysis: documentData.analysisResult,
-        jobDescription: documentData.jobDescription,
-        cvContent: documentData.cvContent
-      }
-    };
-    
-    // Send an empty message that will trigger the interview with system context
-    // The service will automatically add a starter message for interview mode
-    await sendMessage("", customContext);
-    console.log('Interview started successfully');
-    
-  } catch (error) {
-    console.error('Failed to send system message:', error);
-    Alert.alert(
-      'Interview Setup Failed',
-      'Failed to start the personalized interview. Please try again.',
-      [{ text: 'OK' }]
-    );
-  }
-};
 
   // Network status monitoring
   useEffect(() => {
