@@ -35,7 +35,6 @@ import {
   VolumeX,
   Play,
   Pause,
-  BarChart3,
 } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useConversationStore } from '@/src/stores/conversationStore';
@@ -58,10 +57,9 @@ import { PermissionHandler } from '@/components/PermissionHandler';
 import { VoicePersonalitySelector } from '@/components/VoicePersonalitySelector';
 import { AudioPlayerControls } from '@/components/AudioPlayerControls';
 import { InterviewSetupScreen } from '@/components/InterviewSetupScreen';
-import { ConversationMode, ModeConfiguration, DailyChallenge, DocumentAnalysis } from '@/src/types';
+import { ConversationMode, ModeConfiguration, DailyChallenge, ConversationMessage, DocumentAnalysis } from '@/src/types';
 import { spacing, typography } from '@/src/constants/colors';
-import { ConversationContext, ConversationMessage } from '@/types/api';
-import { ClaudeFeedbackModal } from '@/components/ClaudeFeedbackModal';
+import { ConversationContext } from '@/types/api';
 
 const { width } = Dimensions.get('window');
 
@@ -77,9 +75,6 @@ export default function HomeScreen() {
     addMessage,
     setRecordingState,
     setProcessing,
-    lastFeedback,
-    clearLastFeedback,
-    generateFeedback,
   } = useConversationStore();
 
   const {
@@ -142,8 +137,6 @@ export default function HomeScreen() {
   const [showAudioPlayerControls, setShowAudioPlayerControls] = useState(false);
   const [voicePlaybackEnabled, setVoicePlaybackEnabled] = useState(true);
   const [showInterviewSetup, setShowInterviewSetup] = useState(false);
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-  const [isGeneratingFeedback, setIsGeneratingFeedback] = useState(false);
 
   // Mock user preferences for favorites and recent modes
   const [favoriteMode, setFavoriteMode] = useState<string>('general-chat');
@@ -449,7 +442,7 @@ export default function HomeScreen() {
             language: 'en-US',
             continuous: true,
             interimResults: true,
-             // 30 second timeout
+            timeout: 30000 // 30 second timeout
           }
         );
 
@@ -607,64 +600,6 @@ export default function HomeScreen() {
     { id: 'creativity', name: 'Creative', icon: null },
   ];
 
-  const handleEndConversation = async () => {
-    console.log('Starting end conversation process');
-    console.log('endConversation function exists:', typeof endConversation);
-    console.log('currentConversation:', currentConversation);
-    
-    try {
-      setIsGeneratingFeedback(true);
-      // End conversation and generate feedback
-      const feedback = await endConversation();
-      console.log('End conversation completed, feedback:', feedback);
-      
-      // Clear conversation state
-      setConversationMessages([]);
-      setQuickReplies([]);
-      stopCurrentPlayback();
-      
-      // Show feedback modal if feedback was generated
-      if (feedback) {
-        console.log('Showing feedback modal');
-        setShowFeedbackModal(true);
-      } else {
-        console.log('No feedback generated');
-      }
-    } catch (error) {
-      console.error('Error ending conversation:', error);
-      // Still clear the conversation state even if feedback generation failed
-      setConversationMessages([]);
-      setQuickReplies([]);
-      stopCurrentPlayback();
-    } finally {
-      setIsGeneratingFeedback(false);
-    }
-  };
-
-  const handleGenerateFeedback = async () => {
-    if (!currentConversation) {
-      console.log('No current conversation found');
-      return;
-    }
-    
-    console.log('Starting feedback generation for conversation:', currentConversation.id);
-    console.log('generateFeedback function exists:', typeof generateFeedback);
-    console.log('currentConversation:', currentConversation);
-    
-    try {
-      setIsGeneratingFeedback(true);
-      const feedback = await generateFeedback(currentConversation);
-      console.log('Feedback generated successfully:', feedback);
-      if (feedback) {
-        setShowFeedbackModal(true);
-      }
-    } catch (error) {
-      console.error('Error generating feedback:', error);
-    } finally {
-      setIsGeneratingFeedback(false);
-    }
-  };
-
   if (showPermissionHandler) {
     return (
       <PermissionHandler
@@ -693,7 +628,10 @@ export default function HomeScreen() {
               [
                 { text: 'Cancel', style: 'cancel' },
                 { text: 'Clear', style: 'destructive', onPress: () => {
-                  handleEndConversation();
+                  endConversation();
+                  setConversationMessages([]);
+                  setQuickReplies([]);
+                  stopCurrentPlayback();
                 }},
               ]
             );
@@ -746,7 +684,12 @@ export default function HomeScreen() {
 
                 <TouchableOpacity
                   style={[styles.endButton, { backgroundColor: colors.error }]}
-                  onPress={handleEndConversation}
+                  onPress={() => {
+                    endConversation();
+                    setConversationMessages([]);
+                    setQuickReplies([]);
+                    stopCurrentPlayback();
+                  }}
                   accessibilityLabel="End conversation"
                 >
                   <Text style={styles.endButtonText}>End</Text>
@@ -786,15 +729,6 @@ export default function HomeScreen() {
               <View style={[styles.statusBanner, { backgroundColor: colors.primary + '20' }]}>
                 <Text style={[styles.statusText, { color: colors.primary }]}>
                   Generating voice response...
-                </Text>
-              </View>
-            )}
-
-            {/* Feedback Generation Status */}
-            {isGeneratingFeedback && (
-              <View style={[styles.statusBanner, { backgroundColor: colors.secondary + '20' }]}>
-                <Text style={[styles.statusText, { color: colors.secondary }]}>
-                  Generating conversation feedback...
                 </Text>
               </View>
             )}
@@ -921,20 +855,6 @@ export default function HomeScreen() {
                 // Show help modal
               }}
             />
-
-            {/* Manual Feedback Button for Testing */}
-            {currentConversation && conversationMessages.length > 0 && (
-              <TouchableOpacity
-                style={[styles.feedbackTestButton, { backgroundColor: colors.secondary }]}
-                onPress={handleGenerateFeedback}
-                disabled={isGeneratingFeedback}
-              >
-                <BarChart3 size={20} color="white" />
-                <Text style={styles.feedbackTestButtonText}>
-                  {isGeneratingFeedback ? 'Generating...' : 'Generate Feedback'}
-                </Text>
-              </TouchableOpacity>
-            )}
           </LinearGradient>
         </GestureHandler>
 
@@ -962,44 +882,6 @@ export default function HomeScreen() {
           visible={showAudioPlayerControls}
           onClose={() => setShowAudioPlayerControls(false)}
         />
-
-        {/* Feedback Modal */}
-        {lastFeedback && (
-          <ClaudeFeedbackModal
-            visible={showFeedbackModal}
-            onClose={() => {
-              setShowFeedbackModal(false);
-              clearLastFeedback();
-            }}
-            conversation={currentConversation || {
-              id: 'ended-conversation',
-              mode: { 
-                id: 'general-chat', 
-                name: 'General Chat', 
-                description: '', 
-                icon: '', 
-                systemPrompt: '', 
-                category: 'social', 
-                difficulty: 'beginner', 
-                estimatedDuration: 0, 
-                color: { primary: '', secondary: '', gradient: [] }, 
-                features: [], 
-                topics: [], 
-                aiPersonalities: [], 
-                sessionTypes: { 
-                  quick: { duration: 0, description: '' }, 
-                  standard: { duration: 0, description: '' }, 
-                  extended: { duration: 0, description: '' } 
-                } 
-              },
-              title: 'Ended Conversation',
-              duration: 0,
-              messages: [],
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            }}
-          />
-        )}
       </SafeAreaView>
     );
   }
@@ -1608,25 +1490,4 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
   },
-  feedbackTestButton: {
-    position: 'absolute',
-    bottom: 120,
-    right: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 25,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  feedbackTestButtonText: {
-    color: 'white',
-    fontSize: typography.sizes.sm,
-    fontWeight: typography.weights.semibold,
-    marginLeft: spacing.xs,
-  },
-});
+});x
