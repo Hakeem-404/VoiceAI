@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { User, Camera, Mail, X, CircleCheck as CheckCircle, Upload, CircleAlert as AlertCircle } from 'lucide-react-native';
@@ -11,21 +11,31 @@ import supabase from '@/src/lib/supabase';
 interface ProfileSettingsProps {
   visible: boolean;
   onClose: () => void;
+  onProfileUpdated?: () => void;
 }
 
-export function ProfileSettings({ visible, onClose }: ProfileSettingsProps) {
+export function ProfileSettings({ visible, onClose, onProfileUpdated }: ProfileSettingsProps) {
   const { colors, isDark } = useTheme();
   const { user, session } = useSupabaseAuth();
   
-  const [name, setName] = useState(user?.user_metadata?.name || '');
-  const [email, setEmail] = useState(user?.email || '');
-  const [avatarUrl, setAvatarUrl] = useState(user?.user_metadata?.avatar_url || '');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   // Form validation
   const [nameError, setNameError] = useState<string | null>(null);
+
+  // Sync form state with user data
+  useEffect(() => {
+    if (user) {
+      setName(user.user_metadata?.name || '');
+      setEmail(user.email || '');
+      setAvatarUrl(user.user_metadata?.avatar_url || '');
+    }
+  }, [user]);
   
   const validateName = (name: string) => {
     if (!name.trim()) {
@@ -73,6 +83,11 @@ export function ProfileSettings({ visible, onClose }: ProfileSettingsProps) {
       if (authError) throw authError;
       
       setSuccess(true);
+      
+      // Notify parent component of successful update
+      if (onProfileUpdated) {
+        onProfileUpdated();
+      }
       
       // Reset after a delay
       setTimeout(() => {
@@ -163,6 +178,11 @@ export function ProfileSettings({ visible, onClose }: ProfileSettingsProps) {
       // Update local state
       setAvatarUrl(data.publicUrl);
       setSuccess(true);
+      
+      // Notify parent component of successful update
+      if (onProfileUpdated) {
+        onProfileUpdated();
+      }
       
       // Reset success after a delay
       setTimeout(() => {
