@@ -1,18 +1,32 @@
-import * as SQLite from 'expo-sqlite';
 import * as FileSystem from 'expo-file-system';
 import { Platform } from 'react-native';
-import uuid from 'react-native-uuid';
 
-// Database name
 const DATABASE_NAME = 'conversation_companion.db';
-
-// Database version for migrations
 const DATABASE_VERSION = 1;
 
 let databaseInstance: any = null;
+let SQLite: any = null;
 
-// Create/open the database
-export const getDatabase = (): any => {
+// Dynamically import SQLite to handle module loading issues
+const loadSQLite = async () => {
+  if (Platform.OS === 'web') {
+    return null;
+  }
+  
+  if (SQLite) {
+    return SQLite;
+  }
+  
+  try {
+    SQLite = await import('expo-sqlite');
+    return SQLite;
+  } catch (error) {
+    console.error('Failed to load SQLite module:', error);
+    return null;
+  }
+};
+
+export const getDatabase = async (): Promise<any> => {
   if (Platform.OS === 'web') {
     console.log('SQLite is not fully supported on web platform. Using alternative storage.');
     return null;
@@ -23,9 +37,15 @@ export const getDatabase = (): any => {
   }
   
   try {
-    // Check if SQLite is available
-    if (!SQLite) {
+    const SQLiteModule = await loadSQLite();
+    if (!SQLiteModule) {
       console.error('SQLite module is not available');
+      return null;
+    }
+    
+    // Check if SQLite is available
+    if (!SQLiteModule.openDatabase) {
+      console.error('SQLite.openDatabase is not available');
       return null;
     }
     
@@ -33,12 +53,13 @@ export const getDatabase = (): any => {
     const directory = FileSystem.documentDirectory + 'SQLite/';
     
     // Create the directory if it doesn't exist
-    FileSystem.makeDirectoryAsync(directory, { intermediates: true })
-      .catch((error: any) => {
-        console.error('Error creating database directory:', error);
-      });
+    try {
+      await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
+    } catch (error) {
+      console.error('Error creating database directory:', error);
+    }
     
-    databaseInstance = SQLite.openDatabase(DATABASE_NAME);
+    databaseInstance = SQLiteModule.openDatabase(DATABASE_NAME);
     
     // Test if the database is working
     if (databaseInstance && typeof databaseInstance.transaction === 'function') {
@@ -57,7 +78,7 @@ export const getDatabase = (): any => {
 
 // Initialize the database with all required tables
 export const initDatabase = async (): Promise<void> => {
-  const db = getDatabase();
+  const db = await getDatabase();
   
   // Skip database initialization on web platform or if database is not available
   if (!db) {
@@ -186,7 +207,7 @@ const runMigrations = (
 };
 
 // Create initial tables for version 1
-const createInitialTables = (tx: SQLite.SQLTransaction) => {
+const createInitialTables = (tx: any) => {
   // Local conversations table
   tx.executeSql(
     `CREATE TABLE IF NOT EXISTS local_conversations (
@@ -212,7 +233,7 @@ const createInitialTables = (tx: SQLite.SQLTransaction) => {
     );`,
     [],
     () => {},
-    (_, error) => {
+    (_: any, error: any) => {
       console.error('Error creating local_conversations table:', error);
       return false;
     }
@@ -239,7 +260,7 @@ const createInitialTables = (tx: SQLite.SQLTransaction) => {
     );`,
     [],
     () => {},
-    (_, error) => {
+    (_: any, error: any) => {
       console.error('Error creating local_messages table:', error);
       return false;
     }
@@ -262,7 +283,7 @@ const createInitialTables = (tx: SQLite.SQLTransaction) => {
     );`,
     [],
     () => {},
-    (_, error) => {
+    (_: any, error: any) => {
       console.error('Error creating user_preferences table:', error);
       return false;
     }
@@ -285,154 +306,69 @@ const createInitialTables = (tx: SQLite.SQLTransaction) => {
     );`,
     [],
     () => {},
-    (_, error) => {
+    (_: any, error: any) => {
       console.error('Error creating sync_queue table:', error);
       return false;
     }
   );
   
-  // Audio cache table
-  tx.executeSql(
-    `CREATE TABLE IF NOT EXISTS audio_cache (
-      id TEXT PRIMARY KEY NOT NULL,
-      remote_url TEXT,
-      local_path TEXT NOT NULL,
-      content_hash TEXT,
-      size INTEGER,
-      duration REAL,
-      created_at TEXT NOT NULL,
-      last_accessed TEXT NOT NULL,
-      expiry TEXT
-    );`,
-    [],
-    () => {},
-    (_, error) => {
-      console.error('Error creating audio_cache table:', error);
-      return false;
-    }
-  );
-  
-  // User progress table
-  tx.executeSql(
-    `CREATE TABLE IF NOT EXISTS local_user_progress (
-      id TEXT PRIMARY KEY NOT NULL,
-      user_id TEXT,
-      remote_id TEXT,
-      mode TEXT NOT NULL,
-      skill_scores TEXT,
-      total_sessions INTEGER DEFAULT 0,
-      total_duration INTEGER DEFAULT 0,
-      best_scores TEXT,
-      achievements TEXT,
-      last_session_date TEXT,
-      streak_count INTEGER DEFAULT 0,
-      is_synced INTEGER DEFAULT 0,
-      sync_status TEXT DEFAULT 'pending',
-      last_sync_attempt TEXT
-    );`,
-    [],
-    () => {},
-    (_, error) => {
-      console.error('Error creating local_user_progress table:', error);
-      return false;
-    }
-  );
-  
-  // Create full-text search index for conversations
+  // Full-text search table for conversations
   tx.executeSql(
     `CREATE VIRTUAL TABLE IF NOT EXISTS conversation_fts USING fts5(
-      id, title, content
+      id UNINDEXED,
+      title,
+      content,
+      content='local_conversations'
     );`,
     [],
     () => {},
-    (_, error) => {
-      console.error('Error creating full-text search index:', error);
-      return false;
-    }
-  );
-  
-  // Create indexes for better performance
-  tx.executeSql(
-    'CREATE INDEX IF NOT EXISTS idx_local_conversations_user_id ON local_conversations(user_id);',
-    [],
-    () => {},
-    (_, error) => {
-      console.error('Error creating index:', error);
-      return false;
-    }
-  );
-  
-  tx.executeSql(
-    'CREATE INDEX IF NOT EXISTS idx_local_conversations_mode ON local_conversations(mode);',
-    [],
-    () => {},
-    (_, error) => {
-      console.error('Error creating index:', error);
-      return false;
-    }
-  );
-  
-  tx.executeSql(
-    'CREATE INDEX IF NOT EXISTS idx_local_messages_conversation_id ON local_messages(conversation_id);',
-    [],
-    () => {},
-    (_, error) => {
-      console.error('Error creating index:', error);
-      return false;
-    }
-  );
-  
-  tx.executeSql(
-    'CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status);',
-    [],
-    () => {},
-    (_, error) => {
-      console.error('Error creating index:', error);
+    (_: any, error: any) => {
+      console.error('Error creating conversation_fts table:', error);
       return false;
     }
   );
 };
 
-// Helper function to generate a unique ID
+// Generate a unique ID
 export const generateId = (): string => {
-  return uuid.v4() as string;
+  return Math.random().toString(36).substring(2) + Date.now().toString(36);
 };
 
-// Execute a database query with proper error handling
+// Execute a database query
 export const executeQuery = (
   query: string,
   params: any[] = [],
-  successCallback?: (result: SQLite.SQLResultSet) => void,
+  successCallback?: (result: any) => void,
   errorCallback?: (error: any) => void
 ) => {
-  const db = getDatabase();
-  
-  // Handle web platform where database is not available
-  if (!db) {
-    const error = new Error('Database not available on web platform');
-    console.error('Database query error:', error);
-    if (errorCallback) {
-      errorCallback(error);
-    }
+  if (Platform.OS === 'web') {
+    console.log('Database queries not supported on web platform');
+    if (errorCallback) errorCallback(new Error('Database not available on web'));
     return;
   }
   
-  db.transaction(tx => {
-    tx.executeSql(
-      query,
-      params,
-      (_, result) => {
-        if (successCallback) {
-          successCallback(result);
+  getDatabase().then((db) => {
+    if (!db) {
+      if (errorCallback) errorCallback(new Error('Database not available'));
+      return;
+    }
+    
+    db.transaction((tx: any) => {
+      tx.executeSql(
+        query,
+        params,
+        (result: any) => {
+          if (successCallback) successCallback(result);
+        },
+        (error: any) => {
+          console.error('Database query error:', error);
+          if (errorCallback) errorCallback(error);
+          return false;
         }
-      },
-      (_, error) => {
-        console.error('Database query error:', error);
-        if (errorCallback) {
-          errorCallback(error);
-        }
-        return false;
-      }
-    );
+      );
+    });
+  }).catch((error) => {
+    console.error('Database error:', error);
+    if (errorCallback) errorCallback(error);
   });
 };
