@@ -213,7 +213,7 @@ export function useUserStore() {
   }, [authUser, loadUserData, generateAnalytics]);
   
   // Update user preferences
-  const updatePreferences = useCallback(async (preferences: Partial<UserPreferences>) => {
+  const updatePreferences = useCallback(async (userId: string, preferences: Partial<UserPreferences>) => {
     if (!authUser || !user) return;
     
     try {
@@ -230,7 +230,7 @@ export function useUserStore() {
       
       // Update in database
       await supabaseService.updateUserPreferences(
-        authUser.id,
+        userId,
         {
           ...user.preferences,
           ...preferences,
@@ -246,7 +246,7 @@ export function useUserStore() {
     setThemeState(theme);
     
     if (authUser && user) {
-      updatePreferences({ theme });
+      updatePreferences(authUser.id, { theme });
     }
   }, [authUser, user, updatePreferences]);
   
@@ -255,7 +255,7 @@ export function useUserStore() {
     setFavoriteModeState(modeId);
     
     if (authUser && user) {
-      updatePreferences({ favoriteMode: modeId });
+      updatePreferences(authUser.id, { favoriteMode: modeId });
     }
   }, [authUser, user, updatePreferences]);
   
@@ -269,7 +269,7 @@ export function useUserStore() {
     setRecentModes(updatedRecentModes);
     
     if (authUser && user) {
-      updatePreferences({ recentModes: updatedRecentModes });
+      updatePreferences(authUser.id, { recentModes: updatedRecentModes });
     }
   }, [authUser, user, recentModes, updatePreferences]);
   

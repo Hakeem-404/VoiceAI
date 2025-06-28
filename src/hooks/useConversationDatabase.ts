@@ -63,6 +63,8 @@ export function useConversationDatabase() {
         updatedAt: new Date(conv.updated_at),
         bookmarks: [],
         highlights: [],
+        isBookmarked: conv.is_bookmarked,
+        feedback: conv.feedback_summary as any || null
       }));
       
       setConversations(appConversations);
@@ -121,6 +123,8 @@ export function useConversationDatabase() {
         updatedAt: new Date(data.updated_at),
         bookmarks: [],
         highlights: [],
+        isBookmarked: data.is_bookmarked,
+        feedback: data.feedback_summary as any || null
       };
       
       return conversation;
@@ -185,6 +189,7 @@ export function useConversationDatabase() {
         updatedAt: new Date(data.updated_at),
         bookmarks: [],
         highlights: [],
+        isBookmarked: data.is_bookmarked
       };
       
       // Update conversations list
