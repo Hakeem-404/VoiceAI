@@ -14,6 +14,8 @@ import { Target, Trophy, Clock, Star, Play, CircleCheck as CheckCircle, Trending
 import { useTheme } from '@/src/hooks/useTheme';
 import { useUserStore } from '@/src/stores/userStore';
 import { useConversationStore } from '@/src/stores/conversationStore';
+import { useSupabaseAuth } from '@/src/hooks/useSupabase';
+import { useDailyChallenges } from '@/src/hooks/useDailyChallenges';
 import { PracticeSession, DailyChallenge } from '@/src/types';
 import { GamificationSystem } from '@/components/GamificationSystem';
 import { DailyChallengeCard } from '@/components/DailyChallengeCard';
@@ -85,32 +87,71 @@ const mockPracticeSessions: PracticeSession[] = [
 
 export default function PracticeScreen() {
   const { colors, isDark } = useTheme();
-  const { analytics, dailyChallenges, loadDailyChallenges, completeChallenge } = useUserStore();
-  const { startConversation } = useConversationStore();
+  const { analytics, dailyChallenges } = useUserStore();
+  const { createConversation, addRecentMode } = useConversationStore();
+  const { user: authUser } = useSupabaseAuth();
+  const { 
+    challenges: dbChallenges, 
+    loading: challengesLoading, 
+    loadChallenges, 
+    completeChallenge: completeDbChallenge 
+  } = useDailyChallenges();
   
   const [selectedTab, setSelectedTab] = useState<'all' | 'daily' | 'challenges'>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [practiceSessions] = useState(mockPracticeSessions);
+  const [localChallenges, setLocalChallenges] = useState<DailyChallenge[]>([]);
 
   useEffect(() => {
-    loadDailyChallenges();
-  }, []);
+    if (authUser) {
+      loadChallenges();
+    }
+  }, [authUser]);
+
+  // Sync challenges from database or use store challenges
+  useEffect(() => {
+    if (authUser && dbChallenges.length > 0) {
+      setLocalChallenges(dbChallenges);
+    } else if (dailyChallenges.length > 0) {
+      setLocalChallenges(dailyChallenges);
+    }
+  }, [authUser, dbChallenges, dailyChallenges]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     await new Promise(resolve => setTimeout(resolve, 1000));
-    loadDailyChallenges();
+    
+    if (authUser) {
+      loadChallenges();
+    }
+    
     setRefreshing(false);
   };
 
-  const handleChallengePress = (challenge: DailyChallenge) => {
+  const handleChallengePress = async (challenge: DailyChallenge) => {
     const mode = conversationModes.find(m => m.id === challenge.modeId);
     if (mode && !challenge.completed) {
-      startConversation(mode);
-      // Mark challenge as completed (in a real app, this would happen after successful completion)
-      setTimeout(() => {
-        completeChallenge(challenge.id);
-      }, 1000);
+      // Create conversation using store
+      const conversation = createConversation(mode);
+      
+      if (conversation) {
+        // Update recent modes
+        addRecentMode(mode.id);
+        
+        // Mark challenge as completed
+        if (authUser) {
+          try {
+            await completeDbChallenge(challenge.id);
+          } catch (error) {
+            console.error('Failed to complete challenge:', error);
+          }
+        } else {
+          // Update local state for guest users
+          setLocalChallenges(prev => 
+            prev.map(c => c.id === challenge.id ? { ...c, completed: true } : c)
+          );
+        }
+      }
     }
   };
 
@@ -178,7 +219,7 @@ export default function PracticeScreen() {
           {analytics && (
             <GamificationSystem
               achievements={analytics.achievements}
-              dailyChallenges={dailyChallenges}
+              dailyChallenges={localChallenges}
               streakDays={analytics.streakDays}
               totalPoints={analytics.totalConversations * 50} // Mock points calculation
               level={Math.floor(analytics.totalConversations / 10) + 1}
