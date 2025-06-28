@@ -64,6 +64,22 @@ export default function WelcomeScreen() {
                 Real-time feedback and coaching
               </Text>
             </View>
+            <View style={styles.featureItem}>
+              <View style={[styles.featureIcon, { backgroundColor: colors.secondary + '20' }]}>
+                <MessageSquare size={20} color={colors.secondary} />
+              </View>
+              <Text style={[styles.featureText, { color: colors.text }]}>
+                Voice Recognition
+              </Text>
+            </View>
+            <View style={styles.featureItem}>
+              <View style={[styles.featureIcon, { backgroundColor: colors.secondary + '20' }]}>
+                <MessageSquare size={20} color={colors.secondary} />
+              </View>
+              <Text style={[styles.featureText, { color: colors.text }]}>
+                Natural Conversations
+              </Text>
+            </View>
           </View>
 
           {/* Action Buttons */}
