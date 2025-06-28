@@ -399,8 +399,6 @@ export default function SignUpScreen() {
                 <Text style={styles.signUpButtonText}>Create Account</Text>
               )}
             </TouchableOpacity>
-
-            {/* Terms and Conditions */}
             <Text style={[styles.termsText, { color: colors.textSecondary }]}>
               By creating an account, you agree to our{' '}
               <Text style={[styles.termsLink, { color: colors.primary }]}>
@@ -411,8 +409,6 @@ export default function SignUpScreen() {
                 Privacy Policy
               </Text>
             </Text>
-
-            {/* Sign In Link */}
             <View style={styles.signInContainer}>
               <Text style={[styles.signInText, { color: colors.textSecondary }]}>
                 Already have an account?
