@@ -183,16 +183,31 @@ export function ProfileSettings({ visible, onClose, onProfileUpdated }: ProfileS
         // Don't throw here as the upload was successful
       } else {
         console.log('Auth metadata updated successfully');
+        
+        // Refresh the session to ensure UI updates
+        console.log('Refreshing session...');
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) {
+          console.warn('Failed to refresh session:', sessionError);
+        } else {
+          console.log('Session refreshed successfully');
+        }
       }
       
       // Update local state
       console.log('Updating local state with avatar URL:', publicUrl);
+      console.log('Current avatarVersion before update:', avatarVersion);
       setAvatarUrl(publicUrl);
-      setAvatarVersion(prev => prev + 1);
+      setAvatarVersion(prev => {
+        const newVersion = prev + 1;
+        console.log('New avatarVersion:', newVersion);
+        return newVersion;
+      });
       setSuccess(true);
       
       // Notify parent component of successful update
       if (onProfileUpdated) {
+        console.log('Calling onProfileUpdated callback');
         onProfileUpdated();
       }
       
@@ -226,7 +241,7 @@ export function ProfileSettings({ visible, onClose, onProfileUpdated }: ProfileS
             <X size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>
-            Account Settings
+            Profile Settings
           </Text>
           <View style={styles.placeholder} />
         </View>
