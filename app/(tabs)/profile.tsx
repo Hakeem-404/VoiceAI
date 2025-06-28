@@ -37,6 +37,14 @@ export default function ProfileScreen() {
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const [promptFeature, setPromptFeature] = useState<'save' | 'history' | 'voice' | 'analytics' | 'premium'>('save');
   const [showSettings, setShowSettings] = useState(false);
+  const [profileUpdateKey, setProfileUpdateKey] = useState(0);
+
+  // Refresh user data when profile is updated
+  const handleProfileUpdated = () => {
+    // Force a refresh by updating the key
+    setProfileUpdateKey(prev => prev + 1);
+    console.log('Profile updated, refreshing user data...');
+  };
 
   const mockUser = {
     id: '1',
@@ -222,8 +230,10 @@ export default function ProfileScreen() {
       
       {/* Profile Settings Modal */}
       <ProfileSettings
+        key={profileUpdateKey}
         visible={showSettings}
         onClose={() => setShowSettings(false)}
+        onProfileUpdated={handleProfileUpdated}
       />
     </SafeAreaView>
   );
