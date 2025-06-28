@@ -226,7 +226,7 @@ export function ProfileSettings({ visible, onClose, onProfileUpdated }: ProfileS
             <X size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>
-            Profile Settings
+            Account Settings
           </Text>
           <View style={styles.placeholder} />
         </View>
