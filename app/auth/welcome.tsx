@@ -1,9 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { MessageCircle, Mic, Brain } from 'lucide-react-native';
+import { Mic, MessageSquare, ArrowRight } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { spacing, typography } from '@/src/constants/colors';
 
@@ -62,22 +61,6 @@ export default function WelcomeScreen() {
               </View>
               <Text style={[styles.featureText, { color: colors.text }]}>
                 Real-time feedback and coaching
-              </Text>
-            </View>
-            <View style={styles.featureItem}>
-              <View style={[styles.featureIcon, { backgroundColor: colors.secondary + '20' }]}>
-                <MessageSquare size={20} color={colors.secondary} />
-              </View>
-              <Text style={[styles.featureText, { color: colors.text }]}>
-                Voice Recognition
-              </Text>
-            </View>
-            <View style={styles.featureItem}>
-              <View style={[styles.featureIcon, { backgroundColor: colors.secondary + '20' }]}>
-                <MessageSquare size={20} color={colors.secondary} />
-              </View>
-              <Text style={[styles.featureText, { color: colors.text }]}>
-                Natural Conversations
               </Text>
             </View>
           </View>

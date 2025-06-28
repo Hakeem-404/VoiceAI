@@ -19,11 +19,7 @@ import {
   Award,
   Crown,
   ChevronRight,
-  LogOut,
-  Wifi,
-  Database,
-  Download,
-  RefreshCw
+  LogOut
 } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useUserStore } from '@/src/stores/userStore';
@@ -417,12 +413,9 @@ export default function ProfileScreen() {
 }
 
 // Import these components for the UI
-// const Wifi = (props: any) => <RefreshCw {...props} />;
-// const HardDrive = (props: any) => <Database {...props} />;
-// const Download = (props: any) => <Archive {...props} />;
-const Wifi = Wifi;
-const HardDrive = Database;
-const Download = Download;
+const Wifi = (props: any) => <RefreshCw {...props} />;
+const HardDrive = (props: any) => <Database {...props} />;
+const Download = (props: any) => <Archive {...props} />;
 
 const styles = StyleSheet.create({
   container: {

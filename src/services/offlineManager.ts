@@ -12,7 +12,6 @@ import {
   getUserProgress,
   saveUserProgress
 } from './localDatabaseService';
-import { getDatabase } from '../lib/database';
 import { processSyncQueue } from './syncService';
 import { useSupabaseAuth } from '../hooks/useSupabase';
 import * as supabaseService from './supabaseService';
@@ -333,32 +332,22 @@ const updatePendingOperationsCount = async () => {
 
 // Get pending operations count
 const getPendingOperationsCount = async (): Promise<number> => {
-  if (Platform.OS === 'web') {
-    // Return 0 for web since we don't have real database
-    return 0;
-  }
-  
   return new Promise((resolve, reject) => {
-    try {
-      const db = getDatabase();
-      
-      db.transaction(tx => {
-        tx.executeSql(
-          'SELECT COUNT(*) as count FROM sync_queue WHERE status = "pending";',
-          [],
-          (_, result) => {
-            resolve(result.rows.item(0).count);
-          },
-          (_, error) => {
-            reject(error);
-            return false;
-          }
-        );
-      });
-    } catch (error) {
-      console.error('Error getting pending operations count:', error);
-      resolve(0);
-    }
+    const db = getDatabase();
+    
+    db.transaction(tx => {
+      tx.executeSql(
+        'SELECT COUNT(*) as count FROM sync_queue WHERE status = "pending";',
+        [],
+        (_, result) => {
+          resolve(result.rows.item(0).count);
+        },
+        (_, error) => {
+          reject(error);
+          return false;
+        }
+      );
+    });
   });
 };
 
