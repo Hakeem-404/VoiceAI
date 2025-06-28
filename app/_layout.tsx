@@ -60,8 +60,8 @@ export default function RootLayout() {
           // User is not signed in
           <>
             <Stack.Screen name="auth" options={{ headerShown: false }} />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          </>
+            {/* <Stack.Screen name="(tabs)" options={{ headerShown: false }} />d
+          </> */}
         )}
         <Stack.Screen name="+not-found" />
       </Stack>
