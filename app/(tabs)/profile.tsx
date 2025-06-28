@@ -65,53 +65,6 @@ export default function ProfileScreen() {
     createdAt: new Date('2024-01-15'),
   };
 
-  const SettingItem = ({ 
-    icon: IconComponent, 
-    title, 
-    subtitle, 
-    value, 
-    onValueChange,
-    type = 'toggle'
-  }: {
-    icon: any;
-    title: string;
-    subtitle?: string;
-    value?: boolean;
-    onValueChange?: (value: boolean) => void;
-    type?: 'toggle' | 'nav';
-  }) => (
-    <TouchableOpacity 
-      style={[styles.settingItem, { backgroundColor: colors.surface }]}
-      activeOpacity={type === 'nav' ? 0.6 : 1}
-    >
-      <View style={styles.settingContent}>
-        <View style={[styles.settingIcon, { backgroundColor: colors.primary }]}>
-          <IconComponent size={20} color="white" />
-        </View>
-        <View style={styles.settingText}>
-          <Text style={[styles.settingTitle, { color: colors.text }]}>
-            {title}
-          </Text>
-          {subtitle && (
-            <Text style={[styles.settingSubtitle, { color: colors.textSecondary }]}>
-              {subtitle}
-            </Text>
-          )}
-        </View>
-      </View>
-      {type === 'toggle' && value !== undefined && onValueChange ? (
-        <Switch
-          value={value}
-          onValueChange={onValueChange}
-          trackColor={{ false: colors.border, true: colors.primary }}
-          thumbColor={colors.surface}
-        />
-      ) : (
-        <ChevronRight size={20} color={colors.textTertiary} />
-      )}
-    </TouchableOpacity>
-  );
-
   const SubscriptionCard = () => (
     <View style={[styles.subscriptionCard, { backgroundColor: colors.surface }]}>
       <LinearGradient
@@ -214,6 +167,10 @@ export default function ProfileScreen() {
               title="Voice & Speech"
               subtitle="Customize voice speed, pitch, and language"
               type="nav"
+              onPress={() => {
+                // TODO: Navigate to voice settings screen
+                console.log('Voice settings pressed');
+              }}
             />
           </View>
 
@@ -230,12 +187,6 @@ export default function ProfileScreen() {
                 if (authUser) {
                   setShowSettings(true);
                 } else {
-                  setPromptFeature('save');
-                  setShowAuthPrompt(true);
-                }
-              }}
-              onPress={() => {
-                if (!authUser) {
                   setPromptFeature('save');
                   setShowAuthPrompt(true);
                 }
@@ -363,47 +314,6 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.lg,
     fontWeight: typography.weights.semibold,
     marginBottom: spacing.md,
-  },
-  settingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing.lg,
-    borderRadius: 12,
-    marginBottom: spacing.sm,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  settingContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  settingIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  settingText: {
-    flex: 1,
-  },
-  settingTitle: {
-    fontSize: typography.sizes.base,
-    fontWeight: typography.weights.medium,
-    marginBottom: spacing.xs / 2,
-  },
-  settingSubtitle: {
-    fontSize: typography.sizes.sm,
-    lineHeight: typography.sizes.sm * 1.3,
   },
   logoutButton: {
     flexDirection: 'row',
