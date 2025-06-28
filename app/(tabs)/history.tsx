@@ -28,8 +28,8 @@ import { spacing, typography } from '@/src/constants/colors';
 
 export default function HistoryScreen() {
   const { colors, isDark } = useTheme();
-  const { conversations, deleteConversation } = useConversationStore();
-  const { user } = useSupabaseAuth();
+  const { conversations, removeConversation } = useConversationStore();
+  const { user: authUser } = useSupabaseAuth();
   const { 
     conversations: dbConversations, 
     loading, 
@@ -40,25 +40,39 @@ export default function HistoryScreen() {
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'recent' | 'favorites'>('all');
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   
+  // Combined conversations from store and database
+  const [allConversations, setAllConversations] = useState<Conversation[]>([]);
+  
   useEffect(() => {
-    if (user) {
+    if (authUser) {
       loadConversations();
       setShowAuthPrompt(false);
     } else if (!conversations.length) {
       // Show auth prompt if guest user has no conversations
       setShowAuthPrompt(true);
     }
-  }, [user]);
+  }, [authUser]);
+
+  // Combine conversations from store and database
+  useEffect(() => {
+    if (authUser && dbConversations.length > 0) {
+      // Use database conversations for authenticated users
+      setAllConversations(dbConversations);
+    } else {
+      // Use store conversations for guest users or when no DB conversations
+      setAllConversations(conversations);
+    }
+  }, [authUser, dbConversations, conversations]);
 
   // Handle conversation deletion
   const handleDeleteConversation = async (id: string) => {
     try {
-      if (user) {
+      if (authUser && !id.startsWith('local_')) {
         // Delete from database
         await deleteDbConversation(id);
       } else {
         // Delete from local store
-        deleteConversation(id);
+        removeConversation(id);
       }
     } catch (error) {
       console.error('Failed to delete conversation:', error);
@@ -82,7 +96,7 @@ export default function HistoryScreen() {
     return date.toLocaleDateString();
   };
 
-  const filteredConversations = conversations.filter(conversation => {
+  const filteredConversations = allConversations.filter(conversation => {
     const matchesSearch = conversation.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          conversation.mode.name.toLowerCase().includes(searchQuery.toLowerCase());
     
@@ -90,6 +104,9 @@ export default function HistoryScreen() {
     if (selectedFilter === 'recent') {
       const isRecent = (new Date().getTime() - conversation.createdAt.getTime()) < (7 * 24 * 60 * 60 * 1000);
       return matchesSearch && isRecent;
+    }
+    if (selectedFilter === 'favorites') {
+      return matchesSearch && conversation.isBookmarked;
     }
     
     return matchesSearch;
@@ -160,7 +177,10 @@ export default function HistoryScreen() {
         No conversations yet
       </Text>
       <Text style={[styles.emptyDescription, { color: colors.textSecondary }]}>
-        Start your first conversation to see it here
+        {authUser 
+          ? 'Start your first conversation to see it here'
+          : 'Sign in to save and view your conversation history'
+        }
       </Text>
     </View>
   );
@@ -222,6 +242,12 @@ export default function HistoryScreen() {
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={renderEmptyState}
           showsVerticalScrollIndicator={false}
+          refreshing={loading}
+          onRefresh={() => {
+            if (authUser) {
+              loadConversations();
+            }
+          }}
         />
       </LinearGradient>
       
