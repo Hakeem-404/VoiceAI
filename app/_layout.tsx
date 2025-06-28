@@ -19,7 +19,7 @@ export default function RootLayout() {
     const initializeApp = async () => {
       try {
         // Initialize SQLite database
-        await initDatabase();
+        // await initDatabase();
         
         // Initialize sync service
         await initializeSyncService();
