@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -38,6 +38,13 @@ export default function ProfileScreen() {
   const [promptFeature, setPromptFeature] = useState<'save' | 'history' | 'voice' | 'analytics' | 'premium'>('save');
   const [showSettings, setShowSettings] = useState(false);
   const [profileUpdateKey, setProfileUpdateKey] = useState(0);
+
+  // Reset auth prompt when user authentication status changes
+  useEffect(() => {
+    if (authUser) {
+      setShowAuthPrompt(false);
+    }
+  }, [authUser]);
 
   // Refresh user data when profile is updated
   const handleProfileUpdated = () => {
