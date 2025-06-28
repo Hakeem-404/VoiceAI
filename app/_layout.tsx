@@ -19,10 +19,10 @@ export default function RootLayout() {
     const initializeApp = async () => {
       try {
         // Initialize SQLite database
-        // await initDatabase();
+        await initDatabase();
         
         // Initialize sync service
-        await initializeSyncService();
+        // await initializeSyncService();
         
         // Initialize cache service
         await initializeCacheService();
@@ -30,6 +30,7 @@ export default function RootLayout() {
         console.log('App initialization complete');
       } catch (error) {
         console.error('App initialization error:', error);
+        // Don't let initialization errors prevent the app from loading
       }
     };
     
@@ -88,9 +89,10 @@ export default function RootLayout() {
     }
   }, [appIsReady]);
 
-  if (!appIsReady) {
-    return null;
-  }
+  // Temporarily bypass loading state to see if tabs appear
+  // if (!appIsReady) {
+  //   return null;
+  // }
 
   return (
     <>
