@@ -456,14 +456,17 @@ export const uploadAvatar = async (
   userId: string,
   file: Blob
 ) => {
-  const filePath = `${userId}/avatar.jpg`;
+  // Get file extension from the original file
+  const fileExtension = file.type.split('/')[1] || 'jpg';
+  const timestamp = Date.now();
+  const filePath = `${userId}/avatar_${timestamp}.${fileExtension}`;
   
   const { data, error } = await supabase
     .storage
     .from('avatars')
     .upload(filePath, file, {
       cacheControl: '3600',
-      upsert: true
+      upsert: false // Don't overwrite, create new file
     });
     
   if (error) throw error;
@@ -474,10 +477,13 @@ export const uploadAvatar = async (
     .from('avatars')
     .getPublicUrl(filePath);
     
+  // Add timestamp to URL for cache busting
+  const cacheBustedUrl = publicUrl + (publicUrl.includes('?') ? '&' : '?') + `t=${timestamp}`;
+    
   // Update user profile with new avatar URL
-  await updateUserProfile(userId, { avatar_url: publicUrl });
+  await updateUserProfile(userId, { avatar_url: cacheBustedUrl });
   
-  return publicUrl;
+  return cacheBustedUrl;
 };
 
 // Document analysis functions
