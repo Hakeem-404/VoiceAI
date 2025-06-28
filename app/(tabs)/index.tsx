@@ -43,6 +43,7 @@ import { useVoiceStore } from '@/src/stores/voiceStore';
 import { useInputStore } from '@/src/stores/inputStore';
 import { useSettingsStore } from '@/src/stores/settingsStore';
 import { useUserStore } from '@/src/stores/userStore';
+import { useSupabaseAuth } from '@/src/hooks/useSupabase';
 import { conversationModes } from '@/src/constants/conversationModes';
 import { voiceService } from '@/src/services/voiceService';
 import { speechRecognitionService } from '@/services/speechRecognitionService';
@@ -67,14 +68,19 @@ const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const { colors, isDark } = useTheme();
+  
+  // Auth and user data
+  const { user: authUser } = useSupabaseAuth();
+  
+  // Store state and actions
   const {
     currentConversation,
     currentMode,
     recordingState,
     isProcessing,
-    startConversation,
-    endConversation,
-    addMessage,
+    createConversation,
+    endCurrentConversation,
+    addMessageToSession,
     setRecordingState,
     setProcessing,
     lastFeedback,
@@ -103,7 +109,17 @@ export default function HomeScreen() {
   } = useInputStore();
 
   const { permissions, voiceSettings } = useSettingsStore();
-  const { user, analytics } = useUserStore();
+  
+  const { 
+    user, 
+    analytics, 
+    theme,
+    favoriteMode,
+    recentModes,
+    updatePreferences,
+    setTheme,
+    addRecentMode,
+  } = useUserStore();
 
   // ElevenLabs voice integration
   const {
@@ -145,9 +161,9 @@ export default function HomeScreen() {
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [isGeneratingFeedback, setIsGeneratingFeedback] = useState(false);
 
-  // Mock user preferences for favorites and recent modes
-  const [favoriteMode, setFavoriteMode] = useState<string>('general-chat');
-  const [recentModes, setRecentModes] = useState<string[]>(['interview-practice', 'presentation-prep']);
+  // Local state for user preferences
+  const [localFavoriteMode, setLocalFavoriteMode] = useState<string>('general-chat');
+  const [localRecentModes, setLocalRecentModes] = useState<string[]>(['interview-practice', 'presentation-prep']);
 
   useEffect(() => {
     if (permissions.microphone === 'granted') {
@@ -161,7 +177,6 @@ export default function HomeScreen() {
 
     // Check speech recognition support
     setSpeechRecognitionSupported(speechRecognitionService.isSupported());
-    console.log('Speech recognition supported:', speechRecognitionService.isSupported());
 
     // Check ElevenLabs usage limits
     if (isElevenLabsConfigured) {
@@ -172,39 +187,42 @@ export default function HomeScreen() {
     }
   }, [permissions.microphone, isElevenLabsConfigured]);
 
+  // Sync store state with local state
   useEffect(() => {
-  // Check if we have a current conversation that was just started from interview-prep
-  if (currentConversation && 
-      currentConversation.mode.id === 'interview-practice' && 
-      conversationMessages.length === 0 && 
-      !isLoadingResponse) {
-    
-    console.log('🔄 Detected return from interview-prep with started conversation:', {
-      conversationId: currentConversation.id,
-      hasDocumentData: !!documentData.analysisResult,
-      configHasAnalysis: !!currentConversation.configuration?.customSettings?.documentAnalysis
-    });
-
-    // Check if this conversation has personalized analysis
-    const hasPersonalizedData = currentConversation.configuration?.customSettings?.documentAnalysis ||
-                               documentData.analysisResult;
-
-    if (hasPersonalizedData) {
-      console.log('🚀 Starting personalized interview conversation');
-      
-      // Small delay to ensure everything is properly initialized
-      setTimeout(async () => {
-        await sendMessageToClaude(""); // Empty message triggers AI interviewer to start
-      }, 1000);
-    } else {
-      console.log('📝 Starting standard interview conversation');
-      
-      setTimeout(async () => {
-        await sendMessageToClaude(""); // Empty message triggers AI interviewer to start
-      }, 1000);
+    if (favoriteMode) {
+      setLocalFavoriteMode(favoriteMode);
     }
-  }
-}, [currentConversation, conversationMessages.length, isLoadingResponse, documentData.analysisResult]);
+    if (recentModes.length > 0) {
+      setLocalRecentModes(recentModes);
+    }
+  }, [favoriteMode, recentModes]);
+
+  useEffect(() => {
+    // Check if we have a current conversation that was just started from interview-prep
+    if (currentConversation && 
+        currentConversation.mode.id === 'interview-practice' && 
+        conversationMessages.length === 0 && 
+        !isLoadingResponse) {
+      
+      console.log('🔄 Detected return from interview-prep with started conversation');
+
+      // Check if this conversation has personalized analysis
+      const hasPersonalizedData = currentConversation.configuration?.customSettings?.documentAnalysis ||
+                                 documentData.analysisResult;
+
+      if (hasPersonalizedData) {
+        console.log('🚀 Starting personalized interview conversation');
+        setTimeout(async () => {
+          await sendMessageToClaude("");
+        }, 1000);
+      } else {
+        console.log('📝 Starting standard interview conversation');
+        setTimeout(async () => {
+          await sendMessageToClaude("");
+        }, 1000);
+      }
+    }
+  }, [currentConversation, conversationMessages.length, isLoadingResponse, documentData.analysisResult]);
 
   const loadDailyChallenges = () => {
     // Mock daily challenges
@@ -260,69 +278,59 @@ export default function HomeScreen() {
   };
 
   const handleModeStart = async (configuration: ModeConfiguration) => {
-  const mode = conversationModes.find(m => m.id === configuration.modeId);
-  if (!mode) return;
+    const mode = conversationModes.find(m => m.id === configuration.modeId);
+    if (!mode) return;
 
-  console.log('🎯 Starting mode:', mode.name, 'with configuration:', {
-    modeId: configuration.modeId,
-    hasCustomSettings: !!configuration.customSettings,
-    difficulty: configuration.difficulty,
-    sessionType: configuration.sessionType
-  });
+    console.log('🎯 Starting mode:', mode.name);
 
-  // Update recent modes
-  setRecentModes(prev => [mode.id, ...prev.filter(id => id !== mode.id)].slice(0, 3));
-  
-  // Start conversation and reset state
-  startConversation(mode, configuration);
-  setShowConfigModal(false);
-  setError(null);
-  setConversationMessages([]);
-  
-  // Generate initial quick replies for the mode
-  generateQuickRepliesForMode(mode.id);
+    // Update recent modes in store
+    addRecentMode(mode.id);
+    
+    // Update local state
+    setLocalRecentModes(prev => [mode.id, ...prev.filter(id => id !== mode.id)].slice(0, 3));
+    
+    // Create conversation using store
+    const conversation = createConversation(mode, configuration);
+    setShowConfigModal(false);
+    setError(null);
+    setConversationMessages([]);
+    
+    // Generate initial quick replies for the mode
+    generateQuickRepliesForMode(mode.id);
 
-  // For interview practice mode, DON'T auto-start here
-  // Let the interview-prep screen handle it, or the useEffect above
-  if (mode.id === 'interview-practice') {
-    console.log('🎯 Interview mode conversation started - waiting for trigger');
-    // Don't send initial message here - let the useEffect handle it
-  } else {
-    console.log('✅ Non-interview mode started:', mode.name);
-    // For other modes, no initial message needed
-  }
-};
-
-
-  const handleInterviewQuickStart = async () => {
-  const mode = conversationModes.find(m => m.id === 'interview-practice');
-  if (!mode) return;
-  
-  console.log('🚀 Quick Start Interview - no document analysis needed');
-
-  // Create a simple configuration for quick start (no custom settings)
-  const configuration: ModeConfiguration = {
-    modeId: 'interview-practice',
-    difficulty: 'intermediate' as any,
-    sessionType: 'quick',
-    selectedTopics: mode.topics.slice(0, 3),
-    aiPersonality: 'Professional',
-    // No customSettings - this will use generic interview questions
+    if (mode.id === 'interview-practice') {
+      console.log('🎯 Interview mode conversation started - waiting for trigger');
+    } else {
+      console.log('✅ Non-interview mode started:', mode.name);
+    }
   };
 
-  // Start conversation
-  startConversation(mode, configuration);
-  setShowInterviewSetup(false);
-  setError(null);
-  setConversationMessages([]);
-  generateQuickRepliesForMode(mode.id);
+  const handleInterviewQuickStart = async () => {
+    const mode = conversationModes.find(m => m.id === 'interview-practice');
+    if (!mode) return;
+    
+    console.log('🚀 Quick Start Interview - no document analysis needed');
 
-  // For quick start, immediately trigger the AI to start
-  setTimeout(async () => {
-    console.log('💬 Quick start - triggering AI interviewer');
-    await sendMessageToClaude(""); // Empty message lets AI start as interviewer
-  }, 500);
-};
+    const configuration: ModeConfiguration = {
+      modeId: 'interview-practice',
+      difficulty: 'intermediate' as any,
+      sessionType: 'quick',
+      selectedTopics: mode.topics.slice(0, 3),
+      aiPersonality: 'Professional',
+    };
+
+    // Create conversation using store
+    const conversation = createConversation(mode, configuration);
+    setShowInterviewSetup(false);
+    setError(null);
+    setConversationMessages([]);
+    generateQuickRepliesForMode(mode.id);
+
+    setTimeout(async () => {
+      console.log('💬 Quick start - triggering AI interviewer');
+      await sendMessageToClaude("");
+    }, 500);
+  };
 
   const handleInterviewDocumentSelect = (type: 'job' | 'cv') => {
     setActiveDocument(type);
@@ -330,7 +338,6 @@ export default function HomeScreen() {
   };
 
   const handleInterviewContinue = () => {
-    // Navigate to the interview-prep screen with the documents
     router.push('/interview-prep');
     setShowInterviewSetup(false);
   };
@@ -389,184 +396,125 @@ export default function HomeScreen() {
   };
 
   const sendMessageToClaude = async (content: string) => {
-  if (!currentMode || !isSupabaseConfigured) return;
+    if (!currentMode || !isSupabaseConfigured) return;
 
-  console.log('📨 sendMessageToClaude called:', {
-    mode: currentMode?.id,
-    contentLength: content.length,
-    contentPreview: content ? content.substring(0, 50) + '...' : '[EMPTY - AI START]',
-    hasDocumentData: !!documentData.analysisResult,
-    messagesCount: conversationMessages.length
-  });
+    console.log('📨 sendMessageToClaude called:', {
+      mode: currentMode?.id,
+      contentLength: content.length,
+      contentPreview: content ? content.substring(0, 50) + '...' : '[EMPTY - AI START]',
+      hasDocumentData: !!documentData.analysisResult,
+      messagesCount: conversationMessages.length
+    });
 
-  setIsLoadingResponse(true);
-  setError(null);
+    setIsLoadingResponse(true);
+    setError(null);
 
-  try {
-    // Check if this is an interview initialization (empty message, no previous messages)
-    const isInterviewInitialization = currentMode.id === 'interview-practice' && 
-                                     !content.trim() && 
-                                     conversationMessages.length === 0;
+    try {
+      const isInterviewInitialization = currentMode.id === 'interview-practice' && 
+                                       !content.trim() && 
+                                       conversationMessages.length === 0;
 
-    let updatedMessages = [...conversationMessages];
-    
-    // Only add user message if there's actual content
-    if (content.trim()) {
-      const userMessage: ConversationMessage = {
-        id: Date.now().toString(),
-        role: 'user',
-        content: content.trim(),
-        timestamp: new Date(),
+      let updatedMessages = [...conversationMessages];
+      
+      if (content.trim()) {
+        const userMessage: ConversationMessage = {
+          id: Date.now().toString(),
+          role: 'user',
+          content: content.trim(),
+          timestamp: new Date(),
+        };
+        updatedMessages = [...updatedMessages, userMessage];
+        setConversationMessages(updatedMessages);
+        addMessageToSession(userMessage);
+      }
+
+      let context: ConversationContext = {
+        messages: updatedMessages,
+        mode: currentMode.id,
+        sessionId: currentConversation?.id || Date.now().toString(),
+        metadata: {
+          startTime: currentConversation?.createdAt || new Date(),
+          lastActivity: new Date(),
+          messageCount: updatedMessages.length,
+          totalTokens: 0,
+        },
       };
-      updatedMessages = [...updatedMessages, userMessage];
-      setConversationMessages(updatedMessages);
-      addMessage(userMessage);
+
+      // Handle interview practice mode with document analysis
+      if (currentMode.id === 'interview-practice' && documentData.analysisResult) {
+        console.log('🎯 Interview mode: Using personalized questions from analysis');
+        
+        (context as any).customSettings = {
+          documentAnalysis: documentData.analysisResult,
+          jobDescription: documentData.jobDescription,
+          cvContent: documentData.cvContent
+        };
+
+        const options: any = {
+          maxTokens: 500
+        };
+
+        const messageToSend = isInterviewInitialization ? "" : content;
+        
+        const response = await supabaseClaudeAPI.sendMessage(messageToSend, context, options);
+
+        if (response.error) {
+          throw new Error(response.error);
+        }
+
+        if (response.data) {
+          const assistantMessage = response.data;
+          setConversationMessages(prev => [...prev, assistantMessage]);
+          addMessageToSession(assistantMessage);
+
+          if (voicePlaybackEnabled && isElevenLabsConfigured) {
+            try {
+              await generateAndPlaySpeech(
+                assistantMessage.content,
+                `${currentMode.name} Response`
+              );
+            } catch (voiceError) {
+              console.warn('Voice generation failed:', voiceError);
+            }
+          }
+
+          await generateContextualQuickReplies(context, assistantMessage.content);
+        }
+      } else {
+        // Regular conversation handling
+        const messageToSend = isInterviewInitialization ? "" : content;
+        const response = await supabaseClaudeAPI.sendMessage(messageToSend, context);
+
+        if (response.error) {
+          throw new Error(response.error);
+        }
+
+        if (response.data) {
+          const assistantMessage = response.data;
+          setConversationMessages(prev => [...prev, assistantMessage]);
+          addMessageToSession(assistantMessage);
+
+          if (voicePlaybackEnabled && isElevenLabsConfigured) {
+            try {
+              await generateAndPlaySpeech(
+                assistantMessage.content,
+                `${currentMode.name} Response`
+              );
+            } catch (voiceError) {
+              console.warn('Voice generation failed:', voiceError);
+            }
+          }
+
+          await generateContextualQuickReplies(context, assistantMessage.content);
+        }
+      }
+    } catch (error) {
+      console.error('Error sending message to Claude:', error);
+      setError(error instanceof Error ? error.message : 'Failed to send message');
+    } finally {
+      setIsLoadingResponse(false);
     }
-
-    // Create conversation context
-    let context: ConversationContext = {
-      messages: updatedMessages,
-      mode: currentMode.id,
-      sessionId: currentConversation?.id || Date.now().toString(),
-      metadata: {
-        startTime: currentConversation?.createdAt || new Date(),
-        lastActivity: new Date(),
-        messageCount: updatedMessages.length,
-        totalTokens: 0,
-      },
-    };
-
-    // Handle interview practice mode with document analysis
-    if (currentMode.id === 'interview-practice' && documentData.analysisResult) {
-      console.log('🎯 Interview mode: Using personalized questions from analysis:', {
-        analysisScore: documentData.analysisResult?.analysis?.matchScore,
-        strengthsCount: documentData.analysisResult?.analysis?.strengths?.length || 0,
-        gapsCount: documentData.analysisResult?.analysis?.gaps?.length || 0,
-        technicalQs: documentData.analysisResult?.analysis?.interviewQuestions?.technical?.length || 0,
-        behavioralQs: documentData.analysisResult?.analysis?.interviewQuestions?.behavioral?.length || 0,
-        situationalQs: documentData.analysisResult?.analysis?.interviewQuestions?.situational?.length || 0,
-        gapFocusedQs: documentData.analysisResult?.analysis?.interviewQuestions?.gapFocused?.length || 0
-      });
-      
-      // Add custom settings to context for personalized interview
-      (context as any).customSettings = {
-        documentAnalysis: documentData.analysisResult,
-        jobDescription: documentData.jobDescription,
-        cvContent: documentData.cvContent
-      };
-
-      const options: any = {
-        maxTokens: 500 // Larger token limit for interview responses
-      };
-
-      // For initialization, send empty message to trigger AI interviewer
-      const messageToSend = isInterviewInitialization ? "" : content;
-      
-      console.log('🚀 Sending to Claude API:', {
-        isInitialization: isInterviewInitialization,
-        messageToSend: messageToSend || '[EMPTY]',
-        hasCustomSettings: true
-      });
-
-      const response = await supabaseClaudeAPI.sendMessage(messageToSend, context, options);
-
-      if (response.error) {
-        throw new Error(response.error);
-      }
-
-      if (response.data) {
-        const assistantMessage = response.data;
-        setConversationMessages(prev => [...prev, assistantMessage]);
-        addMessage(assistantMessage);
-
-        console.log('✅ Received interview response:', {
-          responseLength: assistantMessage.content.length,
-          isInitialization: isInterviewInitialization
-        });
-
-        // Generate and play voice response if enabled
-        if (voicePlaybackEnabled && isElevenLabsConfigured) {
-          try {
-            await generateAndPlaySpeech(
-              assistantMessage.content,
-              `${currentMode.name} Response`
-            );
-          } catch (voiceError) {
-            console.warn('Voice generation failed:', voiceError);
-          }
-        }
-
-        // Generate contextual quick replies
-        await generateContextualQuickReplies(context, assistantMessage.content);
-      }
-    } else if (currentMode.id === 'interview-practice') {
-      // Standard interview mode without document analysis
-      console.log('📝 Interview mode: Using standard questions (no document analysis)');
-      
-      const messageToSend = isInterviewInitialization ? "" : content;
-      const response = await supabaseClaudeAPI.sendMessage(messageToSend, context);
-
-      if (response.error) {
-        throw new Error(response.error);
-      }
-
-      if (response.data) {
-        const assistantMessage = response.data;
-        setConversationMessages(prev => [...prev, assistantMessage]);
-        addMessage(assistantMessage);
-
-        // Generate and play voice response if enabled
-        if (voicePlaybackEnabled && isElevenLabsConfigured) {
-          try {
-            await generateAndPlaySpeech(
-              assistantMessage.content,
-              `${currentMode.name} Response`
-            );
-          } catch (voiceError) {
-            console.warn('Voice generation failed:', voiceError);
-          }
-        }
-
-        await generateContextualQuickReplies(context, assistantMessage.content);
-      }
-    } else {
-      // Regular conversation handling for non-interview modes
-      console.log('💬 Regular conversation mode:', currentMode.id);
-      
-      const response = await supabaseClaudeAPI.sendMessage(content, context);
-
-      if (response.error) {
-        throw new Error(response.error);
-      }
-
-      if (response.data) {
-        const assistantMessage = response.data;
-        setConversationMessages(prev => [...prev, assistantMessage]);
-        addMessage(assistantMessage);
-
-        // Generate and play voice response if enabled
-        if (voicePlaybackEnabled && isElevenLabsConfigured) {
-          try {
-            await generateAndPlaySpeech(
-              assistantMessage.content,
-              `${currentMode.name} Response`
-            );
-          } catch (voiceError) {
-            console.warn('Voice generation failed:', voiceError);
-          }
-        }
-
-        await generateContextualQuickReplies(context, assistantMessage.content);
-      }
-    }
-  } catch (error) {
-    console.error('Error sending message to Claude:', error);
-    setError(error instanceof Error ? error.message : 'Failed to send message');
-  } finally {
-    setIsLoadingResponse(false);
-  }
-};
-
+  };
 
   const generateContextualQuickReplies = async (context: ConversationContext, lastResponse: string) => {
     try {
@@ -574,9 +522,12 @@ export default function HomeScreen() {
       setQuickReplies(replies);
     } catch (error) {
       console.warn('Failed to generate quick replies:', error);
-      // Fallback to mode-specific quick replies
       generateQuickRepliesForMode(context.mode);
     }
+  };
+
+  const addMessage = (message: ConversationMessage) => {
+    addMessageToSession(message);
   };
 
   const handleVoiceRecord = async () => {
@@ -584,21 +535,17 @@ export default function HomeScreen() {
 
     try {
       if (!isRecording) {
-        // Start recording and speech recognition
         setRecordButtonState('recording');
         setIsRecording(true);
         setError(null);
         setTranscriptionText('');
 
-        // Check if speech recognition is supported
         if (!speechRecognitionService.isSupported()) {
           console.warn('Speech recognition not supported, using audio recording only');
-          // Fall back to audio recording without transcription
           await startAudioRecordingOnly();
           return;
         }
 
-        // Request speech recognition permissions
         const hasPermission = await speechRecognitionService.requestPermissions();
         if (!hasPermission) {
           console.warn('Speech recognition permission denied, using audio recording only');
@@ -606,7 +553,6 @@ export default function HomeScreen() {
           return;
         }
 
-        // Start speech recognition
         setIsTranscribing(true);
         speechRecognitionService.clearTranscript();
         
@@ -615,7 +561,6 @@ export default function HomeScreen() {
             console.log('Speech recognition result:', result);
             setTranscriptionText(result.transcript);
             
-            // Don't auto-stop on final result, let user control when to stop
             if (result.isFinal) {
               console.log('Final speech result received:', result.transcript);
             }
@@ -632,7 +577,6 @@ export default function HomeScreen() {
             language: 'en-US',
             continuous: true,
             interimResults: true,
-             // 30 second timeout
           }
         );
 
@@ -640,18 +584,15 @@ export default function HomeScreen() {
           throw new Error('Failed to start speech recognition');
         }
 
-        // Also start audio recording for visual feedback
         if (permissions.microphone === 'granted') {
           const recording = await voiceService.startRecording(
             (level) => setAudioLevel(level),
             (detected) => {
-              // Voice activity detection logic
               if (voiceSettings.enableVoiceActivityDetection) {
-                // Auto-stop after silence if enabled
                 if (!detected && voiceSettings.autoStopAfterSilence) {
                   setTimeout(() => {
                     if (isRecording) {
-                      handleVoiceRecord(); // Stop recording
+                      handleVoiceRecord();
                     }
                   }, voiceSettings.silenceThreshold);
                 }
@@ -664,20 +605,16 @@ export default function HomeScreen() {
         }
 
       } else {
-        // Stop recording and speech recognition
         setRecordButtonState('processing');
         setIsRecording(false);
         setIsTranscribing(false);
 
-        // Stop speech recognition and get final transcript
         speechRecognitionService.stopListening();
         
-        // Get the final transcript
         const finalTranscript = speechRecognitionService.getFinalTranscript() || 
                                speechRecognitionService.getCurrentTranscript() ||
                                transcriptionText.trim();
 
-        // Stop audio recording
         if (permissions.microphone === 'granted') {
           await voiceService.stopRecording();
         }
@@ -688,7 +625,6 @@ export default function HomeScreen() {
           console.log('Using transcribed text:', finalTranscript);
           await sendMessageToClaude(finalTranscript);
         } else {
-          // No transcription was captured
           console.warn('No transcription captured');
           setError('No speech was detected. Please try speaking more clearly or use text input.');
         }
@@ -708,13 +644,11 @@ export default function HomeScreen() {
       resetVoiceState();
       setTranscriptionText('');
       
-      // Stop speech recognition on error
       speechRecognitionService.stopListening();
     }
   };
 
   const startAudioRecordingOnly = async () => {
-    // Fallback for when speech recognition is not available
     if (permissions.microphone === 'granted') {
       const recording = await voiceService.startRecording(
         (level) => setAudioLevel(level),
@@ -734,7 +668,6 @@ export default function HomeScreen() {
         setRecording(recording);
       }
     } else {
-      // Mock recording for demo when no microphone access
       setTimeout(() => {
         if (isRecording) {
           handleVoiceRecord();
@@ -745,13 +678,11 @@ export default function HomeScreen() {
 
   const handleTextSend = async (text: string) => {
     if (!currentConversation || !isSupabaseConfigured) return;
-
     await sendMessageToClaude(text);
   };
 
   const handleQuickReply = async (reply: string) => {
     if (!currentConversation || !isSupabaseConfigured) return;
-
     await sendMessageToClaude(reply);
   };
 
@@ -768,7 +699,6 @@ export default function HomeScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    // Simulate loading new challenges and data
     await new Promise(resolve => setTimeout(resolve, 1000));
     loadDailyChallenges();
     setRefreshing(false);
@@ -776,8 +706,8 @@ export default function HomeScreen() {
 
   const filteredModes = conversationModes.filter(mode => {
     if (filterCategory === 'all') return true;
-    if (filterCategory === 'favorites') return mode.id === favoriteMode;
-    if (filterCategory === 'recent') return recentModes.includes(mode.id);
+    if (filterCategory === 'favorites') return mode.id === localFavoriteMode;
+    if (filterCategory === 'recent') return localRecentModes.includes(mode.id);
     return mode.category === filterCategory;
   });
 
@@ -792,14 +722,22 @@ export default function HomeScreen() {
 
   const handleEndConversation = async () => {
     console.log('Starting end conversation process');
-    console.log('endConversation function exists:', typeof endConversation);
-    console.log('currentConversation:', currentConversation);
     
     try {
       setIsGeneratingFeedback(true);
-      // End conversation and generate feedback
-      const feedback = await endConversation();
-      console.log('End conversation completed, feedback:', feedback);
+      
+      let feedback = null;
+      if (currentConversation) {
+        try {
+          feedback = await generateFeedback(currentConversation);
+          console.log('Feedback generated successfully:', feedback);
+        } catch (error) {
+          console.error('Failed to generate feedback:', error);
+        }
+      }
+      
+      // End conversation using store
+      endCurrentConversation();
       
       // Clear conversation state
       setConversationMessages([]);
@@ -810,12 +748,11 @@ export default function HomeScreen() {
       if (feedback) {
         console.log('Showing feedback modal');
         setShowFeedbackModal(true);
-      } else {
-        console.log('No feedback generated');
       }
     } catch (error) {
       console.error('Error ending conversation:', error);
       // Still clear the conversation state even if feedback generation failed
+      endCurrentConversation();
       setConversationMessages([]);
       setQuickReplies([]);
       stopCurrentPlayback();
@@ -831,8 +768,6 @@ export default function HomeScreen() {
     }
     
     console.log('Starting feedback generation for conversation:', currentConversation.id);
-    console.log('generateFeedback function exists:', typeof generateFeedback);
-    console.log('currentConversation:', currentConversation);
     
     try {
       setIsGeneratingFeedback(true);
@@ -845,6 +780,13 @@ export default function HomeScreen() {
       console.error('Error generating feedback:', error);
     } finally {
       setIsGeneratingFeedback(false);
+    }
+  };
+
+  const handleThemeChange = (newTheme: 'light' | 'dark' | 'system') => {
+    setTheme(newTheme);
+    if (authUser) {
+      updatePreferences(authUser.id, { theme: newTheme });
     }
   };
 
@@ -1359,9 +1301,9 @@ export default function HomeScreen() {
                   setSelectedMode(mode);
                   setShowConfigModal(true);
                 }}
-                isFavorite={mode.id === favoriteMode}
-                isRecentlyUsed={recentModes.includes(mode.id)}
-                lastUsed={recentModes.includes(mode.id) ? new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000) : undefined}
+                isFavorite={mode.id === localFavoriteMode}
+                isRecentlyUsed={localRecentModes.includes(mode.id)}
+                lastUsed={localRecentModes.includes(mode.id) ? new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000) : undefined}
               />
             ))}
           </View>
