@@ -36,7 +36,7 @@ import { NotificationSettingsModal } from '@/components/NotificationSettingsModa
 import { ThemeSettingsModal } from '@/components/ThemeSettingsModal';
 import { SyncStatusIndicator } from '@/src/components/SyncStatusIndicator';
 import { OfflineModeToggle } from '@/src/components/OfflineModeToggle';
-import { NetworkPreferencesModal } from '@/components/NetworkPreferencesModal';
+import { NetworkPreferencesModal } from '@/src/components/NetworkPreferencesModal';
 import { DataExportModal } from '@/components/DataExportModal';
 import { StorageManagementModal } from '@/components/StorageManagementModal';
 import { spacing, typography } from '@/src/constants/colors';
