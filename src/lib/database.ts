@@ -11,8 +11,9 @@ const DATABASE_VERSION = 1;
 
 // Create/open the database
 export const getDatabase = () => {
-  if (Platform.OS === 'web') {
-    // For web, use the legacy API or handle gracefully
+  try {
+    if (Platform.OS === 'web') {
+      // For web, use the legacy API or handle gracefully
       if (typeof SQLite.openDatabase === 'function') {
         return SQLite.openDatabase(DATABASE_NAME);
       } else {
@@ -20,7 +21,7 @@ export const getDatabase = () => {
         console.warn('SQLite not available on web, using mock database');
         return createMockDatabase();
       }
-  }
+    }
   
   // For native platforms, ensure the database directory exists
   return SQLite.openDatabase(DATABASE_NAME);
