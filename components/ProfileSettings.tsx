@@ -120,7 +120,14 @@ export function ProfileSettings({ visible, onClose, onProfileUpdated }: ProfileS
         const filePromise = new Promise<File | null>((resolve) => {
           input.onchange = (e) => {
             const files = (e.target as HTMLInputElement).files;
+            console.log('File selected:', files);
             resolve(files ? files[0] : null);
+          };
+          
+          // Handle cancellation
+          input.oncancel = () => {
+            console.log('File selection cancelled');
+            resolve(null);
           };
         });
         
@@ -130,7 +137,12 @@ export function ProfileSettings({ visible, onClose, onProfileUpdated }: ProfileS
         // Wait for file selection
         file = await filePromise;
         
-        if (!file) return;
+        if (!file) {
+          console.log('No file selected');
+          return;
+        }
+        
+        console.log('File selected for upload:', file.name, file.size, file.type);
       } else {
         // For native, we would use expo-image-picker
         // For now, just show an alert
@@ -141,42 +153,23 @@ export function ProfileSettings({ visible, onClose, onProfileUpdated }: ProfileS
       // Show loading state
       setLoading(true);
       
-      // Upload the file to Supabase Storage
-      const filePath = `${user.id}/avatar.jpg`;
+      // Use the existing uploadAvatar service
+      const publicUrl = await supabaseService.uploadAvatar(user.id, file);
       
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: true
-        });
-        
-      if (uploadError) throw uploadError;
+      if (!publicUrl) throw new Error('Failed to upload avatar');
       
-      // Get the public URL
-      const { data } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(filePath);
-        
-      if (!data.publicUrl) throw new Error('Failed to get avatar URL');
-      
-      // Update user profile with new avatar URL
-      const { error: updateError } = await supabaseService.updateUserProfile(
-        user.id,
-        { avatar_url: data.publicUrl }
-      );
-      
-      if (updateError) throw updateError;
-      
-      // Update auth metadata
+      // Update auth metadata to ensure immediate visibility
       const { error: authError } = await supabase.auth.updateUser({
-        data: { avatar_url: data.publicUrl }
+        data: { avatar_url: publicUrl }
       });
       
-      if (authError) throw authError;
+      if (authError) {
+        console.warn('Failed to update auth metadata:', authError);
+        // Don't throw here as the upload was successful
+      }
       
       // Update local state
-      setAvatarUrl(data.publicUrl);
+      setAvatarUrl(publicUrl);
       setSuccess(true);
       
       // Notify parent component of successful update
@@ -191,6 +184,7 @@ export function ProfileSettings({ visible, onClose, onProfileUpdated }: ProfileS
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to upload avatar';
       setError(errorMessage);
+      console.error('Avatar upload error:', err);
     } finally {
       setLoading(false);
     }
