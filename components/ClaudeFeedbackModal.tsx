@@ -47,22 +47,22 @@ export function ClaudeFeedbackModal({
     setIsLoading(true);
     setAnalysisStage('Analyzing conversation...');
     
-    try {
-      // Check if feedback already exists in conversation
-      if (conversation.feedback) {
-        setFeedback(conversation.feedback);
-        
-        // Generate summary
-        const summaryData = generateFeedbackSummary(
-          conversation.feedback, 
-          conversation.mode.id
-        );
-        setSummary(summaryData);
-        
-        setIsLoading(false);
-        return;
-      }
+    // Check if feedback already exists in conversation
+    if (conversation.feedback) {
+      setFeedback(conversation.feedback);
       
+      // Generate summary
+      const summaryData = generateFeedbackSummary(
+        conversation.feedback, 
+        conversation.mode.id
+      );
+      setSummary(summaryData);
+      
+      setIsLoading(false);
+      return;
+    }
+    
+    try {
       // Simulate analysis stages for better UX
       setTimeout(() => setAnalysisStage('Evaluating communication patterns...'), 1000);
       setTimeout(() => setAnalysisStage('Identifying strengths and areas for improvement...'), 3000);
@@ -91,7 +91,7 @@ export function ClaudeFeedbackModal({
         }
       }
     } catch (error) {
-      console.error('Error in generateFeedback:', error);
+      console.error('Failed to generate feedback:', error);
     } finally {
       setIsLoading(false);
     }

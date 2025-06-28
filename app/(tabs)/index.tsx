@@ -42,7 +42,7 @@ import { useConversationStore } from '@/src/stores/conversationStore';
 import { useVoiceStore } from '@/src/stores/voiceStore';
 import { useInputStore } from '@/src/stores/inputStore';
 import { useSettingsStore } from '@/src/stores/settingsStore';
-import { useUserStore } from '@/src/hooks/useUserStore';
+import { useUserStore } from '@/src/stores/userStore';
 import { conversationModes } from '@/src/constants/conversationModes';
 import { voiceService } from '@/src/services/voiceService';
 import { speechRecognitionService } from '@/services/speechRecognitionService';

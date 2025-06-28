@@ -22,7 +22,7 @@ import {
   LogOut
 } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
-import { useUserStore } from '@/src/hooks/useUserStore';
+import { useUserStore } from '@/src/stores/userStore';
 import { useSupabaseAuth } from '@/src/hooks/useSupabase';
 import { SettingItem } from '@/components/SettingItem';
 import { UserAvatar } from '@/components/UserAvatar';

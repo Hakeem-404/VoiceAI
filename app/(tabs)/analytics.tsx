@@ -10,7 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { TrendingUp, Target, Clock, Award, ChartBar as BarChart3, Star } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
-import { useUserStore } from '@/src/hooks/useUserStore';
+import { useUserStore } from '@/src/stores/userStore';
 import { useSupabaseAuth } from '@/src/hooks/useSupabase';
 import { GuestModePrompt } from '@/components/GuestModePrompt';
 import { spacing, typography } from '@/src/constants/colors';
