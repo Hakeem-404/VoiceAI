@@ -22,7 +22,7 @@ import { spacing, typography } from '@/src/constants/colors';
 export default function InterviewPrepScreen() {
   const { colors, isDark } = useTheme();
   const { documentData, updateDocumentData } = useInputStore();
-  const { startConversation } = useConversationStore();
+  const { createConversation } = useConversationStore();
   
   const [activeTab, setActiveTab] = useState<'documents' | 'analysis' | 'questions'>('documents');
   const [analysis, setAnalysis] = useState<DocumentAnalysis | null>(null);
@@ -48,7 +48,7 @@ export default function InterviewPrepScreen() {
       return;
     }
 
-    startConversation(interviewMode, {
+    createConversation(interviewMode, {
       modeId: 'interview-practice',
       difficulty: (analysis?.analysis.difficulty === 'junior' ? 'beginner' : 
                   analysis?.analysis.difficulty === 'executive' ? 'advanced' : 'intermediate') || 'intermediate',

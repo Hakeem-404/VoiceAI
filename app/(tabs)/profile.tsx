@@ -24,10 +24,14 @@ import {
 import { useTheme } from '@/src/hooks/useTheme';
 import { useUserStore } from '@/src/stores/userStore';
 import { useSupabaseAuth } from '@/src/hooks/useSupabase';
+import { useVoiceProfiles } from '@/src/hooks/useVoiceProfiles';
 import { SettingItem } from '@/components/SettingItem';
 import { UserAvatar } from '@/components/UserAvatar';
 import { GuestModePrompt } from '@/components/GuestModePrompt';
 import { ProfileSettings } from '@/components/ProfileSettings';
+import { VoiceSettingsModal } from '@/components/VoiceSettingsModal';
+import { NotificationSettingsModal } from '@/components/NotificationSettingsModal';
+import { ThemeSettingsModal } from '@/components/ThemeSettingsModal';
 import { spacing, typography } from '@/src/constants/colors';
 
 export default function ProfileScreen() {
@@ -35,19 +39,25 @@ export default function ProfileScreen() {
   const { 
     user, 
     theme: userTheme, 
-    setTheme, 
+    setTheme,
     updatePreferences 
   } = useUserStore();
   const { user: authUser, signOut } = useSupabaseAuth();
+  const { voiceProfiles, loading: voiceProfilesLoading } = useVoiceProfiles();
+  
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const [promptFeature, setPromptFeature] = useState<'save' | 'history' | 'voice' | 'analytics' | 'premium'>('save');
   const [showSettings, setShowSettings] = useState(false);
+  const [showVoiceSettings, setShowVoiceSettings] = useState(false);
+  const [showNotificationSettings, setShowNotificationSettings] = useState(false);
+  const [showThemeSettings, setShowThemeSettings] = useState(false);
   const [profileUpdateKey, setProfileUpdateKey] = useState(0);
 
   // Local state for preferences
   const [localPreferences, setLocalPreferences] = useState({
     practiceReminders: true,
     achievements: false,
+    darkMode: userTheme === 'dark',
   });
 
   // Reset auth prompt when user authentication status changes
@@ -70,12 +80,7 @@ export default function ProfileScreen() {
 
   // Handle theme changes
   const handleThemeChange = (value: boolean) => {
-    const newTheme = value ? 'dark' : 'light';
-    setTheme(newTheme);
-    
-    if (authUser) {
-      updatePreferences(authUser.id, { theme: newTheme });
-    }
+    setLocalPreferences(prev => ({ ...prev, darkMode: value }));
   };
 
   // Handle preference updates
@@ -92,6 +97,18 @@ export default function ProfileScreen() {
         notifications: notificationUpdates
       });
     }
+  };
+
+  // Save theme preference
+  const saveThemePreference = (isDark: boolean) => {
+    const newTheme = isDark ? 'dark' : 'light';
+    setTheme(newTheme);
+    
+    if (authUser) {
+      updatePreferences(authUser.id, { theme: newTheme });
+    }
+    
+    setShowThemeSettings(false);
   };
 
   const mockUser = {
@@ -184,9 +201,9 @@ export default function ProfileScreen() {
             <SettingItem
               icon={isDark ? Moon : Sun}
               title="Dark Mode"
-              subtitle="Automatically adapts to system preference"
-              value={userTheme === 'dark'}
-              onValueChange={handleThemeChange}
+              subtitle="Change app appearance"
+              type="nav"
+              onPress={() => setShowThemeSettings(true)}
             />
           </View>
 
@@ -197,16 +214,16 @@ export default function ProfileScreen() {
             <SettingItem
               icon={Bell}
               title="Practice Reminders"
-              subtitle="Daily reminders to practice speaking"
-              value={localPreferences.practiceReminders}
-              onValueChange={(value) => handlePreferenceUpdate('practiceReminders', value)}
-            />
-            <SettingItem
-              icon={Award}
-              title="Achievement Notifications"
-              subtitle="Get notified when you unlock achievements"
-              value={localPreferences.achievements}
-              onValueChange={(value) => handlePreferenceUpdate('achievements', value)}
+              subtitle="Configure notification settings"
+              type="nav"
+              onPress={() => {
+                if (authUser) {
+                  setShowNotificationSettings(true);
+                } else {
+                  setPromptFeature('save');
+                  setShowAuthPrompt(true);
+                }
+              }}
             />
           </View>
 
@@ -220,8 +237,12 @@ export default function ProfileScreen() {
               subtitle="Customize voice speed, pitch, and language"
               type="nav"
               onPress={() => {
-                // TODO: Navigate to voice settings screen
-                console.log('Voice settings pressed');
+                if (authUser) {
+                  setShowVoiceSettings(true);
+                } else {
+                  setPromptFeature('voice');
+                  setShowAuthPrompt(true);
+                }
               }}
             />
           </View>
@@ -278,6 +299,44 @@ export default function ProfileScreen() {
         visible={showSettings}
         onClose={() => setShowSettings(false)}
         onProfileUpdated={handleProfileUpdated}
+      />
+      
+      {/* Voice Settings Modal */}
+      <VoiceSettingsModal
+        visible={showVoiceSettings}
+        onClose={() => setShowVoiceSettings(false)}
+        voiceProfiles={voiceProfiles}
+      />
+      
+      {/* Notification Settings Modal */}
+      <NotificationSettingsModal
+        visible={showNotificationSettings}
+        onClose={() => setShowNotificationSettings(false)}
+        initialSettings={{
+          practiceReminders: localPreferences.practiceReminders,
+          achievements: localPreferences.achievements,
+        }}
+        onSave={(settings) => {
+          if (authUser) {
+            updatePreferences(authUser.id, {
+              notifications: settings
+            });
+          }
+          setLocalPreferences(prev => ({
+            ...prev,
+            practiceReminders: settings.practiceReminders,
+            achievements: settings.achievements,
+          }));
+          setShowNotificationSettings(false);
+        }}
+      />
+      
+      {/* Theme Settings Modal */}
+      <ThemeSettingsModal
+        visible={showThemeSettings}
+        onClose={() => setShowThemeSettings(false)}
+        isDarkMode={localPreferences.darkMode}
+        onSave={saveThemePreference}
       />
     </SafeAreaView>
   );
