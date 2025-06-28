@@ -8,12 +8,12 @@ const DATABASE_NAME = 'voiceai.db';
 
 // Database version for migrations
 const DATABASE_VERSION = 1;
-  // Skip SQLite initialization on web platform
-  if (Platform.OS === 'web') {
-    console.log('SQLite is not fully supported on web platform. Using alternative storage.');
-    return null;
-  }
-  
+
+// Skip SQLite initialization on web platform
+// if (Platform.OS === 'web') {
+//   console.log('SQLite is not fully supported on web platform. Using alternative storage.');
+//   return null;
+// }
 
 // Create/open the database
 export const getDatabase = () => {
