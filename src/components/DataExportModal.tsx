@@ -11,7 +11,7 @@ import {
   Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { X, FileText, Download, Share2, CheckCircle, Database, FileJson, FilePdf, FileArchive } from 'lucide-react-native';
+import { X, FileText, Download, Share2, CircleCheck as CheckCircle, Database, FileJson, FilePen as FilePdf, FileArchive } from 'lucide-react-native';
 import { useTheme } from '../hooks/useTheme';
 import { exportDatabaseToJson } from '../services/localDatabaseService';
 import * as FileSystem from 'expo-file-system';

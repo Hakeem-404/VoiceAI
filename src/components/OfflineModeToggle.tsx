@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Switch, TouchableOpacity } from 'react-native';
-import { Wifi, WifiOff, Download, RefreshCw, AlertCircle } from 'lucide-react-native';
+import { Wifi, WifiOff, Download, RefreshCw, CircleAlert as AlertCircle } from 'lucide-react-native';
 import { useOfflineMode } from '../hooks/useOfflineMode';
 import { useTheme } from '../hooks/useTheme';
 import { spacing, typography } from '../constants/colors';

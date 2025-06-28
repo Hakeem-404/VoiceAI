@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { X, Database, Trash2, Archive, RefreshCw, HardDrive, FileAudio, MessageSquare, BarChart3 } from 'lucide-react-native';
+import { X, Database, Trash2, Archive, RefreshCw, HardDrive, FileAudio, MessageSquare, ChartBar as BarChart3 } from 'lucide-react-native';
 import { useTheme } from '../hooks/useTheme';
 import { getDatabaseStats, cleanupOldAudioFiles } from '../services/localDatabaseService';
 import { cacheManager } from '../services/cacheService';

@@ -9,7 +9,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { X, Wifi, Database, RefreshCw, Clock, BarChart3 } from 'lucide-react-native';
+import { X, Wifi, Database, RefreshCw, Clock, ChartBar as BarChart3 } from 'lucide-react-native';
 import { useTheme } from '../hooks/useTheme';
 import { getData, saveData, STORAGE_KEYS } from '../lib/asyncStorage';
 import { processSyncQueue } from '../services/syncService';

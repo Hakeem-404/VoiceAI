@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { Wifi, WifiOff, RefreshCw, CheckCircle, AlertCircle, Clock } from 'lucide-react-native';
+import { Wifi, WifiOff, RefreshCw, CircleCheck as CheckCircle, CircleAlert as AlertCircle, Clock } from 'lucide-react-native';
 import { addSyncListener, processSyncQueue, SyncStatus } from '../services/syncService';
 import { useTheme } from '../hooks/useTheme';
 import { spacing, typography } from '../constants/colors';
