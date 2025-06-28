@@ -26,6 +26,8 @@ export default function AnalyticsScreen() {
   useEffect(() => {
     if (!user) {
       setShowAuthPrompt(true);
+    } else {
+      setShowAuthPrompt(false);
     }
   }, [user]);
 
