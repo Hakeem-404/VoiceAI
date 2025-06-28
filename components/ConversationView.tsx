@@ -12,12 +12,13 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Send, RotateCcw, Copy, Bookmark, MoveHorizontal as MoreHorizontal, Wifi, WifiOff, Zap, ChartBar as BarChart3 } from 'lucide-react-native';
-import { useConversation } from '../hooks/useConversation';
+import { useSupabaseConversation } from '@/src/hooks/useSupabaseConversation';
 import { ConversationMessage } from '../types/api';
 import { RealTimeFeedbackSystem } from './RealTimeFeedbackSystem';
 import { ClaudeFeedbackModal } from './ClaudeFeedbackModal';
 import { Conversation } from '@/src/types';
 import { useConversationStore } from '@/src/stores/conversationStore';
+import { useSupabaseAuth } from '@/src/hooks/useSupabase';
 
 const { width, height } = Dimensions.get('window');
 
@@ -31,9 +32,11 @@ interface ConversationViewProps {
 export function ConversationView({
   mode,
   sessionId,
-  userId,
   onClose
 }: ConversationViewProps) {
+  const { user } = useSupabaseAuth();
+  const userId = user?.id;
+  
   const {
     messages,
     isLoading,
@@ -42,9 +45,11 @@ export function ConversationView({
     quickReplies,
     sendMessage,
     regenerateResponse,
-    clearConversation,
-    canRegenerate
-  } = useConversation({
+    canRegenerate,
+    isConfigured,
+    configStatus,
+    conversationId
+  } = useSupabaseConversation({
     mode,
     sessionId,
     userId,
@@ -55,9 +60,9 @@ export function ConversationView({
   const { currentConversation } = useConversationStore();
   const [inputText, setInputText] = useState('');
   const [isOnline, setIsOnline] = useState(true);
-  const [showFeedback, setShowFeedback] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const [isBookmarked, setIsBookmarked] = useState(false);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -94,6 +99,24 @@ export function ConversationView({
       };
     }
   }, []);
+
+  // Toggle bookmark
+  const handleToggleBookmark = async () => {
+    if (!conversationId || !userId) return;
+    
+    try {
+      setIsBookmarked(!isBookmarked);
+      
+      // Update in database
+      await supabase
+        .from('conversations')
+        .update({ is_bookmarked: !isBookmarked })
+        .eq('id', conversationId);
+    } catch (error) {
+      console.error('Failed to toggle bookmark:', error);
+      setIsBookmarked(isBookmarked); // Revert on error
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!inputText.trim() || isLoading) return;
@@ -185,6 +208,7 @@ export function ConversationView({
               <TouchableOpacity
                 style={styles.headerButton}
                 onPress={regenerateResponse}
+                disabled={messages.length < 3}
                 disabled={isLoading}
               >
                 <RotateCcw size={20} color="white" />
@@ -255,6 +279,13 @@ export function ConversationView({
           >
             {quickReplies.map((reply, index) => (
               <TouchableOpacity
+                style={styles.headerButton}
+                onPress={handleToggleBookmark}
+                disabled={!conversationId || !userId}
+              >
+                <Bookmark size={20} color={isBookmarked ? "#FFD700" : "white"} />
+              </TouchableOpacity>
+              <TouchableOpacity
                 key={index}
                 style={styles.quickReplyButton}
                 onPress={() => handleQuickReply(reply)}
@@ -308,7 +339,7 @@ export function ConversationView({
         <ClaudeFeedbackModal
           visible={showFeedbackModal}
           onClose={() => setShowFeedbackModal(false)}
-          conversation={currentConversation}
+          conversation={currentConversation || createConversationForFeedback()}
         />
       )}
     </View>

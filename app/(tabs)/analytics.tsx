@@ -21,6 +21,7 @@ export default function AnalyticsScreen() {
   const { colors, isDark } = useTheme();
   const { analytics } = useUserStore();
   const { user } = useSupabaseAuth();
+  const { progress } = useUserProgress();
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   
   useEffect(() => {
@@ -29,7 +30,105 @@ export default function AnalyticsScreen() {
     } else {
       setShowAuthPrompt(false);
     }
-  }, [user]);
+    
+    // Generate analytics from progress data if user is authenticated
+    if (user && progress.length > 0) {
+      generateAnalyticsFromProgress();
+    }
+  }, [user, progress]);
+  
+  // Generate analytics from progress data
+  const generateAnalyticsFromProgress = () => {
+    if (!progress.length) return;
+    
+    try {
+      // Calculate total conversations
+      const totalConversations = progress.reduce(
+        (sum, p) => sum + (p.total_sessions || 0), 
+        0
+      );
+      
+      // Calculate total practice time (in minutes)
+      const totalPracticeTime = progress.reduce(
+        (sum, p) => sum + (p.total_duration || 0), 
+        0
+      ) / 60;
+      
+      // Calculate average score
+      const totalScores = progress.reduce((sum, p) => {
+        const bestScores = p.best_scores as any || {};
+        return sum + (bestScores.quality || 0);
+      }, 0);
+      
+      const averageScore = totalScores / progress.length || 0;
+      
+      // Get streak days from user profile
+      const streakDays = user?.user_metadata?.streak_days || 0;
+      
+      // Generate weekly progress
+      const weeklyProgress = [65, 72, 68, 85, 92, 88, 95]; // Placeholder
+      
+      // Calculate skill progress
+      const skillProgress = {
+        fluency: 0,
+        confidence: 0,
+        clarity: 0,
+      };
+      
+      let skillCount = 0;
+      
+      progress.forEach(p => {
+        const scores = p.skill_scores as any || {};
+        if (scores.fluency) {
+          skillProgress.fluency += scores.fluency;
+          skillCount++;
+        }
+        if (scores.confidence) {
+          skillProgress.confidence += scores.confidence;
+          skillCount++;
+        }
+        if (scores.clarity) {
+          skillProgress.clarity += scores.clarity;
+          skillCount++;
+        }
+      });
+      
+      if (skillCount > 0) {
+        skillProgress.fluency = Math.round(skillProgress.fluency / skillCount);
+        skillProgress.confidence = Math.round(skillProgress.confidence / skillCount);
+        skillProgress.clarity = Math.round(skillProgress.clarity / skillCount);
+      }
+      
+      // Get achievements from progress
+      const achievements = progress.flatMap(p => {
+        const achievementsArray = p.achievements as any[] || [];
+        return achievementsArray.map(a => ({
+          id: a.id,
+          title: a.title,
+          description: a.description,
+          icon: a.icon || 'star',
+          unlockedAt: new Date(a.unlockedAt),
+          category: a.category || 'conversation',
+          modeId: p.mode,
+        }));
+      });
+      
+      // Update analytics state
+      if (updateAnalytics) {
+        updateAnalytics({
+          totalConversations,
+          totalPracticeTime,
+          averageScore,
+          streakDays,
+          weeklyProgress,
+          skillProgress,
+          achievements,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to generate analytics from progress:', error);
+    }
+  };
 
   const StatCard = ({ 
     icon: IconComponent, 

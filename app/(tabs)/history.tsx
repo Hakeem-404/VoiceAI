@@ -30,7 +30,12 @@ export default function HistoryScreen() {
   const { colors, isDark } = useTheme();
   const { conversations, deleteConversation } = useConversationStore();
   const { user } = useSupabaseAuth();
-  const { conversations: dbConversations, loading, loadConversations } = useConversationDatabase();
+  const { 
+    conversations: dbConversations, 
+    loading, 
+    loadConversations, 
+    deleteConversation: deleteDbConversation 
+  } = useConversationDatabase();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'recent' | 'favorites'>('all');
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
@@ -44,6 +49,21 @@ export default function HistoryScreen() {
       setShowAuthPrompt(true);
     }
   }, [user]);
+
+  // Handle conversation deletion
+  const handleDeleteConversation = async (id: string) => {
+    try {
+      if (user) {
+        // Delete from database
+        await deleteDbConversation(id);
+      } else {
+        // Delete from local store
+        deleteConversation(id);
+      }
+    } catch (error) {
+      console.error('Failed to delete conversation:', error);
+    }
+  };
 
   const formatDuration = (duration: number) => {
     const minutes = Math.floor(duration / 60);
@@ -83,7 +103,7 @@ export default function HistoryScreen() {
       <View style={styles.conversationHeader}>
         <View style={styles.conversationInfo}>
           <Text style={[styles.conversationTitle, { color: colors.text }]}>
-            {item.title}
+            {item.title || `${item.mode.name} - ${formatDate(item.createdAt)}`}
           </Text>
           <Text style={[styles.conversationMode, { color: colors.textSecondary }]}>
             {item.mode.name}
@@ -91,7 +111,7 @@ export default function HistoryScreen() {
         </View>
         <TouchableOpacity
           style={styles.deleteButton}
-          onPress={() => deleteConversation(item.id)}
+          onPress={() => handleDeleteConversation(item.id)}
         >
           <Trash2 size={18} color={colors.textTertiary} />
         </TouchableOpacity>

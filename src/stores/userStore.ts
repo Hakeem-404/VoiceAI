@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 import { User, UserPreferences, AnalyticsData, DailyChallenge } from '../types';
+import { useUserStore as useUserHook } from '../hooks/useUserStore';
+import { useSupabaseAuth } from '../hooks/useSupabase';
+import * as supabaseService from '../services/supabaseService';
 
 interface UserState {
   user: User | null;
@@ -30,8 +33,9 @@ export const useUserStore = create<UserState>((set, get) => ({
   recentModes: [],
 
   setUser: (user: User) => {
-    set({ 
-      user, 
+    // Update local state
+    set({
+      user,
       theme: user.preferences.theme,
       favoriteMode: user.preferences.favoriteMode || null,
       recentModes: user.preferences.recentModes || [],
@@ -39,211 +43,65 @@ export const useUserStore = create<UserState>((set, get) => ({
   },
 
   updatePreferences: (preferences: Partial<UserPreferences>) => {
+    // Use the hook implementation instead
+    const { updatePreferences } = useUserHook();
     const { user } = get();
-    if (!user) return;
-
-    const updatedUser = {
-      ...user,
-      preferences: {
-        ...user.preferences,
-        ...preferences,
-      },
-    };
-
-    set({ user: updatedUser });
+    
+    if (user) {
+      updatePreferences(preferences);
+    }
   },
 
   setTheme: (theme: 'light' | 'dark' | 'system') => {
-    set({ theme });
+    // Use the hook implementation instead
+    const { setTheme } = useUserHook();
+    setTheme(theme);
     
-    const { user } = get();
-    if (user) {
-      const updatedUser = {
-        ...user,
-        preferences: {
-          ...user.preferences,
-          theme,
-        },
-      };
-      set({ user: updatedUser });
-    }
+    // Update local state
+    set({ theme });
   },
 
   setFavoriteMode: (modeId: string) => {
-    set({ favoriteMode: modeId });
+    // Use the hook implementation instead
+    const { setFavoriteMode } = useUserHook();
+    setFavoriteMode(modeId);
     
-    const { user } = get();
-    if (user) {
-      const updatedUser = {
-        ...user,
-        preferences: {
-          ...user.preferences,
-          favoriteMode: modeId,
-        },
-      };
-      set({ user: updatedUser });
-    }
+    // Update local state
+    set({ favoriteMode: modeId });
   },
 
   addRecentMode: (modeId: string) => {
+    // Use the hook implementation instead
+    const { addRecentMode } = useUserHook();
+    addRecentMode(modeId);
+    
+    // Update local state
     const { recentModes } = get();
     const updatedRecentModes = [modeId, ...recentModes.filter(id => id !== modeId)].slice(0, 5);
-    
     set({ recentModes: updatedRecentModes });
-    
-    const { user } = get();
-    if (user) {
-      const updatedUser = {
-        ...user,
-        preferences: {
-          ...user.preferences,
-          recentModes: updatedRecentModes,
-        },
-      };
-      set({ user: updatedUser });
-    }
   },
 
   loadAnalytics: () => {
-    // Mock analytics data with mode-specific stats
-    const mockAnalytics: AnalyticsData = {
-      totalConversations: 45,
-      totalPracticeTime: 1200, // in minutes
-      averageScore: 8.3,
-      streakDays: 7,
-      weeklyProgress: [65, 72, 68, 85, 92, 88, 95],
-      skillProgress: {
-        fluency: 78,
-        confidence: 82,
-        clarity: 75,
-      },
-      achievements: [
-        {
-          id: '1',
-          title: 'First Conversation',
-          description: 'Completed your first AI conversation',
-          icon: 'star',
-          unlockedAt: new Date(),
-          category: 'conversation',
-        },
-        {
-          id: '2',
-          title: '7-Day Streak',
-          description: 'Practiced for 7 days in a row',
-          icon: 'flame',
-          unlockedAt: new Date(),
-          category: 'streak',
-        },
-        {
-          id: '3',
-          title: 'Debate Master',
-          description: 'Completed 10 debate challenges',
-          icon: 'trophy',
-          unlockedAt: new Date(),
-          category: 'mode-specific',
-          modeId: 'debate-challenge',
-        },
-      ],
-      modeStats: {
-        'general-chat': {
-          sessionsCompleted: 15,
-          totalTime: 300,
-          averageScore: 8.5,
-          lastUsed: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-        },
-        'debate-challenge': {
-          sessionsCompleted: 8,
-          totalTime: 240,
-          averageScore: 7.8,
-          lastUsed: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-        },
-        'interview-practice': {
-          sessionsCompleted: 12,
-          totalTime: 480,
-          averageScore: 8.9,
-          lastUsed: new Date(Date.now() - 3 * 60 * 60 * 1000),
-        },
-        'presentation-prep': {
-          sessionsCompleted: 6,
-          totalTime: 150,
-          averageScore: 8.2,
-          lastUsed: new Date(Date.now() - 5 * 60 * 60 * 1000),
-        },
-        'idea-brainstorm': {
-          sessionsCompleted: 3,
-          totalTime: 90,
-          averageScore: 9.1,
-          lastUsed: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-        },
-        'language-learning': {
-          sessionsCompleted: 1,
-          totalTime: 30,
-          averageScore: 7.5,
-          lastUsed: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
-        },
-      },
-    };
-
-    set({ analytics: mockAnalytics });
+    // Use the hook implementation instead
+    const { loadAnalytics } = useUserHook();
+    loadAnalytics();
   },
 
   updateAnalytics: (data: Partial<AnalyticsData>) => {
-    const { analytics } = get();
-    if (!analytics) return;
-
-    set({
-      analytics: {
-        ...analytics,
-        ...data,
-      },
-    });
+    // Use the hook implementation instead
+    const { updateAnalytics } = useUserHook();
+    updateAnalytics(data);
   },
 
   loadDailyChallenges: () => {
-    const mockChallenges: DailyChallenge[] = [
-      {
-        id: '1',
-        modeId: 'debate-challenge',
-        title: 'Climate Change Debate',
-        description: 'Argue for renewable energy solutions',
-        difficulty: 'intermediate',
-        reward: { points: 100, badge: 'Climate Advocate' },
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-        completed: false,
-      },
-      {
-        id: '2',
-        modeId: 'presentation-prep',
-        title: 'Elevator Pitch Challenge',
-        description: 'Perfect your 30-second pitch',
-        difficulty: 'beginner',
-        reward: { points: 50 },
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-        completed: false,
-      },
-      {
-        id: '3',
-        modeId: 'idea-brainstorm',
-        title: 'Innovation Sprint',
-        description: 'Generate 10 creative solutions',
-        difficulty: 'advanced',
-        reward: { points: 150, badge: 'Innovation Master' },
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-        completed: false,
-      },
-    ];
-
-    set({ dailyChallenges: mockChallenges });
+    // Use the hook implementation instead
+    const { loadDailyChallenges } = useUserHook();
+    loadDailyChallenges();
   },
 
   completeChallenge: (challengeId: string) => {
-    const { dailyChallenges } = get();
-    const updatedChallenges = dailyChallenges.map(challenge =>
-      challenge.id === challengeId
-        ? { ...challenge, completed: true }
-        : challenge
-    );
-
-    set({ dailyChallenges: updatedChallenges });
+    // Use the hook implementation instead
+    const { completeChallenge } = useUserHook();
+    completeChallenge(challengeId);
   },
 }));

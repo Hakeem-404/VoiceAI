@@ -14,13 +14,14 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Send, RotateCcw, Copy, Bookmark, MoveHorizontal as MoreHorizontal, Wifi, WifiOff, Zap, ChartBar as BarChart3 } from 'lucide-react-native';
 import { AlertCircle } from 'lucide-react-native';
-import { useSupabaseConversation } from '../hooks/useSupabaseConversation';
+import { useSupabaseConversation } from '@/src/hooks/useSupabaseConversation';
 import { ConversationMessage } from '../types/api';
 import { RealTimeFeedbackSystem } from './RealTimeFeedbackSystem';
 import { ClaudeFeedbackModal } from './ClaudeFeedbackModal';
 import { Conversation, ConversationMode } from '@/src/types';
 import { useConversationStore } from '@/src/stores/conversationStore';
 import { useInputStore } from '@/src/stores/inputStore';
+import { useSupabaseAuth } from '@/src/hooks/useSupabase';
 import { supabaseClaudeAPI } from '../services/supabaseClaudeAPI';
 
 const { width, height } = Dimensions.get('window');
@@ -35,9 +36,11 @@ interface SupabaseConversationViewProps {
 export function SupabaseConversationView({
   mode,
   sessionId,
-  userId,
   onClose
 }: SupabaseConversationViewProps) {
+  const { user } = useSupabaseAuth();
+  const userId = user?.id;
+  
   const {
     messages,
     isLoading,
@@ -46,10 +49,10 @@ export function SupabaseConversationView({
     quickReplies,
     sendMessage,
     regenerateResponse,
-    clearConversation,
     canRegenerate,
     isConfigured,
-    configStatus
+    configStatus,
+    conversationId
   } = useSupabaseConversation({
     mode,
     sessionId,
@@ -65,6 +68,7 @@ export function SupabaseConversationView({
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const [initialMessageSent, setInitialMessageSent] = useState(false);
+  const [isBookmarked, setIsBookmarked] = useState(false);
 
   // Create conversation mode object for the store
   const conversationMode: ConversationMode = {
@@ -87,10 +91,28 @@ export function SupabaseConversationView({
     }
   };
 
+  // Toggle bookmark
+  const handleToggleBookmark = async () => {
+    if (!conversationId || !userId) return;
+    
+    try {
+      setIsBookmarked(!isBookmarked);
+      
+      // Update in database
+      await supabase
+        .from('conversations')
+        .update({ is_bookmarked: !isBookmarked })
+        .eq('id', conversationId);
+    } catch (error) {
+      console.error('Failed to toggle bookmark:', error);
+      setIsBookmarked(isBookmarked); // Revert on error
+    }
+  };
+
   // Create a conversation object for feedback when needed
   const createConversationForFeedback = (): Conversation => {
     return {
-      id: sessionId,
+      id: conversationId || sessionId,
       mode: conversationMode,
       title: `${conversationMode.name} - ${new Date().toLocaleDateString()}`,
       duration: 0,
@@ -373,12 +395,20 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
             <TouchableOpacity
               style={styles.headerButton}
               onPress={toggleFeedback}
+              disabled={messages.length < 3}
             >
               <BarChart3 size={20} color="white" />
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.headerButton}
-              onPress={onClose}
+              onPress={handleToggleBookmark}
+              disabled={!conversationId || !userId}
+            >
+              <Bookmark size={20} color={isBookmarked ? "#FFD700" : "white"} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={() => {/* Show options menu */}}
             >
               <MoreHorizontal size={20} color="white" />
             </TouchableOpacity>
@@ -498,7 +528,7 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
       <ClaudeFeedbackModal
         visible={showFeedbackModal}
         onClose={() => setShowFeedbackModal(false)}
-        conversation={createConversationForFeedback()}
+        conversation={currentConversation || createConversationForFeedback()}
       />
     </View>
   );
