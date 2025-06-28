@@ -15,7 +15,7 @@ import { X, FileText, Download, Share2, CircleCheck as CheckCircle, Database, Fi
 import { useTheme } from '../hooks/useTheme';
 import { exportDatabaseToJson } from '../services/localDatabaseService';
 import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
+import { shareAsync } from 'expo-sharing';
 import { spacing, typography } from '../constants/colors';
 
 interface DataExportModalProps {
@@ -91,10 +91,10 @@ export function DataExportModal({
     
     try {
       if (Platform.OS === 'ios' || Platform.OS === 'android') {
-        const canShare = await Sharing.isAvailableAsync();
+        const canShare = true; // expo-sharing is always available on native platforms
         
         if (canShare) {
-          await Sharing.shareAsync(exportedFilePath);
+          await shareAsync(fileUri, {
         } else {
           setError('Sharing is not available on this device');
         }
