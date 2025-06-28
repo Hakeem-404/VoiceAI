@@ -24,8 +24,10 @@ import {
 import { useTheme } from '@/src/hooks/useTheme';
 import { useUserStore } from '@/src/stores/userStore';
 import { useSupabaseAuth } from '@/src/hooks/useSupabase';
+import { SettingItem } from '@/components/SettingItem';
 import { UserAvatar } from '@/components/UserAvatar';
 import { GuestModePrompt } from '@/components/GuestModePrompt';
+import { ProfileSettings } from '@/components/ProfileSettings';
 import { spacing, typography } from '@/src/constants/colors';
 
 export default function ProfileScreen() {
@@ -34,6 +36,7 @@ export default function ProfileScreen() {
   const { user: authUser, signOut } = useSupabaseAuth();
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const [promptFeature, setPromptFeature] = useState<'save' | 'history' | 'voice' | 'analytics' | 'premium'>('save');
+  const [showSettings, setShowSettings] = useState(false);
 
   const mockUser = {
     id: '1',
@@ -224,6 +227,14 @@ export default function ProfileScreen() {
               subtitle="Manage your account and privacy"
               type="nav"
               onPress={() => {
+                if (authUser) {
+                  setShowSettings(true);
+                } else {
+                  setPromptFeature('save');
+                  setShowAuthPrompt(true);
+                }
+              }}
+              onPress={() => {
                 if (!authUser) {
                   setPromptFeature('save');
                   setShowAuthPrompt(true);
@@ -256,6 +267,12 @@ export default function ProfileScreen() {
         visible={showAuthPrompt}
         onClose={() => setShowAuthPrompt(false)}
         feature={promptFeature}
+      />
+      
+      {/* Profile Settings Modal */}
+      <ProfileSettings
+        visible={showSettings}
+        onClose={() => setShowSettings(false)}
       />
     </SafeAreaView>
   );

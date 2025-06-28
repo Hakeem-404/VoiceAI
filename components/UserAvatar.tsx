@@ -4,6 +4,7 @@ import { User } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useSupabaseAuth } from '@/src/hooks/useSupabase';
 import { spacing, typography } from '@/src/constants/colors';
+import supabase from '@/src/lib/supabase';
 
 interface UserAvatarProps {
   size?: number;
@@ -15,6 +16,27 @@ export function UserAvatar({ size = 40, onPress, showBadge = false }: UserAvatar
   const { colors } = useTheme();
   const { user } = useSupabaseAuth();
   
+  // Get avatar URL from Supabase storage if available
+  const getAvatarUrl = () => {
+    if (!user) return null;
+    
+    // Check if user has an avatar_url in metadata
+    if (user.user_metadata?.avatar_url) {
+      return user.user_metadata.avatar_url;
+    }
+    
+    // Otherwise, check if there's an avatar in storage
+    if (user.id) {
+      const { data } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(`${user.id}/avatar.jpg`);
+      
+      return data?.publicUrl;
+    }
+    
+    return null;
+  };
+  
   const getInitials = () => {
     if (!user?.user_metadata?.name) return '?';
     
@@ -24,7 +46,7 @@ export function UserAvatar({ size = 40, onPress, showBadge = false }: UserAvatar
     return (nameParts[0].charAt(0) + nameParts[nameParts.length - 1].charAt(0)).toUpperCase();
   };
   
-  const avatarUrl = user?.user_metadata?.avatar_url;
+  const avatarUrl = getAvatarUrl();
   const subscription = user?.user_metadata?.subscription_tier || 'free';
   
   const getBadgeColor = () => {

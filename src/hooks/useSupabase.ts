@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Session } from '@supabase/supabase-js';
-import supabase, { subscribeToTable } from '../lib/supabase';
+import supabase, { subscribeToTable, performOptimisticUpdate } from '../lib/supabase';
 import { Platform } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
+import * as supabaseService from '../services/supabaseService';
 
 export function useSupabaseAuth() {
   const [session, setSession] = useState<Session | null>(null);
@@ -59,17 +60,20 @@ export function useSupabaseAuth() {
       
       // Create user profile if sign up successful
       if (data.user) {
-        const { error: profileError } = await supabase
-          .from('users')
-          .insert({
-            id: data.user.id,
-            email: data.user.email,
-            name,
-            created_at: new Date().toISOString(),
-            last_active: new Date().toISOString()
-          });
-          
-        if (profileError) throw profileError;
+        try {
+          await supabaseService.updateUserProfile(
+            data.user.id,
+            {
+              email: data.user.email,
+              name,
+              created_at: new Date().toISOString(),
+              last_active: new Date().toISOString()
+            }
+          );
+        } catch (profileError) {
+          console.error('Error creating user profile:', profileError);
+          // Continue anyway since auth was successful
+        }
       }
       
       return data;

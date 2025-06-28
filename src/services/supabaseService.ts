@@ -18,6 +18,34 @@ export const updateUserProfile = async (
   userId: string, 
   updates: Partial<Database['public']['Tables']['users']['Update']>
 ) => {
+  // First check if user exists
+  const { data: existingUser, error: checkError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('id', userId)
+    .single();
+    
+  if (checkError && checkError.code !== 'PGRST116') {
+    // Error other than "not found"
+    throw checkError;
+  }
+  
+  if (!existingUser) {
+    // User doesn't exist, create it
+    const { data, error } = await supabase
+      .from('users')
+      .insert({
+        id: userId,
+        ...updates
+      })
+      .select()
+      .single();
+      
+    if (error) throw error;
+    return data;
+  }
+  
+  // User exists, update it
   const { data, error } = await supabase
     .from('users')
     .update(updates)

@@ -3,9 +3,10 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, ScrollView,
 import { LinearGradient } from 'expo-linear-gradient';
 import { User, Camera, Mail, X, CircleCheck as CheckCircle, Upload, CircleAlert as AlertCircle } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
-import { useSupabaseAuth } from '@/src/hooks/useSupabase';
+import { useSupabaseAuth } from '@/src/hooks/useSupabase'; 
 import * as supabaseService from '@/src/services/supabaseService';
 import { spacing, typography } from '@/src/constants/colors';
+import supabase from '@/src/lib/supabase';
 
 interface ProfileSettingsProps {
   visible: boolean;
@@ -85,10 +86,94 @@ export function ProfileSettings({ visible, onClose }: ProfileSettingsProps) {
     }
   };
   
-  const handleUploadAvatar = async () => {
-    // This would normally open a file picker or camera
-    // For now, we'll just show an alert
-    alert('Avatar upload would open a file picker or camera here');
+  const handleUploadAvatar = async (useCamera = false) => {
+    if (!user) {
+      setError('You must be logged in to upload an avatar');
+      return;
+    }
+    
+    try {
+      let file;
+      
+      if (Platform.OS === 'web') {
+        // For web, create a file input and trigger it
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        
+        // Create a promise to handle the file selection
+        const filePromise = new Promise<File | null>((resolve) => {
+          input.onchange = (e) => {
+            const files = (e.target as HTMLInputElement).files;
+            resolve(files ? files[0] : null);
+          };
+        });
+        
+        // Trigger the file input
+        input.click();
+        
+        // Wait for file selection
+        file = await filePromise;
+        
+        if (!file) return;
+      } else {
+        // For native, we would use expo-image-picker
+        // For now, just show an alert
+        alert('On native platforms, this would open the image picker or camera');
+        return;
+      }
+      
+      // Show loading state
+      setLoading(true);
+      
+      // Upload the file to Supabase Storage
+      const filePath = `${user.id}/avatar.jpg`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+        
+      if (uploadError) throw uploadError;
+      
+      // Get the public URL
+      const { data } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+        
+      if (!data.publicUrl) throw new Error('Failed to get avatar URL');
+      
+      // Update user profile with new avatar URL
+      const { error: updateError } = await supabaseService.updateUserProfile(
+        user.id,
+        { avatar_url: data.publicUrl }
+      );
+      
+      if (updateError) throw updateError;
+      
+      // Update auth metadata
+      const { error: authError } = await supabase.auth.updateUser({
+        data: { avatar_url: data.publicUrl }
+      });
+      
+      if (authError) throw authError;
+      
+      // Update local state
+      setAvatarUrl(data.publicUrl);
+      setSuccess(true);
+      
+      // Reset success after a delay
+      setTimeout(() => {
+        setSuccess(false);
+      }, 3000);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to upload avatar';
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!visible) return null;
