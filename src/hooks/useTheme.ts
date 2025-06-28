@@ -1,5 +1,5 @@
 import { useColorScheme } from 'react-native';
-import { useUserStore } from '../stores/userStore';
+import { useUserStore } from './userStore';
 import { colors } from '../constants/colors';
 
 export function useTheme() {
