@@ -198,12 +198,6 @@ export function ClaudeFeedbackModal({
     
     return insights;
   };
-    } catch (error) {
-      console.error('Failed to generate feedback:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleViewDetails = () => {
     setShowDetailedFeedback(true);
