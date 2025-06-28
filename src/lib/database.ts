@@ -18,7 +18,8 @@ const DATABASE_VERSION = 1;
 // Create/open the database
 export const getDatabase = () => {
   if (Platform.OS === 'web') {
-    return SQLite.openDatabase(DATABASE_NAME);
+    console.log('SQLite is not fully supported on web platform. Using alternative storage.');
+    return null;
   }
   
   // For native platforms, ensure the database directory exists
@@ -36,6 +37,12 @@ export const getDatabase = () => {
 // Initialize the database with all required tables
 export const initDatabase = async () => {
   const db = getDatabase();
+  
+  // Skip database initialization on web platform
+  if (!db) {
+    console.log('Database not available on web platform. Skipping initialization.');
+    return;
+  }
   
   // Create a version table to track database version for migrations
   db.transaction(tx => {
@@ -334,6 +341,16 @@ export const executeQuery = (
 ) => {
   const db = getDatabase();
   
+  // Handle web platform where database is not available
+  if (!db) {
+    const error = new Error('Database not available on web platform');
+    console.error('Database query error:', error);
+    if (errorCallback) {
+      errorCallback(error);
+    }
+    return;
+  }
+  
   db.transaction(tx => {
     tx.executeSql(
       query,
@@ -353,8 +370,3 @@ export const executeQuery = (
     );
   });
 };
-
-// Initialize the database when this module is imported
-initDatabase().catch(error => {
-  console.error('Database initialization error:', error);
-});
