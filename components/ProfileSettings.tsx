@@ -21,6 +21,7 @@ export function ProfileSettings({ visible, onClose, onProfileUpdated }: ProfileS
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [avatarVersion, setAvatarVersion] = useState(0);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +35,7 @@ export function ProfileSettings({ visible, onClose, onProfileUpdated }: ProfileS
       setName(user.user_metadata?.name || '');
       setEmail(user.email || '');
       setAvatarUrl(user.user_metadata?.avatar_url || '');
+      setAvatarVersion(0);
     }
   }, [user]);
   
@@ -186,6 +188,7 @@ export function ProfileSettings({ visible, onClose, onProfileUpdated }: ProfileS
       // Update local state
       console.log('Updating local state with avatar URL:', publicUrl);
       setAvatarUrl(publicUrl);
+      setAvatarVersion(prev => prev + 1);
       setSuccess(true);
       
       // Notify parent component of successful update
@@ -238,7 +241,9 @@ export function ProfileSettings({ visible, onClose, onProfileUpdated }: ProfileS
             <View style={styles.avatarContainer}>
               {avatarUrl ? (
                 <Image
-                  source={{ uri: avatarUrl }}
+                  source={{ 
+                    uri: avatarUrl + (avatarUrl.includes('?') ? '&' : '?') + `v=${avatarVersion}` 
+                  }}
                   style={styles.avatar}
                 />
               ) : (
