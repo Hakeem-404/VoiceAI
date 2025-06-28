@@ -11,7 +11,7 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   useFrameworkReady();
   
-  // const { loadAnalytics } = useUserStore();
+  const { loadAnalytics } = useUserStore();
   const { session, loading } = useSupabaseAuth();
   const [appIsReady, setAppIsReady] = useState(false);
   
