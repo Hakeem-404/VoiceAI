@@ -14,9 +14,20 @@ export function VoiceVisualizer({ audioLevels, isActive, size = 100 }: VoiceVisu
     Array.from({ length: 20 }, () => new Animated.Value(0.1))
   ).current;
   
+  const spinValue = useRef(new Animated.Value(0)).current;
+  
   useEffect(() => {
     if (isActive) {
-      const animations = animatedValues.map((animatedValue, index) => {
+      // Create rotation animation
+      Animated.loop(
+        Animated.timing(spinValue, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        })
+      ).start();
+      
+      const animations = animatedValues.map((animatedValue) => {
         return Animated.loop(
           Animated.sequence([
             Animated.timing(animatedValue, {
@@ -35,6 +46,7 @@ export function VoiceVisualizer({ audioLevels, isActive, size = 100 }: VoiceVisu
       
       Animated.stagger(50, animations).start();
     } else {
+      spinValue.stopAnimation();
       animatedValues.forEach(animatedValue => {
         Animated.timing(animatedValue, {
           toValue: 0.1,
@@ -43,10 +55,21 @@ export function VoiceVisualizer({ audioLevels, isActive, size = 100 }: VoiceVisu
         }).start();
       });
     }
-  }, [isActive, animatedValues]);
+  }, [isActive, animatedValues, spinValue]);
+
+  const spin = spinValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
 
   return (
-    <View style={[styles.container, { width: size, height: size }]}>
+    <Animated.View 
+      style={[
+        styles.container, 
+        { width: size, height: size },
+        { transform: [{ rotate: spin }] }
+      ]}
+    >
       <View style={styles.visualizer}>
         {animatedValues.map((animatedValue, index) => (
           <Animated.View
@@ -64,7 +87,7 @@ export function VoiceVisualizer({ audioLevels, isActive, size = 100 }: VoiceVisu
           />
         ))}
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
