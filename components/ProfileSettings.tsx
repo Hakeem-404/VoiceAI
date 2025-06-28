@@ -153,12 +153,25 @@ export function ProfileSettings({ visible, onClose, onProfileUpdated }: ProfileS
       // Show loading state
       setLoading(true);
       
-      // Use the existing uploadAvatar service
-      const publicUrl = await supabaseService.uploadAvatar(user.id, file);
+      console.log('Starting avatar upload for user:', user.id);
       
-      if (!publicUrl) throw new Error('Failed to upload avatar');
+      // Use the existing uploadAvatar service
+      let publicUrl;
+      try {
+        publicUrl = await supabaseService.uploadAvatar(user.id, file);
+        console.log('Upload completed, public URL:', publicUrl);
+      } catch (uploadError) {
+        console.error('Upload failed:', uploadError);
+        throw uploadError;
+      }
+      
+      if (!publicUrl) {
+        console.error('Upload completed but no public URL returned');
+        throw new Error('Failed to upload avatar - no public URL returned');
+      }
       
       // Update auth metadata to ensure immediate visibility
+      console.log('Updating auth metadata with avatar URL:', publicUrl);
       const { error: authError } = await supabase.auth.updateUser({
         data: { avatar_url: publicUrl }
       });
@@ -166,9 +179,12 @@ export function ProfileSettings({ visible, onClose, onProfileUpdated }: ProfileS
       if (authError) {
         console.warn('Failed to update auth metadata:', authError);
         // Don't throw here as the upload was successful
+      } else {
+        console.log('Auth metadata updated successfully');
       }
       
       // Update local state
+      console.log('Updating local state with avatar URL:', publicUrl);
       setAvatarUrl(publicUrl);
       setSuccess(true);
       
