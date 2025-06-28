@@ -9,7 +9,7 @@ import {
   Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { X, Bell, Clock, Award, Target, Calendar } from 'lucide-react-native';
+import { X, Bell, Clock, Award, Target } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { spacing, typography } from '@/src/constants/colors';
 
@@ -145,7 +145,7 @@ export function NotificationSettingsModal({
 
             <View style={[styles.settingRow, { backgroundColor: colors.surface }]}>
               <View style={styles.settingInfo}>
-                <Calendar size={16} color={colors.textSecondary} />
+                <Bell size={16} color={colors.textSecondary} />
                 <View style={styles.settingText}>
                   <Text style={[styles.settingLabel, { color: colors.text }]}>
                     Weekly Reports

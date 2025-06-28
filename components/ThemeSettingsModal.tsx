@@ -106,7 +106,7 @@ export function ThemeSettingsModal({
                   <View style={styles.optionContent}>
                     <View style={[
                       styles.iconContainer,
-                      { backgroundColor: isSelected ? colors.primary : colors.border + '40' }
+                      { backgroundColor: isSelected ? colors.primary : colors.border }
                     ]}>
                       <IconComponent 
                         size={20} 
