@@ -79,7 +79,7 @@ class ElevenLabsService {
   private isOnline = true;
   private usageTracking = {
     charactersUsed: 0,
-    monthlyLimit: 10000, // Creator tier default
+    monthlyLimit: 20000, // Creator tier default
     lastReset: new Date()
   };
 
