@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { User, Camera, Mail, X, CheckCircle, Upload, AlertCircle } from 'lucide-react-native';
+import { User, Camera, Mail, X, CircleCheck as CheckCircle, Upload, CircleAlert as AlertCircle } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useSupabaseAuth } from '@/src/hooks/useSupabase';
 import * as supabaseService from '@/src/services/supabaseService';

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { ArrowLeft, Mail, AlertCircle, CheckCircle } from 'lucide-react-native';
+import { ArrowLeft, Mail, CircleAlert as AlertCircle, CircleCheck as CheckCircle } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import supabase from '@/src/lib/supabase';
 import { spacing, typography } from '@/src/constants/colors';

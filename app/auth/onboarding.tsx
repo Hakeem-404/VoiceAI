@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, Dimensions, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { Mic, MessageSquare, Target, ChevronRight, CheckCircle, Settings, Bell } from 'lucide-react-native';
+import { Mic, MessageSquare, Target, ChevronRight, CircleCheck as CheckCircle, Settings, Bell } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useSupabaseAuth } from '@/src/hooks/useSupabase';
 import * as supabaseService from '@/src/services/supabaseService';
@@ -110,7 +110,7 @@ export default function OnboardingScreen() {
     },
     {
       id: 'complete',
-      title: 'You're All Set!',
+      title: 'You\'re All Set!',
       description: 'Start your first conversation and begin improving your communication skills',
       icon: <CheckCircle size={48} color={colors.success} />,
     },

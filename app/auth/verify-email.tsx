@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { ArrowLeft, Mail, CheckCircle } from 'lucide-react-native';
+import { ArrowLeft, Mail, CircleCheck as CheckCircle } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { spacing, typography } from '@/src/constants/colors';
 
