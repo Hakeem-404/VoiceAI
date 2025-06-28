@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSupabaseAuth } from './useSupabase';
 import { useDailyChallenges } from './useDailyChallenges';
 import { useUserProgress } from './useUserProgress';
@@ -17,6 +17,10 @@ export function useUserStore() {
   const [favoriteMode, setFavoriteModeState] = useState<string | null>(null);
   const [recentModes, setRecentModes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  // Use refs to store the latest functions to avoid stale closures
+  const loadUserDataRef = useRef<() => Promise<void>>();
+  const generateAnalyticsRef = useRef<() => void>();
   
   // Load user data from Supabase
   const loadUserData = useCallback(async () => {
@@ -71,6 +75,11 @@ export function useUserStore() {
       setLoading(false);
     }
   }, [authUser]);
+  
+  // Update the ref when loadUserData changes
+  useEffect(() => {
+    loadUserDataRef.current = loadUserData;
+  }, [loadUserData]);
   
   // Generate analytics data from user progress
   const generateAnalytics = useCallback(() => {
@@ -185,12 +194,21 @@ export function useUserStore() {
     }
   }, [authUser, progress, user]);
   
+  // Update the ref when generateAnalytics changes
+  useEffect(() => {
+    generateAnalyticsRef.current = generateAnalytics;
+  }, [generateAnalytics]);
+  
   // Load analytics data
   const loadAnalytics = useCallback(() => {
     if (authUser) {
-      // Load real data from database
-      loadUserData();
-      generateAnalytics();
+      // Load real data from database using refs
+      if (loadUserDataRef.current) {
+        loadUserDataRef.current();
+      }
+      if (generateAnalyticsRef.current) {
+        generateAnalyticsRef.current();
+      }
     } else {
       // Use mock data for guest users
       const mockAnalytics: AnalyticsData = {
@@ -210,7 +228,7 @@ export function useUserStore() {
       
       setAnalytics(mockAnalytics);
     }
-  }, [authUser, loadUserData, generateAnalytics]);
+  }, [authUser]);
   
   // Update user preferences
   const updatePreferences = useCallback(async (preferences: Partial<UserPreferences>) => {
