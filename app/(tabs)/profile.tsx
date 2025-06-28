@@ -38,7 +38,7 @@ import { SyncStatusIndicator } from '@/src/components/SyncStatusIndicator';
 import { OfflineModeToggle } from '@/src/components/OfflineModeToggle';
 import { NetworkPreferencesModal } from '@/src/components/NetworkPreferencesModal';
 import { DataExportModal } from '@/src/components/DataExportModal';
-import { StorageManagementModal } from '@/components/StorageManagementModal';
+import { StorageManagementModal } from '@/src/components/StorageManagementModal';
 import { spacing, typography } from '@/src/constants/colors';
 
 export default function ProfileScreen() {
