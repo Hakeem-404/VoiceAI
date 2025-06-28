@@ -47,6 +47,8 @@ export function ClaudeFeedbackModal({
     setIsLoading(true);
     setAnalysisStage('Analyzing conversation...');
     
+    try {
+    
     // Check if feedback already exists in conversation
     if (conversation.feedback) {
       setFeedback(conversation.feedback);
