@@ -28,8 +28,12 @@ import { SupabaseConversationView } from '../../components/SupabaseConversationV
 import { supabaseClaudeAPI } from '../../services/supabaseClaudeAPI';
 import { InterviewSetupScreen } from '../../components/InterviewSetupScreen';
 import { useInputStore } from '@/src/stores/inputStore';
+import { useConversationStore } from '@/src/stores/conversationStore';
+import { useUserStore } from '@/src/stores/userStore';
+import { useSupabaseAuth } from '@/src/hooks/useSupabase';
+import { conversationModes } from '@/src/constants/conversationModes';
 
-const conversationModes = [
+const conversationModesList = [
   {
     id: 'general-chat',
     name: 'General Chat',
@@ -87,7 +91,12 @@ export default function ChatScreen() {
   const [configStatus, setConfigStatus] = useState({ hasUrl: false, hasKey: false });
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [showInterviewSetup, setShowInterviewSetup] = useState(false);
+  
+  // Store hooks
   const { documentData, updateDocumentData } = useInputStore();
+  const { createConversation, addRecentMode } = useConversationStore();
+  const { addRecentMode: addRecentModeToUser } = useUserStore();
+  const { user: authUser } = useSupabaseAuth();
 
   useEffect(() => {
     // Check if Supabase is properly configured
@@ -154,20 +163,53 @@ export default function ChatScreen() {
       return;
     }
 
-    setSelectedMode(modeId);
-    setSessionId(Date.now().toString());
+    // Find the mode
+    const mode = conversationModes.find(m => m.id === modeId);
+    if (!mode) {
+      Alert.alert('Error', 'Conversation mode not found');
+      return;
+    }
+
+    // Create conversation using store
+    const conversation = createConversation(mode);
+    
+    if (conversation) {
+      // Update recent modes
+      addRecentModeToUser(modeId);
+      
+      // Set state for navigation
+      setSelectedMode(modeId);
+      setSessionId(conversation.id);
+    }
   };
 
   const handleInterviewContinue = () => {
-    if (documentData.analysisResult) {
-      // Start interview with the analysis data
+    const mode = conversationModes.find(m => m.id === 'interview-practice');
+    if (!mode) return;
+    
+    // Create conversation with document analysis if available
+    const configuration = documentData.analysisResult ? {
+      modeId: 'interview-practice',
+      difficulty: 'intermediate' as any,
+      sessionType: 'standard' as any,
+      selectedTopics: mode.topics.slice(0, 3),
+      aiPersonality: 'Professional',
+      customSettings: {
+        documentAnalysis: documentData.analysisResult,
+        jobDescription: documentData.jobDescription,
+        cvContent: documentData.cvContent,
+      },
+    } : undefined;
+    
+    const conversation = createConversation(mode, configuration);
+    
+    if (conversation) {
+      // Update recent modes
+      addRecentModeToUser('interview-practice');
+      
+      // Set state and close setup
       setSelectedMode('interview-practice');
-      setSessionId(Date.now().toString());
-      setShowInterviewSetup(false);
-    } else {
-      // Start regular interview if no analysis
-      setSelectedMode('interview-practice');
-      setSessionId(Date.now().toString());
+      setSessionId(conversation.id);
       setShowInterviewSetup(false);
     }
   };
@@ -270,7 +312,7 @@ export default function ChatScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.modesGrid}>
-            {conversationModes.map((mode) => {
+            {conversationModesList.map((mode) => {
               const IconComponent = mode.icon;
               return (
                 <TouchableOpacity
@@ -358,9 +400,16 @@ export default function ChatScreen() {
           
           <InterviewSetupScreen
             onQuickStart={() => {
-              setSelectedMode('interview-practice');
-              setSessionId(Date.now().toString());
-              setShowInterviewSetup(false);
+              const mode = conversationModes.find(m => m.id === 'interview-practice');
+              if (mode) {
+                const conversation = createConversation(mode);
+                if (conversation) {
+                  addRecentModeToUser('interview-practice');
+                  setSelectedMode('interview-practice');
+                  setSessionId(conversation.id);
+                  setShowInterviewSetup(false);
+                }
+              }
             }}
             onDocumentSelect={(type) => {
               // This is now handled inside InterviewSetupScreen
@@ -632,5 +681,4 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#111827',
-  }
-});
+  },
