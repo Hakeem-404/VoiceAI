@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Stack, SplashScreen } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { initDatabase } from '@/src/lib/database';
-import { initializeSyncService } from '@/src/services/syncService';
-import { initializeCacheService } from '@/src/services/cacheService';
+import { Platform } from 'react-native';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useUserStore } from '@/src/stores/userStore';
 import { useSupabaseAuth } from '@/src/hooks/useSupabase';
+import { updateAuthState } from '@/src/services/syncService';
 
 // Keep the splash screen visible until we're ready
 SplashScreen.preventAutoHideAsync();
@@ -16,25 +15,42 @@ export default function RootLayout() {
 
   // Initialize database and services
   useEffect(() => {
-    const initializeApp = async () => {
-      try {
-        // Initialize SQLite database
+  const initializeApp = async () => {
+    try {
+      if (Platform.OS !== 'web') {
+        // Only initialize database and services on native platforms
+        const { initDatabase } = await import('@/src/lib/database');
+        const { initializeSyncService } = await import('@/src/services/syncService');
+        const { initializeCacheService } = await import('@/src/services/cacheService');
+        
         await initDatabase();
-        
-        // Initialize sync service
         await initializeSyncService();
-        
-        // Initialize cache service
         await initializeCacheService();
-        
-        console.log('App initialization complete');
-      } catch (error) {
-        console.error('App initialization error:', error);
       }
-    };
+      
+      console.log('App initialization complete');
+    } catch (error) {
+      console.error('App initialization error:', error);
+    }
+  };
+  
+  SplashScreen.preventAutoHideAsync();
+  
+  export default function RootLayout() {
+    useFrameworkReady();
     
-    initializeApp();
-  }, []);
+    const { session, loading, user } = useSupabaseAuth();
+    const { setUser, setTheme } = useUserStore();
+    const [appIsReady, setAppIsReady] = useState(false);
+    
+    // Update auth state for sync service
+    useEffect(() => {
+      updateAuthState({ user, session });
+    }, [user, session]);
+    
+    useEffect(() => {
+      initializeApp();
+    }, []);
   
   const { session, loading, user } = useSupabaseAuth();
   const { setUser, setTheme } = useUserStore();
@@ -96,14 +112,12 @@ export default function RootLayout() {
     <>
       <Stack screenOptions={{ headerShown: false }}>
         {session ? (
-          // User is signed in
-          <>
+          <> // User is signed in
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="interview-prep" options={{ presentation: 'modal' }} />
           </>
         ) : (
-          // User is not signed in
-          <>
+          <> // User is not signed in
             <Stack.Screen name="auth" options={{ headerShown: false }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           </>
