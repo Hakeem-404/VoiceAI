@@ -23,11 +23,17 @@ import {
 } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useUserStore } from '@/src/stores/userStore';
+import { useSupabaseAuth } from '@/src/hooks/useSupabase';
+import { UserAvatar } from '@/components/UserAvatar';
+import { GuestModePrompt } from '@/components/GuestModePrompt';
 import { spacing, typography } from '@/src/constants/colors';
 
 export default function ProfileScreen() {
   const { colors, isDark, theme } = useTheme();
   const { user, setTheme, updatePreferences } = useUserStore();
+  const { user: authUser, signOut } = useSupabaseAuth();
+  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
+  const [promptFeature, setPromptFeature] = useState<'save' | 'history' | 'voice' | 'analytics' | 'premium'>('save');
 
   const mockUser = {
     id: '1',
@@ -139,14 +145,21 @@ export default function ProfileScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-              <User size={32} color="white" />
-            </View>
+            <UserAvatar 
+              size={80} 
+              showBadge={true} 
+              onPress={() => {
+                if (!authUser) {
+                  setPromptFeature('save');
+                  setShowAuthPrompt(true);
+                }
+              }}
+            />
             <Text style={[styles.userName, { color: colors.text }]}>
-              {mockUser.name}
+              {authUser?.user_metadata?.name || 'Guest User'}
             </Text>
             <Text style={[styles.userEmail, { color: colors.textSecondary }]}>
-              {mockUser.email}
+              {authUser?.email || 'Sign in to save your progress'}
             </Text>
           </View>
 
@@ -210,19 +223,40 @@ export default function ProfileScreen() {
               title="Account Settings"
               subtitle="Manage your account and privacy"
               type="nav"
+              onPress={() => {
+                if (!authUser) {
+                  setPromptFeature('save');
+                  setShowAuthPrompt(true);
+                }
+              }}
             />
             <TouchableOpacity
               style={[styles.logoutButton, { backgroundColor: colors.surface }]}
               activeOpacity={0.6}
+              onPress={async () => {
+                if (authUser) {
+                  await signOut();
+                } else {
+                  setPromptFeature('save');
+                  setShowAuthPrompt(true);
+                }
+              }}
             >
               <LogOut size={20} color={colors.error} />
               <Text style={[styles.logoutText, { color: colors.error }]}>
-                Sign Out
+                {authUser ? 'Sign Out' : 'Sign In'}
               </Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
       </LinearGradient>
+      
+      {/* Auth Prompt Modal */}
+      <GuestModePrompt
+        visible={showAuthPrompt}
+        onClose={() => setShowAuthPrompt(false)}
+        feature={promptFeature}
+      />
     </SafeAreaView>
   );
 }

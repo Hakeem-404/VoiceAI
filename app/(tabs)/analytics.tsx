@@ -11,6 +11,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { TrendingUp, Target, Clock, Award, ChartBar as BarChart3, Star } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useUserStore } from '@/src/stores/userStore';
+import { useSupabaseAuth } from '@/src/hooks/useSupabase';
+import { GuestModePrompt } from '@/components/GuestModePrompt';
 import { spacing, typography } from '@/src/constants/colors';
 
 const { width } = Dimensions.get('window');
@@ -18,6 +20,14 @@ const { width } = Dimensions.get('window');
 export default function AnalyticsScreen() {
   const { colors, isDark } = useTheme();
   const { analytics } = useUserStore();
+  const { user } = useSupabaseAuth();
+  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
+  
+  useEffect(() => {
+    if (!user) {
+      setShowAuthPrompt(true);
+    }
+  }, [user]);
 
   const StatCard = ({ 
     icon: IconComponent, 
@@ -221,6 +231,13 @@ export default function AnalyticsScreen() {
           </View>
         </ScrollView>
       </LinearGradient>
+      
+      {/* Auth Prompt Modal */}
+      <GuestModePrompt
+        visible={showAuthPrompt}
+        onClose={() => setShowAuthPrompt(false)}
+        feature="analytics"
+      />
     </SafeAreaView>
   );
 }

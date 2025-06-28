@@ -20,14 +20,29 @@ import {
 } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useConversationStore } from '@/src/stores/conversationStore';
+import { useSupabaseAuth } from '@/src/hooks/useSupabase';
+import { useConversationDatabase } from '@/src/hooks/useConversationDatabase';
+import { GuestModePrompt } from '@/components/GuestModePrompt';
 import { Conversation } from '@/src/types';
 import { spacing, typography } from '@/src/constants/colors';
 
 export default function HistoryScreen() {
   const { colors, isDark } = useTheme();
   const { conversations, deleteConversation } = useConversationStore();
+  const { user } = useSupabaseAuth();
+  const { conversations: dbConversations, loading, loadConversations } = useConversationDatabase();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'recent' | 'favorites'>('all');
+  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
+  
+  useEffect(() => {
+    if (user) {
+      loadConversations();
+    } else if (!conversations.length) {
+      // Show auth prompt if guest user has no conversations
+      setShowAuthPrompt(true);
+    }
+  }, [user]);
 
   const formatDuration = (duration: number) => {
     const minutes = Math.floor(duration / 60);
@@ -188,6 +203,13 @@ export default function HistoryScreen() {
           showsVerticalScrollIndicator={false}
         />
       </LinearGradient>
+      
+      {/* Auth Prompt Modal */}
+      <GuestModePrompt
+        visible={showAuthPrompt}
+        onClose={() => setShowAuthPrompt(false)}
+        feature="history"
+      />
     </SafeAreaView>
   );
 }

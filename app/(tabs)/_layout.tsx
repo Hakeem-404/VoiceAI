@@ -1,7 +1,11 @@
 import { Tabs } from 'expo-router';
 import { Chrome as Home, MessageCircle, Target, History, ChartBar as BarChart3, User } from 'lucide-react-native';
+import { useSupabaseAuth } from '@/src/hooks/useSupabase';
+import { UserAvatar } from '@/components/UserAvatar';
 
 export default function TabLayout() {
+  const { user } = useSupabaseAuth();
+  
   return (
     <Tabs
       screenOptions={{
@@ -72,7 +76,11 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ size, color }) => (
-            <User size={size} color={color} />
+            user ? (
+              <UserAvatar size={size} />
+            ) : (
+              <User size={size} color={color} />
+            )
           ),
         }}
       />
