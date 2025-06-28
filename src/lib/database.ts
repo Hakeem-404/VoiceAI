@@ -4,38 +4,44 @@ import * as FileSystem from 'expo-file-system';
 import uuid from 'react-native-uuid';
 
 // Database name
-const DATABASE_NAME = 'voiceai.db';
+const DATABASE_NAME = 'conversation_companion.db';
 
 // Database version for migrations
 const DATABASE_VERSION = 1;
 
-// Skip SQLite initialization on web platform
-// if (Platform.OS === 'web') {
-//   console.log('SQLite is not fully supported on web platform. Using alternative storage.');
-//   return null;
-// }
+let databaseInstance: SQLite.SQLiteDatabase | null = null;
 
 // Create/open the database
-export const getDatabase = () => {
+export const getDatabase = (): SQLite.SQLiteDatabase | null => {
   if (Platform.OS === 'web') {
     console.log('SQLite is not fully supported on web platform. Using alternative storage.');
     return null;
   }
   
-  // For native platforms, ensure the database directory exists
-  const directory = FileSystem.documentDirectory + 'SQLite/';
+  if (databaseInstance) {
+    return databaseInstance;
+  }
   
-  // Create the directory if it doesn't exist
-  FileSystem.makeDirectoryAsync(directory, { intermediates: true })
-    .catch(error => {
-      console.error('Error creating database directory:', error);
-    });
-  
-  return SQLite.openDatabase(DATABASE_NAME);
+  try {
+    // For native platforms, ensure the database directory exists
+    const directory = FileSystem.documentDirectory + 'SQLite/';
+    
+    // Create the directory if it doesn't exist
+    FileSystem.makeDirectoryAsync(directory, { intermediates: true })
+      .catch((error: any) => {
+        console.error('Error creating database directory:', error);
+      });
+    
+    databaseInstance = SQLite.openDatabase(DATABASE_NAME);
+    return databaseInstance;
+  } catch (error) {
+    console.error('Error opening SQLite database:', error);
+    return null;
+  }
 };
 
 // Initialize the database with all required tables
-export const initDatabase = async () => {
+export const initDatabase = async (): Promise<void> => {
   const db = getDatabase();
   
   // Skip database initialization on web platform
@@ -44,51 +50,73 @@ export const initDatabase = async () => {
     return;
   }
   
-  // Create a version table to track database version for migrations
-  db.transaction(tx => {
-    tx.executeSql(
-      `CREATE TABLE IF NOT EXISTS version (
-        id INTEGER PRIMARY KEY NOT NULL,
-        version INTEGER NOT NULL
-      );`,
-      [],
-      () => {
-        // Check current version and run migrations if needed
-        checkVersion(db);
+  return new Promise<void>((resolve, reject) => {
+    // Create a version table to track database version for migrations
+    db.transaction(
+      (tx: SQLite.SQLTransaction) => {
+        tx.executeSql(
+          `CREATE TABLE IF NOT EXISTS version (
+            id INTEGER PRIMARY KEY NOT NULL,
+            version INTEGER NOT NULL
+          );`,
+          [],
+          () => {
+            // Check current version and run migrations if needed
+            checkVersion(db, resolve, reject);
+          },
+          (_: SQLite.SQLError, error: SQLite.SQLError) => {
+            console.error('Error creating version table:', error);
+            reject(error);
+            return false;
+          }
+        );
       },
-      (_, error) => {
-        console.error('Error creating version table:', error);
-        return false;
+      (error: SQLite.SQLError) => {
+        console.error('Transaction error during database initialization:', error);
+        reject(error);
+      },
+      () => {
+        console.log('Database initialization completed successfully');
+        resolve();
       }
     );
   });
 };
 
 // Check database version and run migrations if needed
-const checkVersion = (db: SQLite.SQLiteDatabase) => {
-  db.transaction(tx => {
+const checkVersion = (
+  db: SQLite.SQLiteDatabase,
+  resolve: (value: void | PromiseLike<void>) => void,
+  reject: (reason?: any) => void
+) => {
+  db.transaction((tx: SQLite.SQLTransaction) => {
     tx.executeSql(
       'SELECT version FROM version ORDER BY version DESC LIMIT 1;',
       [],
-      (_, result) => {
+      (_: SQLite.SQLResultSet, result: SQLite.SQLResultSet) => {
         const rows = result.rows;
         const currentVersion = rows.length > 0 ? rows.item(0).version : 0;
         
         if (currentVersion < DATABASE_VERSION) {
           // Run migrations
-          runMigrations(db, currentVersion);
+          runMigrations(db, currentVersion, resolve, reject);
+        } else {
+          resolve();
         }
       },
-      (_, error) => {
+      (_: SQLite.SQLError, error: SQLite.SQLError) => {
         console.error('Error checking database version:', error);
         
         // If the table doesn't exist yet, insert the initial version
         tx.executeSql(
           'INSERT INTO version (id, version) VALUES (1, ?);',
           [DATABASE_VERSION],
-          () => {},
-          (_, error) => {
+          () => {
+            resolve();
+          },
+          (_: SQLite.SQLError, error: SQLite.SQLError) => {
             console.error('Error inserting initial version:', error);
+            reject(error);
             return false;
           }
         );
@@ -99,8 +127,13 @@ const checkVersion = (db: SQLite.SQLiteDatabase) => {
 };
 
 // Run database migrations
-const runMigrations = (db: SQLite.SQLiteDatabase, currentVersion: number) => {
-  db.transaction(tx => {
+const runMigrations = (
+  db: SQLite.SQLiteDatabase,
+  currentVersion: number,
+  resolve: (value: void | PromiseLike<void>) => void,
+  reject: (reason?: any) => void
+) => {
+  db.transaction((tx: SQLite.SQLTransaction) => {
     // Run migrations based on current version
     if (currentVersion < 1) {
       createInitialTables(tx);
@@ -110,9 +143,12 @@ const runMigrations = (db: SQLite.SQLiteDatabase, currentVersion: number) => {
     tx.executeSql(
       'UPDATE version SET version = ? WHERE id = 1;',
       [DATABASE_VERSION],
-      () => {},
-      (_, error) => {
+      () => {
+        resolve();
+      },
+      (_: SQLite.SQLError, error: SQLite.SQLError) => {
         console.error('Error updating database version:', error);
+        reject(error);
         return false;
       }
     );
