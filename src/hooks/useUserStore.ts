@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSupabaseAuth } from './useSupabase';
 import { useDailyChallenges } from './useDailyChallenges';
 import { useUserProgress } from './useUserProgress';
@@ -17,10 +17,6 @@ export function useUserStore() {
   const [favoriteMode, setFavoriteModeState] = useState<string | null>(null);
   const [recentModes, setRecentModes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  
-  // Use refs to store the latest functions to avoid stale closures
-  const loadUserDataRef = useRef<() => Promise<void>>();
-  const generateAnalyticsRef = useRef<() => void>();
   
   // Load user data from Supabase
   const loadUserData = useCallback(async () => {
@@ -76,139 +72,11 @@ export function useUserStore() {
     }
   }, [authUser]);
   
-  // Update the ref when loadUserData changes
-  useEffect(() => {
-    loadUserDataRef.current = loadUserData;
-  }, [loadUserData]);
-  
-  // Generate analytics data from user progress
-  const generateAnalytics = useCallback(() => {
-    if (!authUser || !progress.length) return;
-    
-    try {
-      // Calculate total conversations
-      const totalConversations = progress.reduce(
-        (sum, p) => sum + (p.total_sessions || 0), 
-        0
-      );
-      
-      // Calculate total practice time (in minutes)
-      const totalPracticeTime = progress.reduce(
-        (sum, p) => sum + (p.total_duration || 0), 
-        0
-      ) / 60;
-      
-      // Calculate average score
-      const totalScores = progress.reduce((sum, p) => {
-        const bestScores = p.best_scores as any || {};
-        return sum + (bestScores.quality || 0);
-      }, 0);
-      
-      const averageScore = totalScores / progress.length || 0;
-      
-      // Get streak days from user profile
-      const streakDays = user?.streak_days || 0;
-      
-      // Generate mock weekly progress for now
-      // In a real app, this would come from actual historical data
-      const weeklyProgress = [65, 72, 68, 85, 92, 88, 95];
-      
-      // Calculate skill progress
-      const skillProgress = {
-        fluency: 0,
-        confidence: 0,
-        clarity: 0,
-      };
-      
-      let skillCount = 0;
-      
-      progress.forEach(p => {
-        const scores = p.skill_scores as any || {};
-        if (scores.fluency) {
-          skillProgress.fluency += scores.fluency;
-          skillCount++;
-        }
-        if (scores.confidence) {
-          skillProgress.confidence += scores.confidence;
-          skillCount++;
-        }
-        if (scores.clarity) {
-          skillProgress.clarity += scores.clarity;
-          skillCount++;
-        }
-      });
-      
-      if (skillCount > 0) {
-        skillProgress.fluency = Math.round(skillProgress.fluency / skillCount);
-        skillProgress.confidence = Math.round(skillProgress.confidence / skillCount);
-        skillProgress.clarity = Math.round(skillProgress.clarity / skillCount);
-      }
-      
-      // Get achievements from progress
-      const achievements = progress.flatMap(p => {
-        const achievementsArray = p.achievements as any[] || [];
-        return achievementsArray.map(a => ({
-          id: a.id,
-          title: a.title,
-          description: a.description,
-          icon: a.icon || 'star',
-          unlockedAt: new Date(a.unlockedAt),
-          category: a.category || 'conversation',
-          modeId: p.mode,
-        }));
-      });
-      
-      // Generate mode stats
-      const modeStats: Record<string, {
-        sessionsCompleted: number;
-        totalTime: number;
-        averageScore: number;
-        lastUsed: Date;
-      }> = {};
-      
-      progress.forEach(p => {
-        const bestScores = p.best_scores as any || {};
-        modeStats[p.mode] = {
-          sessionsCompleted: p.total_sessions || 0,
-          totalTime: Math.round((p.total_duration || 0) / 60), // Convert to minutes
-          averageScore: bestScores.quality || 0,
-          lastUsed: p.last_session_date ? new Date(p.last_session_date) : new Date(),
-        };
-      });
-      
-      // Create analytics object
-      const analyticsData: AnalyticsData = {
-        totalConversations,
-        totalPracticeTime,
-        averageScore,
-        streakDays,
-        weeklyProgress,
-        skillProgress,
-        achievements,
-        modeStats,
-      };
-      
-      setAnalytics(analyticsData);
-    } catch (error) {
-      console.error('Failed to generate analytics:', error);
-    }
-  }, [authUser, progress, user]);
-  
-  // Update the ref when generateAnalytics changes
-  useEffect(() => {
-    generateAnalyticsRef.current = generateAnalytics;
-  }, [generateAnalytics]);
-  
   // Load analytics data
   const loadAnalytics = useCallback(() => {
     if (authUser) {
-      // Load real data from database using refs
-      if (loadUserDataRef.current) {
-        loadUserDataRef.current();
-      }
-      if (generateAnalyticsRef.current) {
-        generateAnalyticsRef.current();
-      }
+      // Load real data from database
+      loadUserData();
     } else {
       // Use mock data for guest users
       const mockAnalytics: AnalyticsData = {
@@ -228,7 +96,7 @@ export function useUserStore() {
       
       setAnalytics(mockAnalytics);
     }
-  }, [authUser]);
+  }, [authUser, loadUserData]);
   
   // Update user preferences
   const updatePreferences = useCallback(async (preferences: Partial<UserPreferences>) => {
@@ -313,6 +181,121 @@ export function useUserStore() {
     }
   }, [authUser, completeDbChallenge]);
   
+  // Update analytics when progress changes
+  useEffect(() => {
+    if (authUser && progress.length > 0) {
+      // Call generateAnalytics directly without adding it to dependencies
+      if (!authUser || !progress.length) return;
+      
+      try {
+        // Calculate total conversations
+        const totalConversations = progress.reduce(
+          (sum, p) => sum + (p.total_sessions || 0), 
+          0
+        );
+        
+        // Calculate total practice time (in minutes)
+        const totalPracticeTime = progress.reduce(
+          (sum, p) => sum + (p.total_duration || 0), 
+          0
+        ) / 60;
+        
+        // Calculate average score
+        const totalScores = progress.reduce((sum, p) => {
+          const bestScores = p.best_scores as any || {};
+          return sum + (bestScores.quality || 0);
+        }, 0);
+        
+        const averageScore = totalScores / progress.length || 0;
+        
+        // Get streak days from user profile
+        const streakDays = user?.streak_days || 0;
+        
+        // Generate mock weekly progress for now
+        const weeklyProgress = [65, 72, 68, 85, 92, 88, 95];
+        
+        // Calculate skill progress
+        const skillProgress = {
+          fluency: 0,
+          confidence: 0,
+          clarity: 0,
+        };
+        
+        let skillCount = 0;
+        
+        progress.forEach(p => {
+          const scores = p.skill_scores as any || {};
+          if (scores.fluency) {
+            skillProgress.fluency += scores.fluency;
+            skillCount++;
+          }
+          if (scores.confidence) {
+            skillProgress.confidence += scores.confidence;
+            skillCount++;
+          }
+          if (scores.clarity) {
+            skillProgress.clarity += scores.clarity;
+            skillCount++;
+          }
+        });
+        
+        if (skillCount > 0) {
+          skillProgress.fluency = Math.round(skillProgress.fluency / skillCount);
+          skillProgress.confidence = Math.round(skillProgress.confidence / skillCount);
+          skillProgress.clarity = Math.round(skillProgress.clarity / skillCount);
+        }
+        
+        // Get achievements from progress
+        const achievements = progress.flatMap(p => {
+          const achievementsArray = p.achievements as any[] || [];
+          return achievementsArray.map(a => ({
+            id: a.id,
+            title: a.title,
+            description: a.description,
+            icon: a.icon || 'star',
+            unlockedAt: new Date(a.unlockedAt),
+            category: a.category || 'conversation',
+            modeId: p.mode,
+          }));
+        });
+        
+        // Generate mode stats
+        const modeStats: Record<string, {
+          sessionsCompleted: number;
+          totalTime: number;
+          averageScore: number;
+          lastUsed: Date;
+        }> = {};
+        
+        progress.forEach(p => {
+          const bestScores = p.best_scores as any || {};
+          modeStats[p.mode] = {
+            sessionsCompleted: p.total_sessions || 0,
+            totalTime: Math.round((p.total_duration || 0) / 60),
+            averageScore: bestScores.quality || 0,
+            lastUsed: p.last_session_date ? new Date(p.last_session_date) : new Date(),
+          };
+        });
+        
+        // Create analytics object
+        const analyticsData: AnalyticsData = {
+          totalConversations,
+          totalPracticeTime,
+          averageScore,
+          streakDays,
+          weeklyProgress,
+          skillProgress,
+          achievements,
+          modeStats,
+        };
+        
+        setAnalytics(analyticsData);
+      } catch (error) {
+        console.error('Failed to generate analytics:', error);
+      }
+    }
+  }, [authUser, progress, user]);
+  
   // Update analytics
   const updateAnalytics = useCallback((data: Partial<AnalyticsData>) => {
     if (!analytics) return;
@@ -329,13 +312,6 @@ export function useUserStore() {
       loadUserData();
     }
   }, [authUser, loadUserData]);
-  
-  // Update analytics when progress changes
-  useEffect(() => {
-    if (authUser && progress.length > 0) {
-      generateAnalytics();
-    }
-  }, [authUser, progress, generateAnalytics]);
   
   // Update daily challenges when they change
   useEffect(() => {
