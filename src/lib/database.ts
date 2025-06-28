@@ -12,11 +12,23 @@ const DATABASE_VERSION = 1;
 // Create/open the database
 export const getDatabase = () => {
   if (Platform.OS === 'web') {
-    return SQLite.openDatabase(DATABASE_NAME);
+    // For web, use the legacy API or handle gracefully
+      if (typeof SQLite.openDatabase === 'function') {
+        return SQLite.openDatabase(DATABASE_NAME);
+      } else {
+        // Fallback for web - return a mock database object
+        console.warn('SQLite not available on web, using mock database');
+        return createMockDatabase();
+      }
   }
   
   // For native platforms, ensure the database directory exists
-  const directory = FileSystem.documentDirectory + 'SQLite/';
+  return SQLite.openDatabase(DATABASE_NAME);
+  } catch (error) {
+    console.error('Error opening database:', error);
+    return createMockDatabase();
+  }
+};
   
   // Create the directory if it doesn't exist
   FileSystem.makeDirectoryAsync(directory, { intermediates: true })
@@ -29,8 +41,13 @@ export const getDatabase = () => {
 
 // Initialize the database with all required tables
 export const initDatabase = async () => {
-  const db = getDatabase();
-  
+  if (Platform.OS === 'web') {
+    console.warn('Database initialization skipped on web');
+    return Promise.resolve();
+  }
+
+  try {
+    const db = getDatabase();
   // Create a version table to track database version for migrations
   db.transaction(tx => {
     tx.executeSql(
@@ -351,4 +368,4 @@ export const executeQuery = (
 // Initialize the database when this module is imported
 initDatabase().catch(error => {
   console.error('Database initialization error:', error);
-});
+})};
