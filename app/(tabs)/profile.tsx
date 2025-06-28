@@ -68,9 +68,6 @@ export default function ProfileScreen() {
   const [showDataExport, setShowDataExport] = useState(false);
   const [showStorageManagement, setShowStorageManagement] = useState(false);
   const [profileUpdateKey, setProfileUpdateKey] = useState(0);
-  const WifiIcon = Wifi;
-  const HardDriveIcon = Database;
-  const DownloadIcon = Download;
 
   // Local state for preferences
   const [localPreferences, setLocalPreferences] = useState({
