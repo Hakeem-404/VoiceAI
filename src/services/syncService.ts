@@ -10,7 +10,7 @@ import {
   updateSyncOperationStatus 
 } from './localDatabaseService';
 import * as supabaseService from './supabaseService';
-import { useSupabaseAuth } from '../hooks/useSupabase';
+import supabase from '../lib/supabase';
 
 // Background sync task name
 const BACKGROUND_SYNC_TASK = 'BACKGROUND_SYNC_TASK';
@@ -41,6 +41,12 @@ let currentSyncStatus: SyncStatus = {
   isSyncing: false,
   pendingOperations: 0,
   syncProgress: 0
+};
+
+// Get current user
+const getCurrentUser = async () => {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user || null;
 };
 
 // Initialize network monitoring
@@ -82,7 +88,7 @@ export const registerBackgroundSync = async () => {
     // Define the task
     TaskManager.defineTask(BACKGROUND_SYNC_TASK, async () => {
       try {
-        const { user } = useSupabaseAuth.getState();
+        const user = await getCurrentUser();
         if (!user) return BackgroundFetch.BackgroundFetchResult.NoData;
         
         const result = await performSync();
@@ -158,7 +164,7 @@ export const processSyncQueue = async (forceSync = false): Promise<boolean> => {
   }
   
   // Get user from auth state
-  const { user } = useSupabaseAuth.getState();
+  const user = await getCurrentUser();
   if (!user) {
     updateSyncStatus({ error: 'User not authenticated' });
     return false;
