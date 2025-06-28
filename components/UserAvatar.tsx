@@ -82,6 +82,8 @@ export function UserAvatar({ size = 40, onPress, showBadge = false }: UserAvatar
         <Image
           source={{ uri: avatarUrl }}
           style={[styles.image, { width: size, height: size, borderRadius: size / 2 }]}
+          onLoad={() => console.log('UserAvatar image loaded successfully:', avatarUrl)}
+          onError={(error) => console.error('UserAvatar image failed to load:', error.nativeEvent)}
         />
       ) : user ? (
         <Text style={[styles.initials, { fontSize: size * 0.4 }]}>
