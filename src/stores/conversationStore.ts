@@ -1,9 +1,7 @@
 import { create } from 'zustand';
 import { Conversation, ConversationMode, RecordingState, ConversationSession, ModeConfiguration, ConversationBookmark, ConversationHighlight, DocumentAnalysis, FeedbackData } from '../types';
 import { ConversationMessage } from '../../types/api';
-import { useConversationStore as useConversationHook } from '../hooks/useConversationStore';
 import { claudeFeedbackService } from '../services/claudeFeedbackService';
-import { useSupabaseAuth } from '../hooks/useSupabase';
 import * as supabaseService from '../services/supabaseService';
 
 interface ConversationState {
@@ -17,19 +15,21 @@ interface ConversationState {
   lastFeedback: FeedbackData | null;
   
   // Actions
-  startConversation: (mode: ConversationMode, configuration?: ModeConfiguration) => void;
-  endConversation: () => Promise<FeedbackData | null>;
+  setCurrentConversation: (conversation: Conversation | null) => void;
+  setConversations: (conversations: Conversation[]) => void;
+  setCurrentMode: (mode: ConversationMode | null) => void;
+  createConversation: (mode: ConversationMode, configuration?: ModeConfiguration) => Conversation;
+  endCurrentConversation: () => void;
   pauseSession: () => void;
   resumeSession: () => void;
-  addMessage: (message: Omit<ConversationMessage, 'id' | 'timestamp'>) => void;
+  addMessageToSession: (message: ConversationMessage) => void;
   addBookmark: (messageId: string, note?: string) => void;
   addHighlight: (messageId: string, text: string, color: string) => void;
   setRecordingState: (state: RecordingState) => void;
   setProcessing: (processing: boolean) => void;
   updateAudioLevels: (levels: number[]) => void;
   saveConversation: (conversation: Conversation) => void;
-  loadConversations: () => void;
-  deleteConversation: (id: string) => void;
+  removeConversation: (id: string) => void;
   switchMode: (mode: ConversationMode) => void;
   generateFeedback: (conversation: Conversation) => Promise<FeedbackData | null>;
   clearLastFeedback: () => void;
@@ -45,57 +45,90 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   currentSession: null,
   lastFeedback: null,
 
-  startConversation: (mode: ConversationMode, configuration?: ModeConfiguration) => {
-    // Use the hook implementation instead
-    const { startConversation } = useConversationHook();
-    const conversation = startConversation(mode, configuration);
+  setCurrentConversation: (conversation) => set({ currentConversation: conversation }),
+  setConversations: (conversations) => set({ conversations }),
+  setCurrentMode: (mode) => set({ currentMode: mode }),
+
+  createConversation: (mode: ConversationMode, configuration?: ModeConfiguration) => {
+    const sessionId = Date.now().toString();
+    const createdAt = new Date();
     
-    if (conversation) {
-      const sessionId = Date.now().toString();
-      
-      const newSession: ConversationSession = {
-        id: sessionId,
+    const newConversation: Conversation = {
+      id: `local_${sessionId}`,
+      mode,
+      title: `${mode.name} - ${createdAt.toLocaleDateString()}`,
+      duration: 0,
+      messages: [],
+      createdAt,
+      updatedAt: createdAt,
+      bookmarks: [],
+      highlights: [],
+      configuration,
+    };
+    
+    const newSession: ConversationSession = {
+      id: sessionId,
+      modeId: mode.id,
+      configuration: configuration || {
         modeId: mode.id,
-        configuration: configuration || {
-          modeId: mode.id,
-          difficulty: mode.difficulty,
-          sessionType: 'standard',
-          selectedTopics: mode.topics.slice(0, 2),
-          aiPersonality: mode.aiPersonalities[0],
-        },
-        startTime: new Date(),
-        isPaused: false,
-        totalPauseTime: 0,
-        messages: [],
-        bookmarks: [],
-        highlights: [],
-      };
-      
-      set({
-        currentConversation: conversation,
-        currentMode: mode,
-        currentSession: newSession,
-        recordingState: 'idle',
-        lastFeedback: null,
-      });
-    }
+        difficulty: mode.difficulty,
+        sessionType: 'standard',
+        selectedTopics: mode.topics.slice(0, 2),
+        aiPersonality: mode.aiPersonalities[0],
+      },
+      startTime: createdAt,
+      isPaused: false,
+      totalPauseTime: 0,
+      messages: [],
+      bookmarks: [],
+      highlights: [],
+    };
+    
+    set({
+      currentConversation: newConversation,
+      currentMode: mode,
+      currentSession: newSession,
+      recordingState: 'idle',
+      lastFeedback: null,
+    });
+    
+    // Add to conversations list
+    const { conversations } = get();
+    set({ conversations: [newConversation, ...conversations] });
+    
+    return newConversation;
   },
 
-  endConversation: async () => {
-    // Use the hook implementation instead
-    const { endConversation } = useConversationHook();
-    const feedback = await endConversation();
+  endCurrentConversation: () => {
+    const { currentConversation, currentSession } = get();
     
-    // Update state
+    if (!currentConversation) return;
+    
+    // Calculate duration
+    const duration = Math.floor(
+      (new Date().getTime() - currentConversation.createdAt.getTime()) / 1000
+    );
+    
+    // Update conversation with duration
+    const updatedConversation = {
+      ...currentConversation,
+      duration,
+      updatedAt: new Date()
+    };
+    
+    // Update conversations list
+    const { conversations } = get();
+    const updatedConversations = conversations.map(c => 
+      c.id === updatedConversation.id ? updatedConversation : c
+    );
+    
     set({
+      conversations: updatedConversations,
       currentConversation: null,
       currentMode: null,
       currentSession: null,
       recordingState: 'idle',
-      lastFeedback: feedback,
     });
-    
-    return feedback;
   },
 
   generateFeedback: async (conversation: Conversation) => {
@@ -141,29 +174,34 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     }
   },
 
-  addMessage: (messageData) => {
-    // Use the hook implementation instead
-    const { addMessage } = useConversationHook();
-    const { currentConversation, currentSession } = get();
-    
-    if (!currentConversation || !currentSession) return;
-    
-    // Add message using the hook
-    const message = addMessage(
-      messageData.role === 'ai' ? 'assistant' : messageData.role,
-      messageData.content,
-      messageData.audioUrl
+  addMessageToSession: (message) => {
+    const { currentSession, currentConversation } = get();
+    if (!currentSession || !currentConversation) return;
+
+    // Update session
+    const updatedSession = {
+      ...currentSession,
+      messages: [...currentSession.messages, message],
+    };
+
+    // Update conversation
+    const updatedConversation = {
+      ...currentConversation,
+      messages: [...currentConversation.messages, message],
+      updatedAt: new Date(),
+    };
+
+    set({ 
+      currentSession: updatedSession,
+      currentConversation: updatedConversation
+    });
+
+    // Update conversations list
+    const { conversations } = get();
+    const updatedConversations = conversations.map(c =>
+      c.id === updatedConversation.id ? updatedConversation : c
     );
-    
-    if (message) {
-      // Update session
-      const updatedSession = {
-        ...currentSession,
-        messages: [...currentSession.messages, message],
-      };
-      
-      set({ currentSession: updatedSession });
-    }
+    set({ conversations: updatedConversations });
   },
 
   addBookmark: (messageId: string, note?: string) => {
@@ -246,22 +284,6 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   },
 
   saveConversation: (conversation: Conversation) => {
-    // Use the hook implementation instead
-    const { user } = useSupabaseAuth();
-    
-    if (user && conversation.id) {
-      // Save to database
-      supabaseService.updateConversation(conversation.id, {
-        title: conversation.title,
-        duration_seconds: conversation.duration,
-        is_bookmarked: !!conversation.isBookmarked,
-        updated_at: new Date().toISOString()
-      }).catch(error => {
-        console.error('Failed to save conversation:', error);
-      });
-    }
-    
-    // Update local state
     const { conversations } = get();
     const existingIndex = conversations.findIndex(c => c.id === conversation.id);
     
@@ -274,15 +296,21 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     }
   },
 
-  loadConversations: () => {
-    // Use the hook implementation instead
-    const { loadConversations } = useConversationHook();
-    loadConversations();
-  },
-
-  deleteConversation: (id: string) => {
-    // Use the hook implementation instead
-    const { deleteConversation } = useConversationHook();
-    deleteConversation(id);
+  removeConversation: (id: string) => {
+    const { conversations, currentConversation } = get();
+    
+    // Remove from conversations list
+    const updatedConversations = conversations.filter(c => c.id !== id);
+    set({ conversations: updatedConversations });
+    
+    // Clear current conversation if it's the one being deleted
+    if (currentConversation?.id === id) {
+      set({
+        currentConversation: null,
+        currentMode: null,
+        currentSession: null,
+        recordingState: 'idle',
+      });
+    }
   },
 }));
