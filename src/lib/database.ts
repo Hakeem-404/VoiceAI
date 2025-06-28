@@ -1,6 +1,6 @@
 import * as SQLite from 'expo-sqlite';
-import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system';
+import { Platform } from 'react-native';
 import uuid from 'react-native-uuid';
 
 // Database name
@@ -9,10 +9,10 @@ const DATABASE_NAME = 'conversation_companion.db';
 // Database version for migrations
 const DATABASE_VERSION = 1;
 
-let databaseInstance: SQLite.SQLiteDatabase | null = null;
+let databaseInstance: any = null;
 
 // Create/open the database
-export const getDatabase = (): SQLite.SQLiteDatabase | null => {
+export const getDatabase = (): any => {
   if (Platform.OS === 'web') {
     console.log('SQLite is not fully supported on web platform. Using alternative storage.');
     return null;
@@ -23,6 +23,12 @@ export const getDatabase = (): SQLite.SQLiteDatabase | null => {
   }
   
   try {
+    // Check if SQLite is available
+    if (!SQLite) {
+      console.error('SQLite module is not available');
+      return null;
+    }
+    
     // For native platforms, ensure the database directory exists
     const directory = FileSystem.documentDirectory + 'SQLite/';
     
@@ -33,7 +39,16 @@ export const getDatabase = (): SQLite.SQLiteDatabase | null => {
       });
     
     databaseInstance = SQLite.openDatabase(DATABASE_NAME);
-    return databaseInstance;
+    
+    // Test if the database is working
+    if (databaseInstance && typeof databaseInstance.transaction === 'function') {
+      console.log('SQLite database opened successfully');
+      return databaseInstance;
+    } else {
+      console.error('SQLite database opened but transaction method is not available');
+      databaseInstance = null;
+      return null;
+    }
   } catch (error) {
     console.error('Error opening SQLite database:', error);
     return null;
@@ -44,115 +59,130 @@ export const getDatabase = (): SQLite.SQLiteDatabase | null => {
 export const initDatabase = async (): Promise<void> => {
   const db = getDatabase();
   
-  // Skip database initialization on web platform
+  // Skip database initialization on web platform or if database is not available
   if (!db) {
-    console.log('Database not available on web platform. Skipping initialization.');
+    console.log('Database not available. Skipping initialization.');
     return;
   }
   
-  return new Promise<void>((resolve, reject) => {
-    // Create a version table to track database version for migrations
-    db.transaction(
-      (tx: SQLite.SQLTransaction) => {
-        tx.executeSql(
-          `CREATE TABLE IF NOT EXISTS version (
-            id INTEGER PRIMARY KEY NOT NULL,
-            version INTEGER NOT NULL
-          );`,
-          [],
-          () => {
-            // Check current version and run migrations if needed
-            checkVersion(db, resolve, reject);
-          },
-          (_: SQLite.SQLError, error: SQLite.SQLError) => {
-            console.error('Error creating version table:', error);
-            reject(error);
-            return false;
-          }
-        );
-      },
-      (error: SQLite.SQLError) => {
-        console.error('Transaction error during database initialization:', error);
-        reject(error);
-      },
-      () => {
-        console.log('Database initialization completed successfully');
-        resolve();
-      }
-    );
+  return new Promise((resolve, reject) => {
+    try {
+      // Create a version table to track database version for migrations
+      db.transaction(
+        (tx: any) => {
+          tx.executeSql(
+            `CREATE TABLE IF NOT EXISTS version (
+              id INTEGER PRIMARY KEY NOT NULL,
+              version INTEGER NOT NULL
+            );`,
+            [],
+            () => {
+              // Check current version and run migrations if needed
+              checkVersion(db, resolve, reject);
+            },
+            (_: any, error: any) => {
+              console.error('Error creating version table:', error);
+              reject(error);
+              return false;
+            }
+          );
+        },
+        (error: any) => {
+          console.error('Transaction error during database initialization:', error);
+          reject(error);
+        },
+        () => {
+          console.log('Database initialization completed successfully');
+          resolve();
+        }
+      );
+    } catch (error) {
+      console.error('Error during database initialization:', error);
+      reject(error);
+    }
   });
 };
 
 // Check database version and run migrations if needed
 const checkVersion = (
-  db: SQLite.SQLiteDatabase,
+  db: any,
   resolve: (value: void | PromiseLike<void>) => void,
   reject: (reason?: any) => void
 ) => {
-  db.transaction((tx: SQLite.SQLTransaction) => {
-    tx.executeSql(
-      'SELECT version FROM version ORDER BY version DESC LIMIT 1;',
-      [],
-      (_: SQLite.SQLResultSet, result: SQLite.SQLResultSet) => {
-        const rows = result.rows;
-        const currentVersion = rows.length > 0 ? rows.item(0).version : 0;
-        
-        if (currentVersion < DATABASE_VERSION) {
-          // Run migrations
-          runMigrations(db, currentVersion, resolve, reject);
-        } else {
-          resolve();
-        }
-      },
-      (_: SQLite.SQLError, error: SQLite.SQLError) => {
-        console.error('Error checking database version:', error);
-        
-        // If the table doesn't exist yet, insert the initial version
-        tx.executeSql(
-          'INSERT INTO version (id, version) VALUES (1, ?);',
-          [DATABASE_VERSION],
-          () => {
+  try {
+    db.transaction((tx: any) => {
+      tx.executeSql(
+        'SELECT version FROM version ORDER BY version DESC LIMIT 1;',
+        [],
+        (_: any, result: any) => {
+          const rows = result.rows;
+          const currentVersion = rows.length > 0 ? rows.item(0).version : 0;
+          
+          if (currentVersion < DATABASE_VERSION) {
+            // Run migrations
+            runMigrations(db, currentVersion, resolve, reject);
+          } else {
             resolve();
-          },
-          (_: SQLite.SQLError, error: SQLite.SQLError) => {
-            console.error('Error inserting initial version:', error);
-            reject(error);
-            return false;
           }
-        );
-        return false;
-      }
-    );
-  });
+        },
+        (_: any, error: any) => {
+          console.error('Error checking database version:', error);
+          
+          // If the table doesn't exist yet, insert the initial version
+          tx.executeSql(
+            'INSERT INTO version (id, version) VALUES (1, ?);',
+            [DATABASE_VERSION],
+            () => {
+              resolve();
+            },
+            (_: any, error: any) => {
+              console.error('Error inserting initial version:', error);
+              reject(error);
+              return false;
+            }
+          );
+          return false;
+        }
+      );
+    });
+  } catch (error) {
+    console.error('Error in checkVersion:', error);
+    reject(error);
+  }
 };
 
 // Run database migrations
 const runMigrations = (
-  db: SQLite.SQLiteDatabase,
+  db: any,
   currentVersion: number,
   resolve: (value: void | PromiseLike<void>) => void,
   reject: (reason?: any) => void
 ) => {
-  db.transaction((tx: SQLite.SQLTransaction) => {
-    // Run migrations based on current version
-    if (currentVersion < 1) {
-      createInitialTables(tx);
-    }
-    
-    // Update the database version
-    tx.executeSql(
-      'UPDATE version SET version = ? WHERE id = 1;',
-      [DATABASE_VERSION],
-      () => {
-        resolve();
-      },
-      (_: SQLite.SQLError, error: SQLite.SQLError) => {
-        console.error('Error updating database version:', error);
-        reject(error);
-        return false;
+  try {
+    db.transaction((tx: any) => {
+      // Run migrations based on current version
+      if (currentVersion < 1) {
+        createInitialTables(tx);
       }
-    );
-  });
+      
+      // Update the database version
+      tx.executeSql(
+        'UPDATE version SET version = ? WHERE id = 1;',
+        [DATABASE_VERSION],
+        () => {
+          resolve();
+        },
+        (_: any, error: any) => {
+          console.error('Error updating database version:', error);
+          reject(error);
+          return false;
+        }
+      );
+    });
+  } catch (error) {
+    console.error('Error in runMigrations:', error);
+    reject(error);
+  }
 };
 
 // Create initial tables for version 1
