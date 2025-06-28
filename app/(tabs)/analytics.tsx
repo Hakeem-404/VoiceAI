@@ -12,6 +12,7 @@ import { TrendingUp, Target, Clock, Award, ChartBar as BarChart3, Star } from 'l
 import { useTheme } from '@/src/hooks/useTheme';
 import { useUserStore } from '@/src/stores/userStore';
 import { useSupabaseAuth } from '@/src/hooks/useSupabase';
+import { useUserProgress } from '@/src/hooks/useUserProgress';
 import { GuestModePrompt } from '@/components/GuestModePrompt';
 import { spacing, typography } from '@/src/constants/colors';
 
@@ -19,23 +20,23 @@ const { width } = Dimensions.get('window');
 
 export default function AnalyticsScreen() {
   const { colors, isDark } = useTheme();
-  const { analytics } = useUserStore();
-  const { user } = useSupabaseAuth();
+  const { analytics, updateAnalytics } = useUserStore();
+  const { user: authUser } = useSupabaseAuth();
   const { progress } = useUserProgress();
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   
   useEffect(() => {
-    if (!user) {
+    if (!authUser) {
       setShowAuthPrompt(true);
     } else {
       setShowAuthPrompt(false);
     }
     
     // Generate analytics from progress data if user is authenticated
-    if (user && progress.length > 0) {
+    if (authUser && progress.length > 0) {
       generateAnalyticsFromProgress();
     }
-  }, [user, progress]);
+  }, [authUser, progress]);
   
   // Generate analytics from progress data
   const generateAnalyticsFromProgress = () => {
@@ -63,7 +64,7 @@ export default function AnalyticsScreen() {
       const averageScore = totalScores / progress.length || 0;
       
       // Get streak days from user profile
-      const streakDays = user?.user_metadata?.streak_days || 0;
+      const streakDays = authUser?.user_metadata?.streak_days || 0;
       
       // Generate weekly progress
       const weeklyProgress = [65, 72, 68, 85, 92, 88, 95]; // Placeholder
@@ -269,7 +270,7 @@ export default function AnalyticsScreen() {
               icon={Clock}
               title="Practice Time"
               value={`${Math.floor(analytics.totalPracticeTime / 60)}h`}
-              subtitle={`${analytics.totalPracticeTime % 60}m total`}
+              subtitle={`${Math.floor(analytics.totalPracticeTime % 60)}m total`}
               color={colors.secondary}
             />
             <StatCard
@@ -314,21 +315,27 @@ export default function AnalyticsScreen() {
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
               Recent Achievements
             </Text>
-            {analytics.achievements.map((achievement) => (
-              <View key={achievement.id} style={styles.achievementItem}>
-                <View style={[styles.achievementIcon, { backgroundColor: colors.warning }]}>
-                  <Star size={20} color="white" />
+            {analytics.achievements.length > 0 ? (
+              analytics.achievements.slice(0, 5).map((achievement) => (
+                <View key={achievement.id} style={styles.achievementItem}>
+                  <View style={[styles.achievementIcon, { backgroundColor: colors.warning }]}>
+                    <Star size={20} color="white" />
+                  </View>
+                  <View style={styles.achievementContent}>
+                    <Text style={[styles.achievementTitle, { color: colors.text }]}>
+                      {achievement.title}
+                    </Text>
+                    <Text style={[styles.achievementDescription, { color: colors.textSecondary }]}>
+                      {achievement.description}
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.achievementContent}>
-                  <Text style={[styles.achievementTitle, { color: colors.text }]}>
-                    {achievement.title}
-                  </Text>
-                  <Text style={[styles.achievementDescription, { color: colors.textSecondary }]}>
-                    {achievement.description}
-                  </Text>
-                </View>
-              </View>
-            ))}
+              ))
+            ) : (
+              <Text style={[styles.noAchievementsText, { color: colors.textSecondary }]}>
+                Complete conversations to unlock achievements!
+              </Text>
+            )}
           </View>
         </ScrollView>
       </LinearGradient>
@@ -521,6 +528,12 @@ const styles = StyleSheet.create({
   achievementDescription: {
     fontSize: typography.sizes.sm,
     lineHeight: typography.sizes.sm * 1.4,
+  },
+  noAchievementsText: {
+    fontSize: typography.sizes.base,
+    textAlign: 'center',
+    fontStyle: 'italic',
+    paddingVertical: spacing.lg,
   },
   loadingContainer: {
     flex: 1,
