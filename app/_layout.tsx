@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Stack, SplashScreen } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
-import { useUserStore } from '@/src/hooks/userStore';
+import { useUserStore } from '@/src/hooks/useUserStore';
 import { useSupabaseAuth } from '@/src/hooks/useSupabase';
 
 // Keep the splash screen visible until we're ready
