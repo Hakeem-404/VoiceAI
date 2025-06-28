@@ -420,9 +420,12 @@ export default function ProfileScreen() {
 }
 
 // Import these components for the UI
-const Wifi = (props: any) => <RefreshCw {...props} />;
-const HardDrive = (props: any) => <Database {...props} />;
-const Download = (props: any) => <Archive {...props} />;
+// const Wifi = (props: any) => <RefreshCw {...props} />;
+// const HardDrive = (props: any) => <Database {...props} />;
+// const Download = (props: any) => <Archive {...props} />;
+const Wifi = Wifi;
+const HardDrive = Database;
+const Download = Download;
 
 const styles = StyleSheet.create({
   container: {
