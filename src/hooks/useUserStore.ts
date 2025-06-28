@@ -214,64 +214,75 @@ export function useUserStore() {
   
   // Update user preferences
   const updatePreferences = useCallback(async (userId: string, preferences: Partial<UserPreferences>) => {
-    if (!authUser || !user) return;
+    if (!user && !userId) return;
     
     try {
       // Update local state
-      const updatedUser = {
-        ...user,
-        preferences: {
-          ...user.preferences,
-          ...preferences,
-        },
-      };
+      if (user) {
+        const updatedUser = {
+          ...user,
+          preferences: {
+            ...user.preferences,
+            ...preferences,
+          },
+        };
+        
+        setUser(updatedUser);
+      }
       
-      setUser(updatedUser);
+      // Update theme if it's in the preferences
+      if (preferences.theme) {
+        setThemeState(preferences.theme);
+      }
+      
+      // Update favorite mode if it's in the preferences
+      if (preferences.favoriteMode !== undefined) {
+        setFavoriteModeState(preferences.favoriteMode);
+      }
+      
+      // Update recent modes if they're in the preferences
+      if (preferences.recentModes) {
+        setRecentModes(preferences.recentModes);
+      }
       
       // Update in database
-      await supabaseService.updateUserPreferences(
-        userId,
-        {
-          ...user.preferences,
-          ...preferences,
-        }
-      );
+      await supabaseService.updateUserPreferences(userId, {
+        ...(user?.preferences || {}),
+        ...preferences,
+      });
     } catch (error) {
       console.error('Failed to update preferences:', error);
     }
-  }, [authUser, user]);
+  }, [user]);
   
   // Set theme
   const setTheme = useCallback((theme: 'light' | 'dark' | 'system') => {
     setThemeState(theme);
     
-    if (authUser && user) {
+    if (authUser?.id) {
       updatePreferences(authUser.id, { theme });
     }
-  }, [authUser, user, updatePreferences]);
+  }, [authUser, updatePreferences]);
   
   // Set favorite mode
   const setFavoriteMode = useCallback((modeId: string) => {
     setFavoriteModeState(modeId);
     
-    if (authUser && user) {
+    if (authUser?.id) {
       updatePreferences(authUser.id, { favoriteMode: modeId });
     }
-  }, [authUser, user, updatePreferences]);
+  }, [authUser, updatePreferences]);
   
   // Add recent mode
   const addRecentMode = useCallback((modeId: string) => {
-    const updatedRecentModes = [
-      modeId, 
-      ...recentModes.filter(id => id !== modeId)
-    ].slice(0, 5);
+    const updatedRecentModes = [modeId, ...recentModes.filter(id => id !== modeId)].slice(0, 5);
     
     setRecentModes(updatedRecentModes);
     
-    if (authUser && user) {
+    if (authUser?.id) {
       updatePreferences(authUser.id, { recentModes: updatedRecentModes });
     }
-  }, [authUser, user, recentModes, updatePreferences]);
+  }, [authUser, recentModes, updatePreferences]);
   
   // Load daily challenges
   const loadDailyChallenges = useCallback(() => {
