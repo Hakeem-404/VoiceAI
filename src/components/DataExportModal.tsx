@@ -94,7 +94,7 @@ export function DataExportModal({
         const canShare = true; // expo-sharing is always available on native platforms
         
         if (canShare) {
-          await shareAsync(fileUri, {
+          await shareAsync(exportedFilePath, {});
         } else {
           setError('Sharing is not available on this device');
         }
