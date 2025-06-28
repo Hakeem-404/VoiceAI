@@ -12,6 +12,20 @@ import {
 import * as supabaseService from './supabaseService';
 import { useSupabaseAuth } from '../hooks/useSupabase';
 
+// Create a global auth state accessor
+let authState: any = null;
+
+// Update the auth state when it changes
+export const updateAuthState = (state: any) => {
+  authState = state;
+};
+
+// Use this instead of useSupabaseAuth.getState()
+const getAuthUser = () => {
+  return authState?.user || null;
+};
+
+
 // Background sync task name
 const BACKGROUND_SYNC_TASK = 'BACKGROUND_SYNC_TASK';
 
@@ -158,7 +172,7 @@ export const processSyncQueue = async (forceSync = false): Promise<boolean> => {
   }
   
   // Get user from auth state
-  const { user } = useSupabaseAuth.getState();
+  const { user } = getAuthUser();
   if (!user) {
     updateSyncStatus({ error: 'User not authenticated' });
     return false;
