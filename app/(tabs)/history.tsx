@@ -38,6 +38,7 @@ export default function HistoryScreen() {
   useEffect(() => {
     if (user) {
       loadConversations();
+      setShowAuthPrompt(false);
     } else if (!conversations.length) {
       // Show auth prompt if guest user has no conversations
       setShowAuthPrompt(true);
