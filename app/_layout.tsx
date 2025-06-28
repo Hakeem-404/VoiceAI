@@ -5,63 +5,56 @@ import { Platform } from 'react-native';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useUserStore } from '@/src/stores/userStore';
 import { useSupabaseAuth } from '@/src/hooks/useSupabase';
-import { updateAuthState } from '@/src/services/syncService';
 
-// Keep the splash screen visible until we're ready
+// Initialize services conditionally
+const initializeApp = async () => {
+  try {
+    if (Platform.OS !== 'web') {
+      // Only initialize database and services on native platforms
+      const { initDatabase } = await import('@/src/lib/database');
+      const { initializeSyncService, updateAuthState } = await import('@/src/services/syncService');
+      const { initializeCacheService } = await import('@/src/services/cacheService');
+      
+      await initDatabase();
+      await initializeSyncService();
+      await initializeCacheService();
+    } else {
+      // For web, just initialize cache service
+      const { initializeCacheService } = await import('@/src/services/cacheService');
+      await initializeCacheService();
+    }
+    
+    console.log('App initialization complete');
+  } catch (error) {
+    console.error('App initialization error:', error);
+  }
+};
+
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   useFrameworkReady();
-
-  // Initialize database and services
-  useEffect(() => {
-  const initializeApp = async () => {
-    try {
-      if (Platform.OS !== 'web') {
-        // Only initialize database and services on native platforms
-        const { initDatabase } = await import('@/src/lib/database');
-        const { initializeSyncService } = await import('@/src/services/syncService');
-        const { initializeCacheService } = await import('@/src/services/cacheService');
-        
-        await initDatabase();
-        await initializeSyncService();
-        await initializeCacheService();
-      }
-      
-      console.log('App initialization complete');
-    } catch (error) {
-      console.error('App initialization error:', error);
-    }
-  };
-  
-  SplashScreen.preventAutoHideAsync();
-  
-  export default function RootLayout() {
-    useFrameworkReady();
-    
-    const { session, loading, user } = useSupabaseAuth();
-    const { setUser, setTheme } = useUserStore();
-    const [appIsReady, setAppIsReady] = useState(false);
-    
-    // Update auth state for sync service
-    useEffect(() => {
-      updateAuthState({ user, session });
-    }, [user, session]);
-    
-    useEffect(() => {
-      initializeApp();
-    }, []);
   
   const { session, loading, user } = useSupabaseAuth();
   const { setUser, setTheme } = useUserStore();
   const [appIsReady, setAppIsReady] = useState(false);
   
+  // Update auth state for sync service (only on native)
   useEffect(() => {
-    // Initialize user data when auth is ready
+    if (Platform.OS !== 'web') {
+      import('@/src/services/syncService').then(({ updateAuthState }) => {
+        updateAuthState({ user, session });
+      });
+    }
+  }, [user, session]);
+  
+  useEffect(() => {
+    initializeApp();
+  }, []);
+  
+  useEffect(() => {
     if (!loading) {
       if (user) {
-        // Create a basic user object for the store
-        // In a real app, you'd fetch full user profile here
         const userData = {
           id: user.id,
           email: user.email || '',
@@ -99,7 +92,6 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (appIsReady) {
-      // Hide the splash screen once we're ready
       SplashScreen.hideAsync();
     }
   }, [appIsReady]);
@@ -107,17 +99,17 @@ export default function RootLayout() {
   if (!appIsReady) {
     return null;
   }
-
+  
   return (
     <>
       <Stack screenOptions={{ headerShown: false }}>
         {session ? (
-          <> // User is signed in
+          <>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="interview-prep" options={{ presentation: 'modal' }} />
           </>
         ) : (
-          <> // User is not signed in
+          <>
             <Stack.Screen name="auth" options={{ headerShown: false }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           </>
