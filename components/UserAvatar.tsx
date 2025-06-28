@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { User } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
@@ -15,6 +15,14 @@ interface UserAvatarProps {
 export function UserAvatar({ size = 40, onPress, showBadge = false }: UserAvatarProps) {
   const { colors } = useTheme();
   const { user } = useSupabaseAuth();
+  const [avatarVersion, setAvatarVersion] = useState(0);
+  
+  // Update avatar version when user metadata changes
+  useEffect(() => {
+    if (user?.user_metadata?.avatar_url) {
+      setAvatarVersion(prev => prev + 1);
+    }
+  }, [user?.user_metadata?.avatar_url]);
   
   // Get avatar URL from Supabase storage if available
   const getAvatarUrl = () => {
@@ -22,7 +30,8 @@ export function UserAvatar({ size = 40, onPress, showBadge = false }: UserAvatar
     
     // Check if user has an avatar_url in metadata
     if (user.user_metadata?.avatar_url) {
-      return user.user_metadata.avatar_url;
+      const baseUrl = user.user_metadata.avatar_url;
+      return baseUrl + (baseUrl.includes('?') ? '&' : '?') + `v=${avatarVersion}`;
     }
     
     // Otherwise, check if there's an avatar in storage
@@ -31,7 +40,9 @@ export function UserAvatar({ size = 40, onPress, showBadge = false }: UserAvatar
         .from('avatars')
         .getPublicUrl(`${user.id}/avatar.jpg`);
       
-      return data?.publicUrl;
+      if (data?.publicUrl) {
+        return data.publicUrl + (data.publicUrl.includes('?') ? '&' : '?') + `v=${avatarVersion}`;
+      }
     }
     
     return null;
