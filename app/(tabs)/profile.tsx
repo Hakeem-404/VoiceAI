@@ -19,7 +19,10 @@ import {
   Award,
   Crown,
   ChevronRight,
-  LogOut
+  LogOut,
+  RefreshCw,
+  Database,
+  Archive
 } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useUserStore } from '@/src/stores/userStore';
