@@ -154,6 +154,12 @@ const updateSyncStatus = (updates: Partial<SyncStatus>) => {
 
 // Process the sync queue
 export const processSyncQueue = async (forceSync = false): Promise<boolean> => {
+  // Skip sync on web platform since there's no local database
+  if (Platform.OS === 'web') {
+    console.log('Sync not available on web platform');
+    return false;
+  }
+  
   // Check if we're already syncing
   if (currentSyncStatus.isSyncing && !forceSync) return false;
   
@@ -427,13 +433,17 @@ export const initializeSyncService = async () => {
   // Initialize network monitoring
   initializeNetworkMonitoring();
   
-  // Register background sync task
-  await registerBackgroundSync();
+  // Register background sync task (skip on web)
+  if (Platform.OS !== 'web') {
+    await registerBackgroundSync();
+  }
   
-  // Process sync queue on startup
-  setTimeout(() => {
-    processSyncQueue();
-  }, 5000); // Wait 5 seconds to allow app to initialize
+  // Process sync queue on startup (skip on web since no local database)
+  if (Platform.OS !== 'web') {
+    setTimeout(() => {
+      processSyncQueue();
+    }, 5000); // Wait 5 seconds to allow app to initialize
+  }
 };
 
 // Initialize the sync service when this module is imported
