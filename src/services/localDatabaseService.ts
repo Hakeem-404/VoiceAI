@@ -958,6 +958,20 @@ export const getDatabaseStats = (): Promise<{
   pendingSyncCount: number;
 }> => {
   return new Promise((resolve, reject) => {
+    const db = getDatabase();
+    
+    // Return empty stats on web platform since database is not available
+    if (!db) {
+      resolve({
+        conversationCount: 0,
+        messageCount: 0,
+        audioCacheSize: 0,
+        syncQueueSize: 0,
+        pendingSyncCount: 0
+      });
+      return;
+    }
+    
     const stats = {
       conversationCount: 0,
       messageCount: 0,
@@ -1022,6 +1036,20 @@ export const getDatabaseStats = (): Promise<{
 // Export database to JSON
 export const exportDatabaseToJson = async (): Promise<string> => {
   const db = getDatabase();
+  
+  // Return empty data on web platform since database is not available
+  if (!db) {
+    console.log('Database not available on web platform. Returning empty export.');
+    return JSON.stringify({
+      local_conversations: [],
+      local_messages: [],
+      user_preferences: [],
+      local_user_progress: [],
+      audio_cache: [],
+      sync_queue: []
+    }, null, 2);
+  }
+  
   const exportData: any = {};
   
   // Helper function to get all rows from a table
@@ -1075,6 +1103,12 @@ export const importDatabaseFromJson = async (jsonData: string): Promise<boolean>
   try {
     const data = JSON.parse(jsonData);
     const db = getDatabase();
+    
+    // Return false on web platform since database is not available
+    if (!db) {
+      console.log('Database not available on web platform. Cannot import data.');
+      return false;
+    }
     
     // Begin transaction
     return new Promise((resolve, reject) => {
