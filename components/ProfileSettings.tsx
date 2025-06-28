@@ -35,9 +35,19 @@ export function ProfileSettings({ visible, onClose, onProfileUpdated }: ProfileS
       setName(user.user_metadata?.name || '');
       setEmail(user.email || '');
       setAvatarUrl(user.user_metadata?.avatar_url || '');
-      setAvatarVersion(0);
+      setAvatarVersion(0); // Reset version when component loads
+      console.log('ProfileSettings: User data synced, avatarUrl:', user.user_metadata?.avatar_url);
     }
   }, [user]);
+  
+  // Debug avatar state changes
+  useEffect(() => {
+    console.log('ProfileSettings: avatarUrl changed to:', avatarUrl);
+  }, [avatarUrl]);
+  
+  useEffect(() => {
+    console.log('ProfileSettings: avatarVersion changed to:', avatarVersion);
+  }, [avatarVersion]);
   
   const validateName = (name: string) => {
     if (!name.trim()) {
@@ -260,6 +270,11 @@ export function ProfileSettings({ visible, onClose, onProfileUpdated }: ProfileS
                     uri: avatarUrl + (avatarUrl.includes('?') ? '&' : '?') + `v=${avatarVersion}` 
                   }}
                   style={styles.avatar}
+                  onLoad={() => {
+                    const imageUrl = avatarUrl + (avatarUrl.includes('?') ? '&' : '?') + `v=${avatarVersion}`;
+                    console.log('Avatar image loaded successfully:', imageUrl);
+                  }}
+                  onError={(error) => console.error('Avatar image failed to load:', error.nativeEvent)}
                 />
               ) : (
                 <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
