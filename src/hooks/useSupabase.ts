@@ -11,30 +11,17 @@ export function useSupabaseAuth() {
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    console.log('🔐 useSupabaseAuth: Initializing auth hook');
-    
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('🔐 useSupabaseAuth: Initial session loaded:', {
-        hasSession: !!session,
-        userEmail: session?.user?.email,
-        sessionExpiry: session?.expires_at
-      });
       setSession(session);
       setLoading(false);
     }).catch(error => {
-      console.error('🔐 useSupabaseAuth: Error loading initial session:', error);
       setError(error);
       setLoading(false);
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('🔐 useSupabaseAuth: Auth state changed:', {
-        event,
-        hasSession: !!session,
-        userEmail: session?.user?.email
-      });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
 
