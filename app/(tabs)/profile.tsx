@@ -32,12 +32,23 @@ import { spacing, typography } from '@/src/constants/colors';
 
 export default function ProfileScreen() {
   const { colors, isDark, theme } = useTheme();
-  const { user, setTheme, updatePreferences } = useUserStore();
+  const { 
+    user, 
+    theme: userTheme, 
+    setTheme, 
+    updatePreferences 
+  } = useUserStore();
   const { user: authUser, signOut } = useSupabaseAuth();
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const [promptFeature, setPromptFeature] = useState<'save' | 'history' | 'voice' | 'analytics' | 'premium'>('save');
   const [showSettings, setShowSettings] = useState(false);
   const [profileUpdateKey, setProfileUpdateKey] = useState(0);
+
+  // Local state for preferences
+  const [localPreferences, setLocalPreferences] = useState({
+    practiceReminders: true,
+    achievements: false,
+  });
 
   // Reset auth prompt when user authentication status changes
   useEffect(() => {
@@ -48,9 +59,7 @@ export default function ProfileScreen() {
 
   // Refresh user data when profile is updated
   const handleProfileUpdated = () => {
-    // Force a refresh by updating the key
     console.log('Profile updated callback triggered');
-    console.log('Current authUser before refresh:', authUser?.user_metadata);
     setProfileUpdateKey(prev => {
       const newKey = prev + 1;
       console.log('Profile update key changed from', prev, 'to', newKey);
@@ -59,12 +68,38 @@ export default function ProfileScreen() {
     console.log('Profile updated, refreshing user data...');
   };
 
+  // Handle theme changes
+  const handleThemeChange = (value: boolean) => {
+    const newTheme = value ? 'dark' : 'light';
+    setTheme(newTheme);
+    
+    if (authUser) {
+      updatePreferences(authUser.id, { theme: newTheme });
+    }
+  };
+
+  // Handle preference updates
+  const handlePreferenceUpdate = async (key: string, value: boolean) => {
+    setLocalPreferences(prev => ({ ...prev, [key]: value }));
+    
+    if (authUser) {
+      const notificationUpdates = {
+        ...localPreferences,
+        [key]: value,
+      };
+      
+      await updatePreferences(authUser.id, {
+        notifications: notificationUpdates
+      });
+    }
+  };
+
   const mockUser = {
     id: '1',
     name: 'Alex Johnson',
     email: 'alex.johnson@example.com',
     preferences: {
-      theme: theme,
+      theme: userTheme,
       voiceSettings: {
         selectedVoice: 'en-US-Standard-A',
         speed: 1.0,
@@ -72,9 +107,9 @@ export default function ProfileScreen() {
         volume: 0.8,
       },
       notifications: {
-        practiceReminders: true,
+        practiceReminders: localPreferences.practiceReminders,
         dailyGoals: true,
-        achievements: false,
+        achievements: localPreferences.achievements,
       },
       language: 'en-US',
     },
@@ -133,10 +168,10 @@ export default function ProfileScreen() {
               }}
             />
             <Text style={[styles.userName, { color: colors.text }]}>
-              {authUser?.user_metadata?.name || 'Guest User'}
+              {authUser?.user_metadata?.name || user?.name || 'Guest User'}
             </Text>
             <Text style={[styles.userEmail, { color: colors.textSecondary }]}>
-              {authUser?.email || 'Sign in to save your progress'}
+              {authUser?.email || user?.email || 'Sign in to save your progress'}
             </Text>
           </View>
 
@@ -150,8 +185,8 @@ export default function ProfileScreen() {
               icon={isDark ? Moon : Sun}
               title="Dark Mode"
               subtitle="Automatically adapts to system preference"
-              value={theme === 'dark'}
-              onValueChange={(value) => setTheme(value ? 'dark' : 'light')}
+              value={userTheme === 'dark'}
+              onValueChange={handleThemeChange}
             />
           </View>
 
@@ -163,19 +198,15 @@ export default function ProfileScreen() {
               icon={Bell}
               title="Practice Reminders"
               subtitle="Daily reminders to practice speaking"
-              value={mockUser.preferences.notifications.practiceReminders}
-              onValueChange={(value) => {
-                // Update preferences
-              }}
+              value={localPreferences.practiceReminders}
+              onValueChange={(value) => handlePreferenceUpdate('practiceReminders', value)}
             />
             <SettingItem
               icon={Award}
               title="Achievement Notifications"
               subtitle="Get notified when you unlock achievements"
-              value={mockUser.preferences.notifications.achievements}
-              onValueChange={(value) => {
-                // Update preferences
-              }}
+              value={localPreferences.achievements}
+              onValueChange={(value) => handlePreferenceUpdate('achievements', value)}
             />
           </View>
 
