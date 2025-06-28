@@ -35,7 +35,7 @@ import { VoiceSettingsModal } from '@/components/VoiceSettingsModal';
 import { NotificationSettingsModal } from '@/components/NotificationSettingsModal';
 import { ThemeSettingsModal } from '@/components/ThemeSettingsModal';
 import { SyncStatusIndicator } from '@/src/components/SyncStatusIndicator';
-import { OfflineModeToggle } from '@/components/OfflineModeToggle';
+import { OfflineModeToggle } from '@/src/components/OfflineModeToggle';
 import { NetworkPreferencesModal } from '@/components/NetworkPreferencesModal';
 import { DataExportModal } from '@/components/DataExportModal';
 import { StorageManagementModal } from '@/components/StorageManagementModal';
