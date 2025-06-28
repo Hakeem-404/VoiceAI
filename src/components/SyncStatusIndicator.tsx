@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Animated } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Wifi, WifiOff, RefreshCw, CircleCheck as CheckCircle, CircleAlert as AlertCircle, Clock } from 'lucide-react-native';
 import { addSyncListener, processSyncQueue, SyncStatus } from '../services/syncService';
 import { useTheme } from '../hooks/useTheme';
@@ -22,34 +22,6 @@ export function SyncStatusIndicator({
     isSyncing: false,
     pendingOperations: 0,
     syncProgress: 0
-  });
-
-  // Create a rotation animation
-  const spinValue = useRef(new Animated.Value(0)).current;
-  
-  useEffect(() => {
-    // Only animate when syncing
-    if (syncStatus.isSyncing) {
-      Animated.loop(
-        Animated.timing(spinValue, {
-          toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        })
-      ).start();
-    } else {
-      spinValue.stopAnimation();
-    }
-    
-    return () => {
-      spinValue.stopAnimation();
-    };
-  }, [syncStatus.isSyncing, spinValue]);
-  
-  // Map 0-1 to 0-360 degrees
-  const spin = spinValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
   });
 
   useEffect(() => {
@@ -75,9 +47,9 @@ export function SyncStatusIndicator({
     
     if (syncStatus.isSyncing) {
       return (
-        <Animated.View style={{ transform: [{ rotate: spin }] }}>
+        <View style={styles.spinnerContainer}>
           <RefreshCw size={compact ? 16 : 20} color={colors.primary} />
-        </Animated.View>
+        </View>
       );
     }
     
@@ -278,5 +250,12 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: typography.sizes.xs,
     flex: 1,
+  },
+  spinnerContainer: {
+    transform: [{ rotate: '0deg' }],
+    animationName: 'spin',
+    animationDuration: '1s',
+    animationIterationCount: 'infinite',
+    animationTimingFunction: 'linear',
   },
 });

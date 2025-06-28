@@ -22,7 +22,7 @@ export default function RootLayout() {
         await initDatabase();
         
         // Initialize sync service
-        // await initializeSyncService();
+        await initializeSyncService();
         
         // Initialize cache service
         await initializeCacheService();
@@ -30,7 +30,6 @@ export default function RootLayout() {
         console.log('App initialization complete');
       } catch (error) {
         console.error('App initialization error:', error);
-        // Don't let initialization errors prevent the app from loading
       }
     };
     
@@ -89,10 +88,9 @@ export default function RootLayout() {
     }
   }, [appIsReady]);
 
-  // Temporarily bypass loading state to see if tabs appear
-  // if (!appIsReady) {
-  //   return null;
-  // }
+  if (!appIsReady) {
+    return null;
+  }
 
   return (
     <>

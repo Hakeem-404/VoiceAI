@@ -335,12 +335,6 @@ const getPendingOperationsCount = async (): Promise<number> => {
   return new Promise((resolve, reject) => {
     const db = getDatabase();
     
-    // Return 0 on web platform since database is not available
-    if (!db) {
-      resolve(0);
-      return;
-    }
-    
     db.transaction(tx => {
       tx.executeSql(
         'SELECT COUNT(*) as count FROM sync_queue WHERE status = "pending";',

@@ -1,116 +1,89 @@
-import { useEffect, useState } from 'react';
-import { Stack, SplashScreen } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { initDatabase } from '@/src/lib/database';
-import { initializeSyncService } from '@/src/services/syncService';
-import { initializeCacheService } from '@/src/services/cacheService';
-import { useFrameworkReady } from '@/hooks/useFrameworkReady';
-import { useUserStore } from '@/src/stores/userStore';
+import { Tabs } from 'expo-router';
+import { Chrome as Home, MessageCircle, Target, History, ChartBar as BarChart3, User } from 'lucide-react-native';
 import { useSupabaseAuth } from '@/src/hooks/useSupabase';
+import { UserAvatar } from '@/components/UserAvatar';
 
-// Keep the splash screen visible until we're ready
-SplashScreen.preventAutoHideAsync();
-
-export default function RootLayout() {
-  useFrameworkReady();
-
-  // Initialize database and services
-  useEffect(() => {
-    const initializeApp = async () => {
-      try {
-        // Initialize SQLite database
-        await initDatabase();
-        
-        // Initialize sync service
-        // await initializeSyncService();
-        
-        // Initialize cache service
-        await initializeCacheService();
-        
-        console.log('App initialization complete');
-      } catch (error) {
-        console.error('App initialization error:', error);
-      }
-    };
-    
-    initializeApp();
-  }, []);
+export default function TabLayout() {
+  const { user } = useSupabaseAuth();
   
-  const { session, loading, user } = useSupabaseAuth();
-  const { setUser, setTheme } = useUserStore();
-  const [appIsReady, setAppIsReady] = useState(false);
-  
-  useEffect(() => {
-    // Initialize user data when auth is ready
-    if (!loading) {
-      if (user) {
-        // Create a basic user object for the store
-        // In a real app, you'd fetch full user profile here
-        const userData = {
-          id: user.id,
-          email: user.email || '',
-          name: user.user_metadata?.name || '',
-          preferences: {
-            theme: 'system' as const,
-            voiceSettings: {
-              selectedVoice: 'en-US-Standard-A',
-              speed: 1.0,
-              pitch: 1.0,
-              volume: 0.8,
-            },
-            notifications: {
-              practiceReminders: true,
-              dailyGoals: true,
-              achievements: false,
-            },
-            language: 'en-US',
-            favoriteMode: null,
-            recentModes: [],
-          },
-          subscription: {
-            tier: 'free' as const,
-            expiresAt: undefined,
-            features: [],
-          },
-          createdAt: new Date(),
-        };
-        
-        setUser(userData);
-      }
-      setAppIsReady(true);
-    }
-  }, [loading, user, setUser]);
-
-  useEffect(() => {
-    if (appIsReady) {
-      // Hide the splash screen once we're ready
-      SplashScreen.hideAsync();
-    }
-  }, [appIsReady]);
-
-  if (!appIsReady) {
-    return null;
-  }
-
   return (
-    <>
-      <Stack screenOptions={{ headerShown: false }}>
-        {session ? (
-          // User is signed in
-          <>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="interview-prep" options={{ presentation: 'modal' }} />
-          </>
-        ) : (
-          // User is not signed in
-          <>
-            <Stack.Screen name="auth" options={{ headerShown: false }} />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          </>
-        )}
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </>
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: '#6366F1',
+        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarStyle: {
+          backgroundColor: 'white',
+          borderTopColor: '#E5E7EB',
+          borderTopWidth: 1,
+          height: 84,
+          paddingBottom: 20,
+          paddingTop: 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '500',
+        },
+      }}
+    >
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Home',
+          tabBarIcon: ({ size, color }) => (
+            <Home size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="chat"
+        options={{
+          title: 'Chat',
+          tabBarIcon: ({ size, color }) => (
+            <MessageCircle size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="practice"
+        options={{
+          title: 'Practice',
+          tabBarIcon: ({ size, color }) => (
+            <Target size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="history"
+        options={{
+          title: 'History',
+          tabBarIcon: ({ size, color }) => (
+            <History size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="analytics"
+        options={{
+          title: 'Analytics',
+          tabBarIcon: ({ size, color }) => (
+            <BarChart3 size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ size, color }) => (
+            user ? (
+              <UserAvatar size={size} />
+            ) : (
+              <User size={size} color={color} />
+            )
+          ),
+        }}
+      />
+    </Tabs>
   );
 }

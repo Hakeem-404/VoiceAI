@@ -10,7 +10,7 @@ import {
   updateSyncOperationStatus 
 } from './localDatabaseService';
 import * as supabaseService from './supabaseService';
-import supabase from '../lib/supabase';
+import { useSupabaseAuth } from '../hooks/useSupabase';
 
 // Background sync task name
 const BACKGROUND_SYNC_TASK = 'BACKGROUND_SYNC_TASK';
@@ -41,12 +41,6 @@ let currentSyncStatus: SyncStatus = {
   isSyncing: false,
   pendingOperations: 0,
   syncProgress: 0
-};
-
-// Get current user
-const getCurrentUser = async () => {
-  const { data } = await supabase.auth.getSession();
-  return data.session?.user || null;
 };
 
 // Initialize network monitoring
@@ -88,7 +82,7 @@ export const registerBackgroundSync = async () => {
     // Define the task
     TaskManager.defineTask(BACKGROUND_SYNC_TASK, async () => {
       try {
-        const user = await getCurrentUser();
+        const { user } = useSupabaseAuth.getState();
         if (!user) return BackgroundFetch.BackgroundFetchResult.NoData;
         
         const result = await performSync();
@@ -154,12 +148,6 @@ const updateSyncStatus = (updates: Partial<SyncStatus>) => {
 
 // Process the sync queue
 export const processSyncQueue = async (forceSync = false): Promise<boolean> => {
-  // Skip sync on web platform since there's no local database
-  if (Platform.OS === 'web') {
-    console.log('Sync not available on web platform');
-    return false;
-  }
-  
   // Check if we're already syncing
   if (currentSyncStatus.isSyncing && !forceSync) return false;
   
@@ -170,7 +158,7 @@ export const processSyncQueue = async (forceSync = false): Promise<boolean> => {
   }
   
   // Get user from auth state
-  const user = await getCurrentUser();
+  const { user } = useSupabaseAuth.getState();
   if (!user) {
     updateSyncStatus({ error: 'User not authenticated' });
     return false;
@@ -433,17 +421,13 @@ export const initializeSyncService = async () => {
   // Initialize network monitoring
   initializeNetworkMonitoring();
   
-  // Register background sync task (skip on web)
-  if (Platform.OS !== 'web') {
-    await registerBackgroundSync();
-  }
+  // Register background sync task
+  await registerBackgroundSync();
   
-  // Process sync queue on startup (skip on web since no local database)
-  if (Platform.OS !== 'web') {
-    setTimeout(() => {
-      processSyncQueue();
-    }, 5000); // Wait 5 seconds to allow app to initialize
-  }
+  // Process sync queue on startup
+  setTimeout(() => {
+    processSyncQueue();
+  }, 5000); // Wait 5 seconds to allow app to initialize
 };
 
 // Initialize the sync service when this module is imported

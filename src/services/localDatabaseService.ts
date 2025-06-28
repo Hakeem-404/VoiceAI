@@ -595,14 +595,6 @@ export const addToSyncQueue = (
   data: any,
   priority: 'high' | 'normal' | 'low' = 'normal'
 ): Promise<string> => {
-  // Check if database is available
-  const db = getDatabase();
-  if (!db) {
-    // On web platform, just return success without adding to sync queue
-    console.log('Database not available on web platform. Skipping sync queue addition.');
-    return Promise.resolve('local_' + generateId());
-  }
-  
   const id = generateId();
   
   return new Promise((resolve, reject) => {
@@ -690,14 +682,6 @@ export const updateSyncOperationStatus = (
   status: 'pending' | 'in_progress' | 'completed' | 'failed',
   error?: string
 ): Promise<boolean> => {
-  // Check if database is available
-  const db = getDatabase();
-  if (!db) {
-    // On web platform, just return success without updating database
-    console.log('Database not available on web platform. Skipping sync operation status update.');
-    return Promise.resolve(true);
-  }
-  
   return new Promise((resolve, reject) => {
     executeQuery(
       `UPDATE sync_queue SET 
@@ -724,14 +708,6 @@ export const updateSyncOperationStatus = (
 
 // Clean up completed sync operations
 export const cleanupCompletedSyncOperations = (olderThanHours = 24): Promise<number> => {
-  // Check if database is available
-  const db = getDatabase();
-  if (!db) {
-    // On web platform, just return 0 without cleaning up database
-    console.log('Database not available on web platform. Skipping sync operations cleanup.');
-    return Promise.resolve(0);
-  }
-  
   const cutoffDate = new Date(Date.now() - olderThanHours * 60 * 60 * 1000).toISOString();
   
   return new Promise((resolve, reject) => {
@@ -753,14 +729,6 @@ export const saveUserPreferences = (
   userId: string,
   preferences: any
 ): Promise<boolean> => {
-  // Check if database is available
-  const db = getDatabase();
-  if (!db) {
-    // On web platform, just return success without saving to database
-    console.log('Database not available on web platform. Skipping preference save.');
-    return Promise.resolve(true);
-  }
-  
   const id = generateId();
   
   return new Promise((resolve, reject) => {
@@ -806,31 +774,6 @@ export const saveUserPreferences = (
 // Get user preferences
 export const getUserPreferences = (userId: string): Promise<any | null> => {
   return new Promise((resolve, reject) => {
-    // Check if database is available
-    const db = getDatabase();
-    if (!db) {
-      // Return default preferences on web platform
-      console.log('Database not available on web platform. Returning default preferences.');
-      resolve({
-        theme: 'system',
-        voiceSettings: {
-          selectedVoice: 'en-US-Standard-A',
-          speed: 1.0,
-          pitch: 1.0,
-          volume: 0.8,
-        },
-        notifications: {
-          practiceReminders: true,
-          dailyGoals: true,
-          achievements: false,
-        },
-        language: 'en-US',
-        favoriteMode: null,
-        recentModes: []
-      });
-      return;
-    }
-    
     executeQuery(
       'SELECT * FROM user_preferences WHERE user_id = ? LIMIT 1;',
       [userId],
@@ -864,14 +807,6 @@ export const saveUserProgress = (
   mode: string,
   progress: any
 ): Promise<string> => {
-  // Check if database is available
-  const db = getDatabase();
-  if (!db) {
-    // On web platform, just return success without saving to database
-    console.log('Database not available on web platform. Skipping progress save.');
-    return Promise.resolve('local_' + generateId());
-  }
-  
   const id = generateId();
   
   return new Promise((resolve, reject) => {
@@ -925,14 +860,6 @@ export const getUserProgress = (
   userId: string,
   mode?: string
 ): Promise<any[]> => {
-  // Check if database is available
-  const db = getDatabase();
-  if (!db) {
-    // Return empty array on web platform since database is not available
-    console.log('Database not available on web platform. Returning empty progress.');
-    return Promise.resolve([]);
-  }
-  
   let query = 'SELECT * FROM local_user_progress WHERE user_id = ?';
   const params: any[] = [userId];
   
@@ -1031,20 +958,6 @@ export const getDatabaseStats = (): Promise<{
   pendingSyncCount: number;
 }> => {
   return new Promise((resolve, reject) => {
-    const db = getDatabase();
-    
-    // Return empty stats on web platform since database is not available
-    if (!db) {
-      resolve({
-        conversationCount: 0,
-        messageCount: 0,
-        audioCacheSize: 0,
-        syncQueueSize: 0,
-        pendingSyncCount: 0
-      });
-      return;
-    }
-    
     const stats = {
       conversationCount: 0,
       messageCount: 0,
@@ -1109,20 +1022,6 @@ export const getDatabaseStats = (): Promise<{
 // Export database to JSON
 export const exportDatabaseToJson = async (): Promise<string> => {
   const db = getDatabase();
-  
-  // Return empty data on web platform since database is not available
-  if (!db) {
-    console.log('Database not available on web platform. Returning empty export.');
-    return JSON.stringify({
-      local_conversations: [],
-      local_messages: [],
-      user_preferences: [],
-      local_user_progress: [],
-      audio_cache: [],
-      sync_queue: []
-    }, null, 2);
-  }
-  
   const exportData: any = {};
   
   // Helper function to get all rows from a table
@@ -1176,12 +1075,6 @@ export const importDatabaseFromJson = async (jsonData: string): Promise<boolean>
   try {
     const data = JSON.parse(jsonData);
     const db = getDatabase();
-    
-    // Return false on web platform since database is not available
-    if (!db) {
-      console.log('Database not available on web platform. Cannot import data.');
-      return false;
-    }
     
     // Begin transaction
     return new Promise((resolve, reject) => {
