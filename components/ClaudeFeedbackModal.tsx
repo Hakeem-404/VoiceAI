@@ -48,53 +48,56 @@ export function ClaudeFeedbackModal({
     setAnalysisStage('Analyzing conversation...');
     
     try {
-    
-    // Check if feedback already exists in conversation
-    if (conversation.feedback) {
-      setFeedback(conversation.feedback);
+      // Check if feedback already exists in conversation
+      if (conversation.feedback) {
+        setFeedback(conversation.feedback);
+        
+        // Generate summary
+        const summaryData = generateFeedbackSummary(
+          conversation.feedback, 
+          conversation.mode.id
+        );
+        setSummary(summaryData);
+        
+        setIsLoading(false);
+        return;
+      }
       
-      // Generate summary
-      const summaryData = generateFeedbackSummary(
-        conversation.feedback, 
-        conversation.mode.id
-      );
-      setSummary(summaryData);
-      
-      setIsLoading(false);
-      return;
-    }
-    
-    try {
-      // Simulate analysis stages for better UX
-      setTimeout(() => setAnalysisStage('Evaluating communication patterns...'), 1000);
-      setTimeout(() => setAnalysisStage('Identifying strengths and areas for improvement...'), 3000);
-      setTimeout(() => setAnalysisStage('Generating personalized recommendations...'), 5000);
-      
-      // Generate feedback using Claude
-      const feedbackData = await generateFeedbackWithClaude(conversation);
-      setFeedback(feedbackData);
-      
-      // Generate summary
-      const summaryData = generateFeedbackSummary(
-        feedbackData, 
-        conversation.mode.id
-      );
-      setSummary(summaryData);
-      
-      // Save feedback to database if user is authenticated
-      if (user && conversation.id && !conversation.id.startsWith('local_')) {
-        try {
-          await supabaseService.updateConversation(conversation.id, {
-            quality_score: feedbackData.scores.overall,
-            feedback_summary: feedbackData
-          });
-        } catch (error) {
-          console.error('Failed to save feedback to database:', error);
+      try {
+        // Simulate analysis stages for better UX
+        setTimeout(() => setAnalysisStage('Evaluating communication patterns...'), 1000);
+        setTimeout(() => setAnalysisStage('Identifying strengths and areas for improvement...'), 3000);
+        setTimeout(() => setAnalysisStage('Generating personalized recommendations...'), 5000);
+        
+        // Generate feedback using Claude
+        const feedbackData = await generateFeedbackWithClaude(conversation);
+        setFeedback(feedbackData);
+        
+        // Generate summary
+        const summaryData = generateFeedbackSummary(
+          feedbackData, 
+          conversation.mode.id
+        );
+        setSummary(summaryData);
+        
+        // Save feedback to database if user is authenticated
+        if (user && conversation.id && !conversation.id.startsWith('local_')) {
+          try {
+            await supabaseService.updateConversation(conversation.id, {
+              quality_score: feedbackData.scores.overall,
+              feedback_summary: feedbackData
+            });
+          } catch (error) {
+            console.error('Failed to save feedback to database:', error);
+          }
         }
+      } catch (error) {
+        console.error('Failed to generate feedback:', error);
+      } finally {
+        setIsLoading(false);
       }
     } catch (error) {
-      console.error('Failed to generate feedback:', error);
-    } finally {
+      console.error('Error in generateFeedback:', error);
       setIsLoading(false);
     }
   };
