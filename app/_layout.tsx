@@ -11,14 +11,10 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   useFrameworkReady();
   
-  const { loadAnalytics } = useUserStore();
   const { session, loading } = useSupabaseAuth();
   const [appIsReady, setAppIsReady] = useState(false);
   
   useEffect(() => {
-    // Initialize user data and analytics
-    loadAnalytics();
-    
     // Prepare app
     async function prepare() {
       try {
