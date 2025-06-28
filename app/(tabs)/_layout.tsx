@@ -1,82 +1,89 @@
-import { useEffect, useState } from 'react';
-import { Stack, SplashScreen } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { useFrameworkReady } from '@/hooks/useFrameworkReady';
-import { useUserStore } from '@/src/stores/userStore';
+import { Tabs } from 'expo-router';
+import { Chrome as Home, MessageCircle, Target, History, ChartBar as BarChart3, User } from 'lucide-react-native';
 import { useSupabaseAuth } from '@/src/hooks/useSupabase';
+import { UserAvatar } from '@/components/UserAvatar';
 
-// Keep the splash screen visible until we're ready
-SplashScreen.preventAutoHideAsync();
-
-export default function RootLayout() {
-  useFrameworkReady();
+export default function TabLayout() {
+  const { user } = useSupabaseAuth();
   
-  const { loadAnalytics } = useUserStore();
-  const { session, loading } = useSupabaseAuth();
-  const [appIsReady, setAppIsReady] = useState(false);
-  
-  // Debug authentication state
-  useEffect(() => {
-    console.log('🔐 Root Layout - Auth State:', {
-      hasSession: !!session,
-      sessionUser: session?.user?.email,
-      loading,
-      appIsReady
-    });
-  }, [session, loading, appIsReady]);
-  
-  useEffect(() => {
-    // Initialize user data and analytics
-    loadAnalytics();
-    
-    // Prepare app
-    async function prepare() {
-      try {
-        // Wait for auth to be ready
-        if (!loading) {
-          console.log('🚀 App initialization complete - Auth loading finished');
-          // Any other initialization can go here
-          setAppIsReady(true);
-        }
-      } catch (e) {
-        console.warn('Error during app initialization:', e);
-        setAppIsReady(true);
-      }
-    }
-
-    prepare();
-  }, [loading]);
-
-  useEffect(() => {
-    if (appIsReady) {
-      // Hide the splash screen once we're ready
-      SplashScreen.hideAsync();
-    }
-  }, [appIsReady]);
-
-  if (!appIsReady) {
-    return null;
-  }
-
   return (
-    <>
-      <Stack screenOptions={{ headerShown: false }}>
-        {session ? (
-          // User is signed in
-          <>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="interview-prep" options={{ presentation: 'modal' }} />
-          </>
-        ) : (
-          // User is not signed in
-          <>
-            <Stack.Screen name="auth" options={{ headerShown: false }} />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          </>
-        )}
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </>
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: '#6366F1',
+        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarStyle: {
+          backgroundColor: 'white',
+          borderTopColor: '#E5E7EB',
+          borderTopWidth: 1,
+          height: 84,
+          paddingBottom: 20,
+          paddingTop: 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '500',
+        },
+      }}
+    >
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Home',
+          tabBarIcon: ({ size, color }) => (
+            <Home size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="chat"
+        options={{
+          title: 'Chat',
+          tabBarIcon: ({ size, color }) => (
+            <MessageCircle size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="practice"
+        options={{
+          title: 'Practice',
+          tabBarIcon: ({ size, color }) => (
+            <Target size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="history"
+        options={{
+          title: 'History',
+          tabBarIcon: ({ size, color }) => (
+            <History size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="analytics"
+        options={{
+          title: 'Analytics',
+          tabBarIcon: ({ size, color }) => (
+            <BarChart3 size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ size, color }) => (
+            user ? (
+              <UserAvatar size={size} />
+            ) : (
+              <User size={size} color={color} />
+            )
+          ),
+        }}
+      />
+    </Tabs>
   );
 }
