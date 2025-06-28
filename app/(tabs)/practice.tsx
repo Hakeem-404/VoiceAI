@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Target, Trophy, Clock, Star, Play, CircleCheck as CheckCircle, TrendingUp, Zap, Award, Calendar } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
-import { useUserStore } from '@/src/hooks/userStore';
+import { useUserStore } from '@/src/hooks/useUserStore';
 import { useConversationStore } from '@/src/stores/conversationStore';
 import { PracticeSession, DailyChallenge } from '@/src/types';
 import { GamificationSystem } from '@/components/GamificationSystem';
