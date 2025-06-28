@@ -42,7 +42,13 @@ export default function ProfileScreen() {
   // Refresh user data when profile is updated
   const handleProfileUpdated = () => {
     // Force a refresh by updating the key
-    setProfileUpdateKey(prev => prev + 1);
+    console.log('Profile updated callback triggered');
+    console.log('Current authUser before refresh:', authUser?.user_metadata);
+    setProfileUpdateKey(prev => {
+      const newKey = prev + 1;
+      console.log('Profile update key changed from', prev, 'to', newKey);
+      return newKey;
+    });
     console.log('Profile updated, refreshing user data...');
   };
 
