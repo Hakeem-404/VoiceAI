@@ -774,6 +774,31 @@ export const saveUserPreferences = (
 // Get user preferences
 export const getUserPreferences = (userId: string): Promise<any | null> => {
   return new Promise((resolve, reject) => {
+    // Check if database is available
+    const db = getDatabase();
+    if (!db) {
+      // Return default preferences on web platform
+      console.log('Database not available on web platform. Returning default preferences.');
+      resolve({
+        theme: 'system',
+        voiceSettings: {
+          selectedVoice: 'en-US-Standard-A',
+          speed: 1.0,
+          pitch: 1.0,
+          volume: 0.8,
+        },
+        notifications: {
+          practiceReminders: true,
+          dailyGoals: true,
+          achievements: false,
+        },
+        language: 'en-US',
+        favoriteMode: null,
+        recentModes: []
+      });
+      return;
+    }
+    
     executeQuery(
       'SELECT * FROM user_preferences WHERE user_id = ? LIMIT 1;',
       [userId],
