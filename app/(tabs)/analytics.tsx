@@ -12,15 +12,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { 
   TrendingUp, 
   Target, 
-  Clock,
+  Clock, 
   Award, 
   ChartBar as BarChart3, 
   Star,
   Calendar,
   Flame,
   MessageCircle,
-  Share2,
-  RefreshCw
+  Share2
 } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useDataPersistence } from '@/src/hooks/useDataPersistence';
