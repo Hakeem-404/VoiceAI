@@ -1,9 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Stack, SplashScreen } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { initDatabase } from '@/src/lib/database';
-import { initializeSyncService } from '@/src/services/syncService';
-import { initializeCacheService } from '@/src/services/cacheService';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useUserStore } from '@/src/stores/userStore';
 import { useSupabaseAuth } from '@/src/hooks/useSupabase';
@@ -13,28 +10,6 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   useFrameworkReady();
-
-  // Initialize database and services
-  useEffect(() => {
-    const initializeApp = async () => {
-      try {
-        // Initialize SQLite database
-        await initDatabase();
-        
-        // Initialize sync service
-        await initializeSyncService();
-        
-        // Initialize cache service
-        await initializeCacheService();
-        
-        console.log('App initialization complete');
-      } catch (error) {
-        console.error('App initialization error:', error);
-      }
-    };
-    
-    initializeApp();
-  }, []);
   
   const { session, loading, user } = useSupabaseAuth();
   const { setUser, setTheme } = useUserStore();

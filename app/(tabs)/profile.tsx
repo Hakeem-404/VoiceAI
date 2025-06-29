@@ -24,9 +24,7 @@ import {
 import { useTheme } from '@/src/hooks/useTheme';
 import { useUserStore } from '@/src/stores/userStore';
 import { useSupabaseAuth } from '@/src/hooks/useSupabase';
-import { useLocalUserPreferences } from '@/src/hooks/useLocalUserPreferences';
 import { useVoiceProfiles } from '@/src/hooks/useVoiceProfiles';
-import { useOfflineMode } from '@/src/hooks/useOfflineMode';
 import { SettingItem } from '@/components/SettingItem';
 import { UserAvatar } from '@/components/UserAvatar';
 import { GuestModePrompt } from '@/components/GuestModePrompt';
@@ -34,11 +32,6 @@ import { ProfileSettings } from '@/components/ProfileSettings';
 import { VoiceSettingsModal } from '@/components/VoiceSettingsModal';
 import { NotificationSettingsModal } from '@/components/NotificationSettingsModal';
 import { ThemeSettingsModal } from '@/components/ThemeSettingsModal';
-import { SyncStatusIndicator } from '@/src/components/SyncStatusIndicator';
-import { OfflineModeToggle } from '@/src/components/OfflineModeToggle';
-import { NetworkPreferencesModal } from '@/src/components/NetworkPreferencesModal';
-import { DataExportModal } from '@/src/components/DataExportModal';
-import { StorageManagementModal } from '@/src/components/StorageManagementModal';
 import { spacing, typography } from '@/src/constants/colors';
 
 export default function ProfileScreen() {
@@ -49,10 +42,8 @@ export default function ProfileScreen() {
     setTheme,
     updatePreferences 
   } = useUserStore();
-  const { preferences, updatePreferences: updateLocalPreferences } = useLocalUserPreferences();
   const { user: authUser, signOut } = useSupabaseAuth();
   const { voiceProfiles, loading: voiceProfilesLoading } = useVoiceProfiles();
-  const { isOfflineMode, toggleOfflineMode } = useOfflineMode();
   
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const [promptFeature, setPromptFeature] = useState<'save' | 'history' | 'voice' | 'analytics' | 'premium'>('save');
@@ -60,9 +51,6 @@ export default function ProfileScreen() {
   const [showVoiceSettings, setShowVoiceSettings] = useState(false);
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
   const [showThemeSettings, setShowThemeSettings] = useState(false);
-  const [showNetworkSettings, setShowNetworkSettings] = useState(false);
-  const [showDataExport, setShowDataExport] = useState(false);
-  const [showStorageManagement, setShowStorageManagement] = useState(false);
   const [profileUpdateKey, setProfileUpdateKey] = useState(0);
 
   // Local state for preferences
@@ -115,11 +103,6 @@ export default function ProfileScreen() {
   const saveThemePreference = (isDark: boolean) => {
     const newTheme = isDark ? 'dark' : 'light';
     setTheme(newTheme);
-
-    // Also update local preferences
-    if (preferences) {
-      updateLocalPreferences({ theme: newTheme });
-    }
     
     if (authUser) {
       updatePreferences(authUser.id, { theme: newTheme });
@@ -210,14 +193,6 @@ export default function ProfileScreen() {
           </View>
 
           <SubscriptionCard />
-          
-          {/* Sync Status */}
-          <View style={styles.syncContainer}>
-            <SyncStatusIndicator showDetails={true} />
-          </View>
-          
-          {/* Offline Mode */}
-          <OfflineModeToggle showDetails={true} />
 
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
@@ -229,33 +204,6 @@ export default function ProfileScreen() {
               subtitle="Change app appearance"
               type="nav"
               onPress={() => setShowThemeSettings(true)}
-            />
-          </View>
-          
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Data & Storage
-            </Text>
-            <SettingItem
-              icon={Wifi}
-              title="Network & Sync"
-              subtitle="Configure network usage and sync preferences"
-              type="nav"
-              onPress={() => setShowNetworkSettings(true)}
-            />
-            <SettingItem
-              icon={HardDrive}
-              title="Storage Management"
-              subtitle="Manage app storage and cache"
-              type="nav"
-              onPress={() => setShowStorageManagement(true)}
-            />
-            <SettingItem
-              icon={Download}
-              title="Export Data"
-              subtitle="Export your conversations and progress"
-              type="nav"
-              onPress={() => setShowDataExport(true)}
             />
           </View>
 
@@ -387,35 +335,12 @@ export default function ProfileScreen() {
       <ThemeSettingsModal
         visible={showThemeSettings}
         onClose={() => setShowThemeSettings(false)}
-        isDarkMode={userTheme === 'dark'}
+        isDarkMode={localPreferences.darkMode}
         onSave={saveThemePreference}
-      />
-      
-      {/* Network Settings Modal */}
-      <NetworkPreferencesModal
-        visible={showNetworkSettings}
-        onClose={() => setShowNetworkSettings(false)}
-      />
-      
-      {/* Data Export Modal */}
-      <DataExportModal
-        visible={showDataExport}
-        onClose={() => setShowDataExport(false)}
-      />
-      
-      {/* Storage Management Modal */}
-      <StorageManagementModal
-        visible={showStorageManagement}
-        onClose={() => setShowStorageManagement(false)}
       />
     </SafeAreaView>
   );
 }
-
-// Import these components for the UI
-const Wifi = (props: any) => <RefreshCw {...props} />;
-const HardDrive = (props: any) => <Database {...props} />;
-const Download = (props: any) => <Archive {...props} />;
 
 const styles = StyleSheet.create({
   container: {
@@ -483,9 +408,6 @@ const styles = StyleSheet.create({
   subscriptionExpiry: {
     color: 'rgba(255, 255, 255, 0.8)',
     fontSize: typography.sizes.sm,
-  },
-  syncContainer: {
-    marginBottom: spacing.xl,
   },
   manageButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
