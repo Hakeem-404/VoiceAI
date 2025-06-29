@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { Wifi, WifiOff, RefreshCw } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
-import { useOfflineSupport } from '@/src/hooks/useOfflineSupport';
+import { useDataPersistence } from '@/src/hooks/useDataPersistence';
 import { spacing, typography } from '@/src/constants/colors';
 
 interface OfflineIndicatorProps {
@@ -11,7 +11,7 @@ interface OfflineIndicatorProps {
 
 export function OfflineIndicator({ showForceSync = false }: OfflineIndicatorProps) {
   const { colors } = useTheme();
-  const { isOnline, lastSyncTime, pendingChanges, forceSync } = useOfflineSupport();
+  const { isOnline, lastSyncTime, pendingChanges, forceSync } = useDataPersistence();
   
   if (isOnline && pendingChanges === 0) {
     return null;

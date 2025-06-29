@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { RefreshCw, Check, CircleAlert as AlertCircle } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
-import { useOfflineSupport } from '@/src/hooks/useOfflineSupport';
+import { useDataPersistence } from '@/src/hooks/useDataPersistence';
 import { spacing, typography } from '@/src/constants/colors';
 
 interface SyncStatusIndicatorProps {
@@ -11,7 +11,7 @@ interface SyncStatusIndicatorProps {
 
 export function SyncStatusIndicator({ compact = false }: SyncStatusIndicatorProps) {
   const { colors } = useTheme();
-  const { isOnline, lastSyncTime, pendingChanges, forceSync } = useOfflineSupport();
+  const { isOnline, lastSyncTime, pendingChanges, forceSync } = useDataPersistence();
   
   const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);

@@ -53,6 +53,12 @@ const initNetworkMonitoring = () => {
   }
 };
 
+// Process sync queue
+const processSyncQueue = async () => {
+  // This would be implemented to process the sync queue when coming online
+  console.log('Processing sync queue');
+};
+
 // Storage service
 class StorageService {
   private syncQueue: QueueItem[] = [];
@@ -219,21 +225,6 @@ class StorageService {
       }
       
       await this.saveConversations(conversations);
-      
-      // Add to sync queue if it's a local ID
-      if (conversation.id.startsWith('local_')) {
-        await this.addToSyncQueue({
-          operation: 'create',
-          entity: 'conversation',
-          data: conversation,
-        });
-      } else {
-        await this.addToSyncQueue({
-          operation: 'update',
-          entity: 'conversation',
-          data: conversation,
-        });
-      }
     } catch (error) {
       console.error('Failed to save conversation:', error);
       throw error;
@@ -255,15 +246,6 @@ class StorageService {
       const conversations = await this.getConversations();
       const updatedConversations = conversations.filter(c => c.id !== id);
       await this.saveConversations(updatedConversations);
-      
-      // Add to sync queue if it's not a local ID
-      if (!id.startsWith('local_')) {
-        await this.addToSyncQueue({
-          operation: 'delete',
-          entity: 'conversation',
-          data: { id },
-        });
-      }
     } catch (error) {
       console.error('Failed to delete conversation:', error);
       throw error;

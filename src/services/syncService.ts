@@ -3,7 +3,7 @@ import NetInfo from '@react-native-community/netinfo';
 import { storageService } from './storageService';
 import * as supabaseService from './supabaseService';
 import { Conversation, Message, User, UserPreferences } from '../types';
-import { useSupabaseAuth } from '../hooks/useSupabase';
+import { getModeById } from '../constants/conversationModes';
 
 // Network status
 let isOnline = true;
@@ -123,8 +123,58 @@ class SyncService {
     }
   }
   
+  // Get user profile
+  async getUserProfile(userId: string): Promise<User | null> {
+    try {
+      // Get user profile from Supabase
+      const userProfile = await supabaseService.getUserProfile(userId);
+      
+      if (userProfile) {
+        // Create user object from profile
+        const userData: User = {
+          id: userProfile.id,
+          email: userProfile.email || '',
+          name: userProfile.name || '',
+          preferences: {
+            theme: (userProfile.preferences as any)?.theme || 'system',
+            voiceSettings: (userProfile.preferences as any)?.voiceSettings || {
+              selectedVoice: 'en-US-Standard-A',
+              speed: 1.0,
+              pitch: 1.0,
+              volume: 0.8,
+            },
+            notifications: (userProfile.preferences as any)?.notifications || {
+              practiceReminders: true,
+              dailyGoals: true,
+              achievements: false,
+            },
+            language: (userProfile.preferences as any)?.language || 'en-US',
+            favoriteMode: (userProfile.preferences as any)?.favoriteMode || null,
+            recentModes: (userProfile.preferences as any)?.recentModes || [],
+          },
+          subscription: {
+            tier: userProfile.subscription_tier as 'free' | 'premium' | 'pro',
+            expiresAt: undefined,
+            features: [],
+          },
+          createdAt: new Date(userProfile.created_at),
+        };
+        
+        // Save to local storage
+        await storageService.saveCurrentUser(userData);
+        
+        return userData;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Failed to get user profile:', error);
+      throw error;
+    }
+  }
+  
   // Sync conversations
-  private async syncConversations(userId: string) {
+  async syncConversations(userId: string) {
     try {
       // Get local conversations
       const localConversations = await storageService.getConversations();
@@ -286,10 +336,13 @@ class SyncService {
         // Get full conversation with messages
         const fullServerConv = await supabaseService.getConversationById(id);
         
+        // Get mode from constants
+        const modeData = getModeById(fullServerConv.mode);
+        
         // Convert to app Conversation type
         const newConv: Conversation = {
           id: fullServerConv.id,
-          mode: {
+          mode: modeData || {
             id: fullServerConv.mode,
             name: fullServerConv.mode.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase()),
             description: '',
@@ -326,31 +379,36 @@ class SyncService {
         };
         
         // Add to local storage
-        const localConversations = await storageService.getConversations();
-        await storageService.saveConversations([...localConversations, newConv]);
+        await storageService.saveConversation(newConv);
       }
+      
+      // Reload conversations from storage
+      const updatedLocalConversations = await storageService.getConversations();
+      return updatedLocalConversations;
     } catch (error) {
       console.error('Failed to sync conversations:', error);
       throw error;
     }
   }
   
-  // Sync user progress
-  private async syncUserProgress(userId: string) {
+  // Get user progress
+  async getUserProgress(userId: string): Promise<any[]> {
     try {
       // Get user progress from server
       const progress = await supabaseService.getUserProgress(userId);
       
       // Store progress data in app config
       await storageService.updateAppConfig({ userProgress: progress });
+      
+      return progress;
     } catch (error) {
-      console.error('Failed to sync user progress:', error);
+      console.error('Failed to get user progress:', error);
       throw error;
     }
   }
   
-  // Sync user preferences
-  async syncUserPreferences(userId: string, preferences: UserPreferences) {
+  // Update user preferences
+  async updateUserPreferences(userId: string, preferences: UserPreferences) {
     try {
       if (!isOnline) {
         // Store locally and add to sync queue
@@ -364,7 +422,7 @@ class SyncService {
       // Update local storage
       await storageService.saveUserPreferences(preferences);
     } catch (error) {
-      console.error('Failed to sync user preferences:', error);
+      console.error('Failed to update user preferences:', error);
       
       // Store locally even if server update fails
       await storageService.saveUserPreferences(preferences);
@@ -372,8 +430,8 @@ class SyncService {
     }
   }
   
-  // Save conversation with sync
-  async saveConversation(userId: string | undefined, conversation: Conversation) {
+  // Save conversation
+  async saveConversation(userId: string, conversation: Conversation): Promise<Conversation> {
     try {
       // Always save locally first
       await storageService.saveConversation(conversation);
@@ -444,122 +502,60 @@ class SyncService {
     }
   }
   
-  // Delete conversation with sync
-  async deleteConversation(userId: string | undefined, conversationId: string) {
+  // Delete conversation
+  async deleteConversation(userId: string, conversationId: string) {
     try {
-      // Always delete locally first
-      await storageService.deleteConversation(conversationId);
-      
-      // If user is not authenticated or offline, just delete locally
-      if (!userId || !isOnline || conversationId.startsWith('local_')) {
-        return;
-      }
-      
       // Delete from server
-      try {
+      if (!conversationId.startsWith('local_')) {
         await supabaseService.deleteConversation(conversationId);
-      } catch (error) {
-        console.error('Failed to delete conversation from server:', error);
       }
+      
+      return true;
     } catch (error) {
-      console.error('Failed to delete conversation:', error);
+      console.error('Failed to delete conversation from server:', error);
       throw error;
     }
   }
   
-  // Add message to conversation with sync
+  // Add message to conversation
   async addMessageToConversation(
-    userId: string | undefined,
+    userId: string,
     conversationId: string,
     message: Message
   ) {
     try {
-      // Get local conversation
-      const conversation = await storageService.getConversation(conversationId);
-      
-      if (!conversation) {
-        throw new Error(`Conversation not found: ${conversationId}`);
-      }
-      
-      // Add message to local conversation
-      const updatedConversation = {
-        ...conversation,
-        messages: [...conversation.messages, message],
-        updatedAt: new Date(),
-      };
-      
-      // Save locally
-      await storageService.saveConversation(updatedConversation);
-      
-      // If user is not authenticated or offline, just keep locally
-      if (!userId || !isOnline || conversationId.startsWith('local_')) {
-        return updatedConversation;
-      }
-      
       // Add message to server conversation
-      try {
-        await supabaseService.addMessage(
-          conversationId,
-          message.role === 'ai' ? 'assistant' : message.role,
-          message.content,
-          conversation.messages.length,
-          message.audioUrl
-        );
-        
-        return updatedConversation;
-      } catch (error) {
-        console.error('Failed to add message to server conversation:', error);
-        return updatedConversation;
-      }
+      await supabaseService.addMessage(
+        conversationId,
+        message.role === 'ai' ? 'assistant' : message.role,
+        message.content,
+        parseInt(message.id),
+        message.audioUrl
+      );
+      
+      return true;
     } catch (error) {
-      console.error('Failed to add message to conversation:', error);
+      console.error('Failed to add message to server conversation:', error);
       throw error;
     }
   }
   
-  // Toggle conversation bookmark with sync
+  // Toggle conversation bookmark
   async toggleConversationBookmark(
-    userId: string | undefined,
+    userId: string,
     conversationId: string,
     isBookmarked: boolean
   ) {
     try {
-      // Get local conversation
-      const conversation = await storageService.getConversation(conversationId);
-      
-      if (!conversation) {
-        throw new Error(`Conversation not found: ${conversationId}`);
-      }
-      
-      // Update local conversation
-      const updatedConversation = {
-        ...conversation,
-        isBookmarked,
-        updatedAt: new Date(),
-      };
-      
-      // Save locally
-      await storageService.saveConversation(updatedConversation);
-      
-      // If user is not authenticated or offline, just keep locally
-      if (!userId || !isOnline || conversationId.startsWith('local_')) {
-        return updatedConversation;
-      }
-      
       // Update server conversation
-      try {
-        await supabaseService.toggleConversationBookmark(
-          conversationId,
-          isBookmarked
-        );
-        
-        return updatedConversation;
-      } catch (error) {
-        console.error('Failed to toggle bookmark on server:', error);
-        return updatedConversation;
-      }
+      await supabaseService.toggleConversationBookmark(
+        conversationId,
+        isBookmarked
+      );
+      
+      return true;
     } catch (error) {
-      console.error('Failed to toggle conversation bookmark:', error);
+      console.error('Failed to toggle bookmark on server:', error);
       throw error;
     }
   }
