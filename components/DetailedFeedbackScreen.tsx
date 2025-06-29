@@ -7,22 +7,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { 
-  Star, 
-  TrendingUp,  
-  TrendingDown, 
-  CheckCircle, 
-  AlertTriangle,
-  ArrowRight,
-  Award,
-  BarChart3,
-  Clock,
-  MessageSquare,
-  Volume2,
-  Zap,
-  Brain,
-  X
-} from 'lucide-react-native';
+import { Star, TrendingUp, TrendingDown, CircleCheck as CheckCircle, TriangleAlert as AlertTriangle, ArrowRight, Award, ChartBar as BarChart3, Clock, MessageSquare, Volume2, Zap, Brain, X } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { FeedbackData } from '@/src/types';
 import { spacing, typography } from '@/src/constants/colors';
