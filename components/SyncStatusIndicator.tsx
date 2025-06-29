@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
-import { RefreshCw, Check, AlertCircle } from 'lucide-react-native';
+import { RefreshCw, Check, CircleAlert as AlertCircle } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { useOfflineSupport } from '@/src/hooks/useOfflineSupport';
 import { spacing, typography } from '@/src/constants/colors';
