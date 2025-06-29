@@ -43,7 +43,7 @@ class ClaudeFeedbackService {
   // Generate comprehensive feedback after conversation using Claude
   async generateFeedback(conversation: Conversation): Promise<FeedbackData> {
     console.log('Generating Claude-powered feedback for conversation:', conversation.id);
-    
+
     // Check cache first
     const cacheKey = `feedback_${conversation.id}`;
     const cachedFeedback = this.feedbackCache.get(cacheKey);
@@ -54,7 +54,7 @@ class ClaudeFeedbackService {
     
     try {
       // Create a prompt for Claude based on the conversation mode
-      const prompt = this.createFeedbackPrompt(conversation);
+      const prompt = await this.createFeedbackPrompt(conversation);
       
       // Create a context for Claude API
       const context: ConversationContext = {
@@ -71,7 +71,7 @@ class ClaudeFeedbackService {
       
       // Send the prompt to Claude
       const response = await supabaseClaudeAPI.sendMessage(prompt, context);
-      
+
       if (response.error) {
         console.error('Claude feedback analysis failed:', response.error);
         throw new Error(`Failed to analyze conversation: ${response.error}`);
@@ -82,7 +82,7 @@ class ClaudeFeedbackService {
       }
       
       // Parse the feedback from Claude's response
-      const feedback = this.parseFeedbackResponse(response.data.content, conversation);
+      const feedback = await this.parseFeedbackResponse(response.data.content, conversation);
       
       // Add progress tracking if we have previous feedback
       const previousFeedback = this.previousFeedback.get(conversation.mode.id);
@@ -107,7 +107,7 @@ class ClaudeFeedbackService {
   }
 
   // Create a mode-specific prompt for Claude to analyze the conversation
-  private createFeedbackPrompt(conversation: Conversation): string {
+  private async createFeedbackPrompt(conversation: Conversation): Promise<string> {
     const { mode, messages, duration } = conversation;
     
     // Convert messages to a format suitable for analysis
@@ -116,7 +116,7 @@ class ClaudeFeedbackService {
     }).join('\n\n');
     
     // Create a base prompt with conversation details
-    let prompt = `
+    const prompt = `
 You are an expert communication coach specializing in ${mode.name} conversations. 
 Please analyze the following conversation that lasted ${Math.floor(duration / 60)} minutes and ${duration % 60} seconds.
 
@@ -180,7 +180,7 @@ IMPORTANT:
 7. Remember: You are coaching the USER, not evaluating the AI assistant.
 `;
 
-    // Add mode-specific analysis instructions
+    /* Add mode-specific analysis instructions
     switch (mode.id) {
       case 'general-chat':
         prompt += `\n\nFor general chat analysis, also include:
@@ -296,7 +296,7 @@ Focus on the USER's grammar, vocabulary, pronunciation, and overall fluency.`;
         break;
     }
     
-    prompt += `\n\nEnsure your feedback is specific to the USER's communication in this conversation, mentioning actual examples from the USER's messages. Provide actionable advice that will help the USER improve their ${mode.name} skills.`;
+    prompt += `\n\nEnsure your feedback is specific to the USER's communication in this conversation, mentioning actual examples from the USER's messages. Provide actionable advice that will help the USER improve their ${mode.name} skills.`;*/
     
     return prompt;
   }
@@ -304,7 +304,7 @@ Focus on the USER's grammar, vocabulary, pronunciation, and overall fluency.`;
   // Enhanced parsing methods to capture ALL of Claude's feedback
 
 // Parse Claude's response into a structured feedback object
-private parseFeedbackResponse(response: string, conversation: Conversation): FeedbackData {
+private async parseFeedbackResponse(response: string, conversation: Conversation): Promise<FeedbackData> {
   try {
     console.log('Raw Claude response:', response);
     
@@ -319,12 +319,77 @@ private parseFeedbackResponse(response: string, conversation: Conversation): Fee
     // Build feedback from extracted data
     const feedback = this.buildFeedbackFromExtractedData(extractedData, conversation);
     
+    // If we have a very basic feedback, try to enhance it with real data
+    if (feedback.scores.overall === 75 && feedback.strengths.length <= 3) {
+      try {
+        // Calculate some real metrics from the conversation
+        const userMessages = conversation.messages.filter(m => m.role === 'user');
+        const totalWords = userMessages.reduce((sum, msg) => sum + msg.content.split(/\s+/).length, 0);
+        const avgWordsPerMessage = Math.round(totalWords / userMessages.length);
+        const fillerWords = this.countFillerWords(userMessages);
+        const questionCount = this.countQuestions(userMessages);
+        
+        // Update analytics with real data
+        feedback.analytics.wordsPerMinute = Math.round(totalWords / (conversation.duration / 60)) || 150;
+        feedback.analytics.fillerWords = fillerWords;
+        feedback.analytics.questionCount = questionCount;
+        feedback.analytics.speakingTime = Math.round(conversation.duration / 120);
+        feedback.analytics.listeningTime = Math.round(conversation.duration / 120);
+      } catch (error) {
+        console.warn('Failed to enhance feedback with real metrics:', error);
+      }
+    }
+    
     return feedback;
   } catch (error) {
     console.error('Failed to parse Claude feedback response:', error);
     // Only fall back to basic feedback if we truly can't extract anything
-    return this.generateBasicFeedback(conversation);
+    return await this.generateBasicFeedback(conversation);
   }
+}
+
+// Count filler words in messages
+private countFillerWords(messages: any[]): number {
+  const fillerWords = ['um', 'uh', 'like', 'you know', 'sort of', 'kind of', 'basically', 'actually', 'literally'];
+  let count = 0;
+  
+  messages.forEach(msg => {
+    const content = msg.content.toLowerCase();
+    fillerWords.forEach(word => {
+      const regex = new RegExp(`\\b${word}\\b`, 'g');
+      const matches = content.match(regex);
+      if (matches) {
+        count += matches.length;
+      }
+    });
+  });
+  
+  return count;
+}
+
+// Count questions in messages
+private countQuestions(messages: any[]): number {
+  let count = 0;
+  
+  messages.forEach(msg => {
+    const content = msg.content;
+    const questionMarks = (content.match(/\?/g) || []).length;
+    const questionWords = (content.match(/\b(what|how|why|when|where|who|which)\b/gi) || []).length;
+    
+    // Count as question if it has a question mark or starts with a question word
+    count += questionMarks;
+    
+    // Add questions that don't have question marks but start with question words
+    const sentences = content.split(/[.!?]+/);
+    sentences.forEach(sentence => {
+      const trimmed = sentence.trim();
+      if (trimmed && !trimmed.includes('?') && /^(what|how|why|when|where|who|which)\b/i.test(trimmed)) {
+        count++;
+      }
+    });
+  });
+  
+  return count;
 }
 
 // Extract ALL possible data from Claude's response using multiple strategies
@@ -1179,7 +1244,7 @@ private fixCommonJsonIssues(jsonString: string): string {
   // Generate real-time feedback during conversation
   async generateRealTimeFeedback(
     messages: ConversationMessage[],
-    conversationMode: string
+    conversationMode: string 
   ): Promise<RealTimeFeedback | null> {
     // Only generate feedback if we have enough messages
     if (messages.length < 3) return null;
@@ -1187,7 +1252,7 @@ private fixCommonJsonIssues(jsonString: string): string {
     // Get the last few messages for context
     const recentMessages = messages.slice(-3);
     
-    // Create a prompt for Claude
+    // Create a prompt for real-time feedback
     const prompt = `
 You are an expert communication coach providing real-time feedback during a ${conversationMode} conversation.
 Analyze these recent messages and provide ONE specific, actionable piece of feedback for the USER if needed.
@@ -1212,50 +1277,62 @@ Remember: You are coaching the USER, not evaluating the AI assistant.
 
     try {
       // Create a context for Claude API
-      const context: ConversationContext = {
-        messages: [],
-        mode: 'realtime-feedback',
-        sessionId: `feedback_${Date.now()}`,
-        metadata: {
-          startTime: new Date(),
-          lastActivity: new Date(),
-          messageCount: 0,
-          totalTokens: 0,
-        },
-      };
+      // Analyze the conversation to generate real-time feedback
+      const userMessages = recentMessages.filter(m => m.role === 'user');
+      if (userMessages.length === 0) return null;
       
-      // Send the prompt to Claude
-      const response = await supabaseClaudeAPI.sendMessage(prompt, context);
+      // Get the last user message
+      const lastUserMessage = userMessages[userMessages.length - 1];
       
-      if (response.error || !response.data) {
-        console.warn('Real-time feedback generation failed:', response.error);
-        return null;
-      }
+      // Simple analysis to generate feedback
+      const content = lastUserMessage.content.toLowerCase();
       
-      // Parse the response
-      try {
-        const jsonMatch = response.data.content.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) return null;
-        
-        const feedbackData = JSON.parse(jsonMatch[0]);
-        
-        // Check if no feedback is needed
-        if (feedbackData.none) return null;
-        
-        // Create feedback object
-        const feedback: RealTimeFeedback = {
-          type: feedbackData.type,
-          message: feedbackData.message,
-          severity: feedbackData.severity,
+      // Check for filler words
+      const fillerWords = ['um', 'uh', 'like', 'you know', 'sort of', 'kind of'];
+      const hasFillerWords = fillerWords.some(word => content.includes(word));
+      
+      // Check for questions
+      const hasQuestion = content.includes('?');
+      
+      // Check for short responses
+      const wordCount = content.split(/\s+/).length;
+      const isShortResponse = wordCount < 5;
+      
+      // Check for long responses
+      const isLongResponse = wordCount > 50;
+      
+      // Generate feedback based on analysis
+      if (hasFillerWords) {
+        return {
+          type: 'filler',
+          message: 'Try to reduce filler words like "um" and "uh"',
+          severity: 'suggestion',
           timestamp: new Date(),
         };
-        
-        this.realtimeFeedback.push(feedback);
-        return feedback;
-      } catch (error) {
-        console.warn('Failed to parse real-time feedback:', error);
-        return null;
+      } else if (isShortResponse) {
+        return {
+          type: 'engagement',
+          message: 'Try to elaborate more in your responses',
+          severity: 'suggestion',
+          timestamp: new Date(),
+        };
+      } else if (isLongResponse) {
+        return {
+          type: 'pace',
+          message: 'Consider breaking long responses into smaller points',
+          severity: 'suggestion',
+          timestamp: new Date(),
+        };
+      } else if (!hasQuestion && Math.random() < 0.3) {
+        return {
+          type: 'question',
+          message: 'Try asking follow-up questions to engage more',
+          severity: 'suggestion',
+          timestamp: new Date(),
+        };
       }
+      
+      return null;
     } catch (error) {
       console.warn('Failed to generate real-time feedback:', error);
       return null;
@@ -1263,8 +1340,15 @@ Remember: You are coaching the USER, not evaluating the AI assistant.
   }
 
   // Fallback method if Claude analysis fails
-  private generateBasicFeedback(conversation: Conversation): FeedbackData {
+  private async generateBasicFeedback(conversation: Conversation): Promise<FeedbackData> {
     console.log('Using fallback basic feedback generation');
+    
+    // Calculate some real metrics from the conversation
+    const userMessages = conversation.messages.filter(m => m.role === 'user');
+    const totalWords = userMessages.reduce((sum, msg) => sum + msg.content.split(/\s+/).length, 0);
+    const fillerWords = this.countFillerWords(userMessages);
+    const questionCount = this.countQuestions(userMessages);
+    const wordsPerMinute = Math.round(totalWords / (conversation.duration / 60)) || 150;
     
     // Create a simple feedback object with generic feedback
     const feedback: FeedbackData = {
@@ -1287,10 +1371,10 @@ Remember: You are coaching the USER, not evaluating the AI assistant.
         `Focus on active listening and engagement`,
       ],
       analytics: {
-        wordsPerMinute: 150,
+        wordsPerMinute,
         pauseCount: Math.round(conversation.duration / 60),
-        fillerWords: Math.round(conversation.duration / 120),
-        questionCount: conversation.messages.filter(m => m.role === 'user' && m.content.includes('?')).length,
+        fillerWords,
+        questionCount,
         speakingTime: Math.round(conversation.duration / 120),
         listeningTime: Math.round(conversation.duration / 120),
       },

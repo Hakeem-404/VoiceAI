@@ -13,9 +13,9 @@ import { Star, Award, ArrowRight, X, ChartBar as BarChart3, Share2, MessageSquar
 import { useTheme } from '@/src/hooks/useTheme';
 import { FeedbackData, FeedbackSummary, Conversation } from '@/src/types';
 import { FeedbackSummaryCard } from './FeedbackSummaryCard';
-import { DetailedFeedbackScreen } from './DetailedFeedbackScreen';
-import { useSupabaseAuth } from '@/src/hooks/useSupabase';
-import * as supabaseService from '@/src/services/supabaseService';
+import { DetailedFeedbackScreen } from './DetailedFeedbackScreen'; 
+import { feedbackService } from '@/src/services/feedbackService';
+import { useDataPersistence } from '@/src/hooks/useDataPersistence';
 import { spacing, typography } from '@/src/constants/colors';
 
 interface ClaudeFeedbackModalProps {
@@ -26,11 +26,11 @@ interface ClaudeFeedbackModalProps {
 
 export function ClaudeFeedbackModal({ 
   visible, 
-  onClose,
+  onClose, 
   conversation,
 }: ClaudeFeedbackModalProps) {
   const { colors, isDark } = useTheme();
-  const { user } = useSupabaseAuth();
+  const { updateConversation, isOnline } = useDataPersistence();
   const [isLoading, setIsLoading] = useState(true);
   const [feedback, setFeedback] = useState<FeedbackData | null>(null);
   const [summary, setSummary] = useState<FeedbackSummary | null>(null);
@@ -44,7 +44,7 @@ export function ClaudeFeedbackModal({
   }, [visible]);
 
   const generateFeedback = async () => {
-    setIsLoading(true);
+    setIsLoading(true); 
     setAnalysisStage('Analyzing conversation...');
     
     // Check if feedback already exists in conversation
@@ -53,7 +53,7 @@ export function ClaudeFeedbackModal({
       
       // Generate summary
       const summaryData = generateFeedbackSummary(
-        conversation.feedback, 
+        conversation.feedback,  
         conversation.mode.id
       );
       setSummary(summaryData);
@@ -69,7 +69,7 @@ export function ClaudeFeedbackModal({
       setTimeout(() => setAnalysisStage('Generating personalized recommendations...'), 5000);
       
       // Generate feedback using Claude
-      const feedbackData = await generateFeedbackWithClaude(conversation);
+      const feedbackData = await feedbackService.generateFeedback(conversation);
       setFeedback(feedbackData);
       
       // Generate summary
@@ -80,15 +80,15 @@ export function ClaudeFeedbackModal({
       setSummary(summaryData);
       
       // Save feedback to database if user is authenticated
-      if (user && conversation.id && !conversation.id.startsWith('local_')) {
+      if (conversation.id && !conversation.id.startsWith('local_') && isOnline) {
         try {
-          await supabaseService.updateConversation(conversation.id, {
-            quality_score: feedbackData.scores.overall,
-            feedback_summary: feedbackData
+          await updateConversation(conversation.id, {
+            feedback: feedbackData,
+            qualityScore: feedbackData.scores.overall
           });
         } catch (error) {
           console.error('Failed to save feedback to database:', error);
-        }
+        } 
       }
     } catch (error) {
       console.error('Failed to generate feedback:', error);
@@ -97,7 +97,7 @@ export function ClaudeFeedbackModal({
     }
   };
   
-  // Generate feedback using Claude
+  /* Generate feedback using Claude
   const generateFeedbackWithClaude = async (conversation: Conversation): Promise<FeedbackData> => {
     try {
       // Format messages for Claude
@@ -152,7 +152,7 @@ export function ClaudeFeedbackModal({
       console.error('Failed to generate feedback with Claude:', error);
       throw error;
     }
-  };
+  }; */
   
   // Generate feedback summary
   const generateFeedbackSummary = (feedback: FeedbackData, conversationMode: string): FeedbackSummary => {
@@ -200,7 +200,7 @@ export function ClaudeFeedbackModal({
   };
 
   const handleViewDetails = () => {
-    setShowDetailedFeedback(true);
+    setShowDetailedFeedback(true); 
   };
 
   const handleCloseDetails = () => {
@@ -208,7 +208,7 @@ export function ClaudeFeedbackModal({
   };
 
   const handleShare = () => {
-    // Share functionality would be implemented here
+    // Share functionality would be implemented here 
     console.log('Share feedback');
   };
 
@@ -222,7 +222,7 @@ export function ClaudeFeedbackModal({
       >
         <DetailedFeedbackScreen
           feedback={feedback}
-          conversationMode={conversation.mode.id}
+          conversationMode={conversation.mode.id} 
           conversationDuration={conversation.duration}
           onClose={handleCloseDetails}
         />
@@ -240,7 +240,7 @@ export function ClaudeFeedbackModal({
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <LinearGradient
           colors={isDark ? ['#1E293B', '#0F172A'] : ['#F8FAFC', '#FFFFFF']}
-          style={styles.header}
+          style={styles.header} 
         >
           <View style={styles.headerTop}>
             <TouchableOpacity
@@ -253,7 +253,7 @@ export function ClaudeFeedbackModal({
             <Text style={[styles.headerTitle, { color: colors.text }]}>
               AI-Powered Feedback
             </Text>
-            
+             
             <TouchableOpacity
               style={styles.shareButton}
               onPress={handleShare}
@@ -261,7 +261,7 @@ export function ClaudeFeedbackModal({
               <Share2 size={24} color={colors.text} />
             </TouchableOpacity>
           </View>
-          
+           
           <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
             Intelligent analysis of your {conversation.mode.name.toLowerCase()} conversation
           </Text>
@@ -270,7 +270,7 @@ export function ClaudeFeedbackModal({
         <View style={styles.content}>
           {isLoading ? (
             <View style={styles.loadingContainer}>
-              <View style={styles.analysisStages}>
+              <View style={styles.analysisStages}> 
                 <View style={[styles.analysisIcon, { backgroundColor: colors.primary }]}>
                   <Brain size={32} color="white" />
                 </View>
@@ -278,7 +278,7 @@ export function ClaudeFeedbackModal({
                   <View style={styles.analysisStep}>
                     <MessageSquare size={20} color={colors.primary} />
                     <Text style={[styles.analysisStepText, { color: colors.text }]}>
-                      Processing conversation data
+                      Processing conversation data 
                     </Text>
                     <View style={[styles.checkmark, { backgroundColor: colors.success }]}>
                       <Text style={styles.checkmarkText}>✓</Text>
@@ -287,14 +287,14 @@ export function ClaudeFeedbackModal({
                   <View style={styles.analysisStep}>
                     <Brain size={20} color={colors.primary} />
                     <Text style={[styles.analysisStepText, { color: colors.text }]}>
-                      {analysisStage}
+                      {analysisStage} 
                     </Text>
                     <ActivityIndicator size="small" color={colors.primary} />
                   </View>
                   <View style={styles.analysisStep}>
                     <Zap size={20} color={colors.textTertiary} />
                     <Text style={[styles.analysisStepText, { color: colors.textTertiary }]}>
-                      Generating personalized insights
+                      Generating personalized insights 
                     </Text>
                   </View>
                   <View style={styles.analysisStep}>
@@ -308,7 +308,7 @@ export function ClaudeFeedbackModal({
               <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
                 Using Claude AI to analyze your conversation...
               </Text>
-            </View>
+            </View> 
           ) : summary ? (
             <FeedbackSummaryCard
               summary={summary}
@@ -332,7 +332,7 @@ export function ClaudeFeedbackModal({
           {!isLoading && summary && (
             <View style={styles.actionsContainer}>
               <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: colors.primary }]}
+                style={[styles.actionButton, { backgroundColor: colors.primary }]} 
                 onPress={handleViewDetails}
               >
                 <BarChart3 size={20} color="white" />
@@ -340,7 +340,7 @@ export function ClaudeFeedbackModal({
               </TouchableOpacity>
               
               <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: colors.secondary }]}
+                style={[styles.actionButton, { backgroundColor: colors.secondary }]} 
                 onPress={() => {
                   // Navigate to practice screen
                   onClose();

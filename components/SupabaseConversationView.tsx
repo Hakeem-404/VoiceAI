@@ -41,7 +41,7 @@ export function SupabaseConversationView({
   const {
     messages,
     isLoading,
-    isStreaming,
+    isStreaming, 
     error,
     quickReplies,
     sendMessage,
@@ -63,7 +63,8 @@ export function SupabaseConversationView({
   const [inputText, setInputText] = useState('');
   const [isOnline, setIsOnline] = useState(true);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<ScrollView>(null); 
+  const [isBookmarked, setIsBookmarked] = useState(false);
   const [initialMessageSent, setInitialMessageSent] = useState(false);
 
   // Create conversation mode object for the store
@@ -116,7 +117,7 @@ export function SupabaseConversationView({
     }
   }, [messages.length]);
 
-  // Network status monitoring
+  // Network status monitoring 
   useEffect(() => {
     if (Platform.OS !== 'web') {
       // Only import and use NetInfo on native platforms
@@ -142,6 +143,23 @@ export function SupabaseConversationView({
       };
     }
   }, []);
+
+  // Toggle bookmark 
+  const handleToggleBookmark = async () => {
+    if (!conversationId || !userId) return;
+    
+    try {
+      if (isBookmarked) {
+        await supabaseClaudeAPI.removeBookmark(conversationId, userId);
+      } else {
+        await supabaseClaudeAPI.addBookmark(conversationId, userId);
+      }
+      setIsBookmarked(!isBookmarked);
+    } catch (error) {
+      console.error('Failed to toggle bookmark:', error);
+      Alert.alert('Error', 'Failed to update bookmark');
+    }
+  };
 
   // Send initial system message for interview practice with document analysis
   useEffect(() => {
@@ -256,16 +274,15 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
   }
 };
 
-  const handleSendMessage = async (text: string) => {
-    if ((!text.trim() && !initialMessageSent) || isLoading || !isConfigured) return;
+  const handleSendMessage = async () => { 
+    if (!inputText.trim() || isLoading) return;
 
-    const message = text.trim();
+    const message = inputText.trim();
     setInputText('');
     await sendMessage(message);
   };
 
-  const handleQuickReply = async (reply: string) => {
-    if (!isConfigured) return;
+  const handleQuickReply = async (reply: string) => { 
     await sendMessage(reply);
   };
 
@@ -279,7 +296,7 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
     }
   };
 
-  const toggleFeedback = () => {
+  const toggleFeedback = () => { 
     setShowFeedbackModal(true);
   };
 
@@ -288,7 +305,7 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
     const isLastMessage = index === messages.length - 1;
     const isStreamingMessage = isLastMessage && message.role === 'assistant' && isStreaming;
 
-    return (
+    return ( 
       <View style={[styles.messageContainer, isUser ? styles.userMessageContainer : styles.assistantMessageContainer]}>
         <View style={[styles.messageBubble, isUser ? styles.userBubble : styles.assistantBubble]}>
           <Text style={[styles.messageText, isUser ? styles.userText : styles.assistantText]}>
@@ -296,7 +313,7 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
           </Text>
           
           {isStreamingMessage && (
-            <View style={styles.streamingIndicator}>
+            <View style={styles.streamingIndicator}> 
               <ActivityIndicator size="small" color="#666" />
             </View>
           )}
@@ -307,7 +324,7 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
         </View>
 
         {!isUser && (
-          <TouchableOpacity
+          <TouchableOpacity 
             style={styles.messageAction}
             onPress={() => copyMessage(message.content)}
           >
@@ -318,7 +335,7 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
     );
   };
 
-  const NetworkStatus = () => (
+  const NetworkStatus = () => ( 
     <View style={[styles.networkStatus, !isOnline && styles.networkStatusOffline]}>
       {isOnline ? (
         <Wifi size={16} color="#10B981" />
@@ -350,7 +367,7 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container}> 
       {/* Header */}
       <LinearGradient
         colors={['#6366F1', '#8B5CF6']}
@@ -358,10 +375,10 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >
-        <View style={styles.headerContent}>
+        <View style={styles.headerContent}> 
           <Text style={styles.headerTitle}>{mode.replace('-', ' ').toUpperCase()}</Text>
           <View style={styles.headerActions}>
-            {canRegenerate && isConfigured && (
+            {canRegenerate && (
               <TouchableOpacity
                 style={styles.headerButton}
                 onPress={regenerateResponse}
@@ -371,16 +388,25 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              style={styles.headerButton}
+              style={styles.headerButton} 
               onPress={toggleFeedback}
             >
               <BarChart3 size={20} color="white" />
             </TouchableOpacity>
+            {userId && (
+              <TouchableOpacity
+                style={styles.headerButton}
+                onPress={onClose}
+              >
+                <MoreHorizontal size={20} color="white" />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
-              style={styles.headerButton}
-              onPress={onClose}
+              style={styles.headerButton} 
+              onPress={handleToggleBookmark}
+              disabled={!conversationId || !userId}
             >
-              <MoreHorizontal size={20} color="white" />
+              <Bookmark size={20} color={isBookmarked ? "#FFD700" : "white"} />
             </TouchableOpacity>
           </View>
         </View>
@@ -391,7 +417,7 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
       {/* Configuration Status */}
       <ConfigurationStatus />
 
-      {/* Real-time Feedback System */}
+      {/* Real-time Feedback System */} 
       {currentConversation && (
         <RealTimeFeedbackSystem
           conversation={currentConversation}
@@ -401,7 +427,7 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
       )}
 
       {/* Messages */}
-      <ScrollView
+      <ScrollView 
         ref={scrollViewRef}
         style={styles.messagesContainer}
         contentContainerStyle={styles.messagesContent}
@@ -422,7 +448,7 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
         )}
 
         {messages.map((message, index) => (
-          <MessageBubble key={message.id} message={message} index={index} />
+          <MessageBubble key={message.id} message={message} index={index} /> 
         ))}
 
         {isLoading && !isStreaming && (
@@ -434,7 +460,7 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
       </ScrollView>
 
       {/* Quick Replies */}
-      {quickReplies.length > 0 && !isLoading && isConfigured && (
+      {quickReplies.length > 0 && !isLoading && ( 
         <View style={styles.quickRepliesContainer}>
           <ScrollView
             horizontal
@@ -456,30 +482,27 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
       )}
 
       {/* Input Area */}
-      <View style={styles.inputContainer}>
+      <View style={styles.inputContainer}> 
         <View style={styles.inputWrapper}>
           <TextInput
-            style={[
-              styles.textInput,
-              !isConfigured && styles.textInputDisabled
-            ]}
+            style={styles.textInput}
             value={inputText}
             onChangeText={setInputText}
-            placeholder={isConfigured ? "Type your message..." : "Configuration required"}
+            placeholder="Type your message..."
             placeholderTextColor="#9CA3AF"
             multiline
             maxLength={1000}
-            editable={!isLoading && isConfigured}
+            editable={!isLoading}
           />
-          <TouchableOpacity
+          <TouchableOpacity 
             style={[
               styles.sendButton,
-              (!inputText.trim() || isLoading || !isConfigured) && styles.sendButtonDisabled
+              (!inputText.trim() || isLoading) && styles.sendButtonDisabled
             ]}
-            onPress={() => handleSendMessage(inputText)}
-            disabled={!inputText.trim() || isLoading || !isConfigured}
+            onPress={handleSendMessage}
+            disabled={!inputText.trim() || isLoading}
           >
-            {isLoading ? (
+            {isLoading ? ( 
               <ActivityIndicator size="small" color="white" />
             ) : (
               <Send size={20} color="white" />
@@ -487,7 +510,7 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
           </TouchableOpacity>
         </View>
 
-        {error && (
+        {error && ( 
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>{error}</Text>
           </View>
@@ -495,11 +518,13 @@ IMPORTANT: Begin the interview immediately with a brief introduction and your fi
       </View>
 
       {/* Claude Feedback Modal */}
-      <ClaudeFeedbackModal
-        visible={showFeedbackModal}
-        onClose={() => setShowFeedbackModal(false)}
-        conversation={createConversationForFeedback()}
-      />
+      {currentConversation && ( 
+        <ClaudeFeedbackModal
+          visible={showFeedbackModal}
+          onClose={() => setShowFeedbackModal(false)}
+          conversation={createConversationForFeedback()}
+        />
+      )}
     </View>
   );
 }
@@ -721,10 +746,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     maxHeight: 100,
     backgroundColor: '#F9FAFB',
-  },
-  textInputDisabled: {
-    backgroundColor: '#F3F4F6',
-    color: '#9CA3AF',
   },
   sendButton: {
     width: 44,

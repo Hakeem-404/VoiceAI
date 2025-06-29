@@ -8,7 +8,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { 
   Star, 
-  TrendingUp, 
+  TrendingUp,  
   TrendingDown, 
   CheckCircle, 
   AlertTriangle,
@@ -27,7 +27,7 @@ interface FeedbackSummaryCardProps {
 
 export function FeedbackSummaryCard({ 
   summary, 
-  conversationMode,
+  conversationMode, 
   onViewDetails 
 }: FeedbackSummaryCardProps) {
   const { colors, isDark } = useTheme();
@@ -39,7 +39,7 @@ export function FeedbackSummaryCard({
     return colors.error;
   };
 
-  const getChangeIcon = (change: number) => {
+  const getChangeIcon = (change: number) => { 
     if (change > 0) return <TrendingUp size={16} color={colors.success} />;
     if (change < 0) return <TrendingDown size={16} color={colors.error} />;
     return null;
@@ -52,12 +52,12 @@ export function FeedbackSummaryCard({
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface }]}>
+    <View style={[styles.container, { backgroundColor: colors.surface }]}> 
       <LinearGradient
         colors={[colors.primary, colors.secondary]}
         style={styles.header}
       >
-        <View style={styles.headerContent}>
+        <View style={styles.headerContent}> 
           <View style={styles.scoreContainer}>
             <Text style={styles.scoreLabelText}>Overall Score</Text>
             <Text style={styles.scoreText}>{summary.overallScore}</Text>
@@ -72,7 +72,7 @@ export function FeedbackSummaryCard({
             )}
           </View>
           
-          <View style={styles.modeContainer}>
+          <View style={styles.modeContainer}> 
             <Award size={20} color="white" />
             <Text style={styles.modeText}>
               {formatModeName(conversationMode)}
@@ -80,7 +80,7 @@ export function FeedbackSummaryCard({
           </View>
         </View>
       </LinearGradient>
-
+      
       <View style={styles.content}>
         {/* Strengths */}
         <View style={styles.section}>
@@ -88,7 +88,7 @@ export function FeedbackSummaryCard({
             <CheckCircle size={18} color={colors.success} />
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
               Key Strengths
-            </Text>
+            </Text> 
           </View>
           
           {summary.keyStrengths.map((strength, index) => (
@@ -96,7 +96,7 @@ export function FeedbackSummaryCard({
               <View style={[styles.listBullet, { backgroundColor: colors.success }]} />
               <Text style={[styles.listText, { color: colors.text }]}>{strength}</Text>
             </View>
-          ))}
+          ))} 
         </View>
 
         {/* Improvement Areas */}
@@ -105,7 +105,7 @@ export function FeedbackSummaryCard({
             <AlertTriangle size={18} color={colors.warning} />
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
               Areas to Improve
-            </Text>
+            </Text> 
           </View>
           
           {summary.improvementAreas.map((area, index) => (
@@ -113,7 +113,7 @@ export function FeedbackSummaryCard({
               <View style={[styles.listBullet, { backgroundColor: colors.warning }]} />
               <Text style={[styles.listText, { color: colors.text }]}>{area}</Text>
             </View>
-          ))}
+          ))} 
         </View>
 
         {/* Mode-Specific Insights */}
@@ -123,7 +123,7 @@ export function FeedbackSummaryCard({
               <Star size={18} color={colors.primary} />
               <Text style={[styles.sectionTitle, { color: colors.text }]}>
                 {formatModeName(conversationMode)} Insights
-              </Text>
+              </Text> 
             </View>
             
             {summary.modeSpecificInsights.map((insight, index) => (
@@ -131,7 +131,7 @@ export function FeedbackSummaryCard({
                 <View style={[styles.listBullet, { backgroundColor: colors.primary }]} />
                 <Text style={[styles.listText, { color: colors.text }]}>{insight}</Text>
               </View>
-            ))}
+            ))} 
           </View>
         )}
 
@@ -141,7 +141,7 @@ export function FeedbackSummaryCard({
             <ArrowRight size={18} color={colors.secondary} />
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
               Next Steps
-            </Text>
+            </Text> 
           </View>
           
           {summary.nextStepSuggestions.map((step, index) => (
@@ -149,7 +149,7 @@ export function FeedbackSummaryCard({
               <View style={[styles.listBullet, { backgroundColor: colors.secondary }]} />
               <Text style={[styles.listText, { color: colors.text }]}>{step}</Text>
             </View>
-          ))}
+          ))} 
         </View>
 
         <TouchableOpacity
@@ -157,7 +157,7 @@ export function FeedbackSummaryCard({
           onPress={onViewDetails}
         >
           <Text style={styles.detailsButtonText}>View Detailed Feedback</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> 
       </View>
     </View>
   );

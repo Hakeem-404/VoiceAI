@@ -35,7 +35,7 @@ class DocumentAnalysisService {
   private async performClaudeAnalysis(
     jobDescription: string,
     cv: string
-  ): Promise<DocumentAnalysis> {
+  ): Promise<DocumentAnalysis> { 
     console.log('Performing Claude analysis of documents');
     
     // Step 1: Analyze job description
@@ -62,7 +62,7 @@ class DocumentAnalysisService {
     const prompt = `You are a job analysis expert. Analyze this job description and extract key information.
 
 JOB DESCRIPTION:
-${jobDescription}
+${jobDescription.substring(0, 5000)} ${jobDescription.length > 5000 ? '... (truncated)' : ''}
 
 IMPORTANT: You must respond with ONLY a valid JSON object in exactly this format:
 {
@@ -80,7 +80,7 @@ Respond ONLY with the JSON object, no other text.`;
     try {
       const response = await this.sendMessageToClaude(prompt, 'jd_analysis');
       return this.parseJobDescriptionResponse(response);
-    } catch (error) {
+    } catch (error) { 
       console.error('Job description analysis failed:', error);
       // Return fallback analysis
       return this.getFallbackJobAnalysis(jobDescription);
@@ -91,7 +91,7 @@ Respond ONLY with the JSON object, no other text.`;
     const prompt = `You are a CV analysis expert. Analyze this CV/Resume and extract key information.
 
 CV/RESUME:
-${cv}
+${cv.substring(0, 5000)} ${cv.length > 5000 ? '... (truncated)' : ''}
 
 IMPORTANT: You must respond with ONLY a valid JSON object in exactly this format:
 {
@@ -121,16 +121,16 @@ Respond ONLY with the JSON object, no other text.`;
     jobDescription: string,
     cv: string
   ): Promise<DocumentAnalysis['analysis']> {
-    const prompt = `You are an interview preparation expert. Compare this job description with the candidate profile and provide match assessment.
+    const prompt = `You are an interview preparation expert. Compare this job description with the candidate profile and provide match assessment. 
 
 JOB DESCRIPTION:
-${jobDescription}
+${jobDescription.substring(0, 3000)} ${jobDescription.length > 3000 ? '... (truncated)' : ''}
 
 JOB REQUIREMENTS:
 ${JSON.stringify(jdAnalysis, null, 2)}
 
 ${cv ? `CV/RESUME:
-${cv}
+${cv.substring(0, 3000)} ${cv.length > 3000 ? '... (truncated)' : ''}
 
 CANDIDATE PROFILE:
 ${JSON.stringify(cvAnalysis, null, 2)}` : 'CV/RESUME: Not provided'}
@@ -168,7 +168,7 @@ Respond ONLY with the JSON object, no other text.`;
   // Improved message sending with better error handling
   private async sendMessageToClaude(prompt: string, analysisType: string): Promise<string> {
     const context: ConversationContext = {
-      messages: [],
+      messages: [], 
       mode: 'document-analysis',
       sessionId: `${analysisType}_${Date.now()}`,
       metadata: {
@@ -189,10 +189,10 @@ Respond ONLY with the JSON object, no other text.`;
     
     // Pass explicit options to override the default max_tokens
     const apiOptions = {
-      timeout: 30000,
+      timeout: 45000,
       retries: 2,
       cache: false,
-      maxTokens: 1000 // This should override the mode-specific token limit
+      maxTokens: 2000 // This should override the mode-specific token limit
     };
     
     const response = await supabaseClaudeAPI.sendMessage(prompt, context, apiOptions);
@@ -409,14 +409,14 @@ Respond ONLY with the JSON object, no other text.`;
   private extractJobDescriptionFromText(text: string): DocumentAnalysis['jobDescription'] {
     // Extract arrays from partial JSON text
     const requirements = this.extractArrayFromText(text, 'requirements') || [];
-    const skills = this.extractArrayFromText(text, 'skills') || [];
+    const skills = this.extractArrayFromText(text, 'skills') || []; 
     const responsibilities = this.extractArrayFromText(text, 'responsibilities') || [];
     const culture = this.extractArrayFromText(text, 'culture') || [];
     
     // Extract experience level
     const experienceMatch = text.match(/"experience":\s*"([^"]*)/);
     const experience = experienceMatch ? experienceMatch[1] : 'mid';
-    
+
     // Extract company info
     const companyInfoMatch = text.match(/"companyInfo":\s*"([^"]*)/);
     const companyInfo = companyInfoMatch ? companyInfoMatch[1] : '';
@@ -432,7 +432,7 @@ Respond ONLY with the JSON object, no other text.`;
   }
 
   private extractCVFromText(text: string): DocumentAnalysis['cv'] {
-    return {
+    return { 
       skills: this.extractArrayFromText(text, 'skills') || [],
       experience: this.extractArrayFromText(text, 'experience') || [],
       achievements: this.extractArrayFromText(text, 'achievements') || [],
@@ -442,7 +442,7 @@ Respond ONLY with the JSON object, no other text.`;
   }
 
   private extractMatchFromText(text: string): DocumentAnalysis['analysis'] {
-    // Extract match score
+    // Extract match score 
     const scoreMatch = text.match(/"matchScore":\s*(\d+)/);
     const matchScore = scoreMatch ? parseInt(scoreMatch[1]) : 70;
     
@@ -451,7 +451,7 @@ Respond ONLY with the JSON object, no other text.`;
     const difficulty = difficultyMatch && ['junior', 'mid', 'senior', 'executive'].includes(difficultyMatch[1]) 
       ? difficultyMatch[1] as any : 'mid';
     
-    return {
+    return { 
       matchScore,
       strengths: this.extractArrayFromText(text, 'strengths') || [],
       gaps: this.extractArrayFromText(text, 'gaps') || [],
@@ -468,7 +468,7 @@ Respond ONLY with the JSON object, no other text.`;
   }
 
   private extractArrayFromText(text: string, fieldName: string): string[] | null {
-    // Match array in JSON format, even if incomplete
+    // Match array in JSON format, even if incomplete 
     const regex = new RegExp(`"${fieldName}":\\s*\\[([^\\]]*(?:\\]|$))`, 'i');
     const match = text.match(regex);
     
@@ -496,7 +496,7 @@ Respond ONLY with the JSON object, no other text.`;
   }
 
   // Fallback methods for when Claude parsing fails
-  private getFallbackJobAnalysis(jobDescription: string): DocumentAnalysis['jobDescription'] {
+  private getFallbackJobAnalysis(jobDescription: string): DocumentAnalysis['jobDescription'] { 
     // Extract basic information using simple text processing as fallback
     const text = jobDescription.toLowerCase();
     
@@ -504,7 +504,7 @@ Respond ONLY with the JSON object, no other text.`;
       requirements: [
         'Review job requirements carefully',
         'Prepare examples of relevant experience',
-        'Research company background'
+        'Research company background' 
       ],
       skills: [
         'Communication skills',
@@ -524,7 +524,7 @@ Respond ONLY with the JSON object, no other text.`;
   }
 
   private getFallbackCVAnalysis(cv: string): DocumentAnalysis['cv'] {
-    return {
+    return { 
       skills: ['General professional skills', 'Technical abilities', 'Communication skills'],
       experience: ['Professional experience', 'Project involvement', 'Career progression'],
       achievements: ['Notable accomplishments', 'Key contributions'],
@@ -536,7 +536,7 @@ Respond ONLY with the JSON object, no other text.`;
   private getFallbackMatchAnalysis(
     jdAnalysis: DocumentAnalysis['jobDescription'],
     cvAnalysis: DocumentAnalysis['cv']
-  ): DocumentAnalysis['analysis'] {
+  ): DocumentAnalysis['analysis'] { 
     return {
       matchScore: 70,
       strengths: ['General professional skills', 'Communication abilities', 'Technical background'],
@@ -544,7 +544,7 @@ Respond ONLY with the JSON object, no other text.`;
       focusAreas: ['Technical preparation', 'Company research', 'Industry trends'],
       difficulty: jdAnalysis.experience as any || 'mid',
       recommendations: [
-        'Research the company thoroughly',
+        'Research the company thoroughly', 
         'Prepare specific examples',
         'Practice technical questions',
         'Review industry trends'
@@ -552,7 +552,7 @@ Respond ONLY with the JSON object, no other text.`;
       interviewQuestions: {
         technical: [
           'Describe your technical experience',
-          'How do you approach problem-solving?',
+          'How do you approach problem-solving?', 
           'What tools and technologies are you familiar with?',
           'Can you walk me through a technical project you worked on?'
         ],
@@ -562,7 +562,7 @@ Respond ONLY with the JSON object, no other text.`;
           'Describe a situation where you had to learn something new quickly',
           'How do you prioritize your work?'
         ],
-        situational: [
+        situational: [ 
           'How would you handle conflicting priorities?',
           'What would you do if you disagreed with a team decision?',
           'How would you approach learning our company\'s processes?',
@@ -578,7 +578,7 @@ Respond ONLY with the JSON object, no other text.`;
     };
   }
 
-  private getEmptyCVAnalysis(): DocumentAnalysis['cv'] {
+  private getEmptyCVAnalysis(): DocumentAnalysis['cv'] { 
     return {
       skills: [],
       experience: [],

@@ -4,7 +4,7 @@ import { useTheme } from '@/src/hooks/useTheme';
 import { Conversation, RealTimeFeedback } from '@/src/types';
 import { ConversationMessage } from '../../types/api';
 import { RealTimeFeedbackIndicator } from './RealTimeFeedbackIndicator';
-import { claudeFeedbackService } from '@/src/services/claudeFeedbackService';
+import { feedbackService } from '@/src/services/feedbackService';
 import { spacing } from '@/src/constants/colors';
 
 interface RealTimeFeedbackSystemProps {
@@ -28,7 +28,7 @@ export function RealTimeFeedbackSystem({
   const FEEDBACK_COOLDOWN = 30000; // 30 seconds
   
   useEffect(() => {
-    if (isActive) {
+    if (isActive) { 
       startFeedbackMonitoring();
     } else {
       stopFeedbackMonitoring();
@@ -73,11 +73,11 @@ export function RealTimeFeedbackSystem({
     }
   };
   
-  const checkForFeedback = async () => {
+  const checkForFeedback = async () => { 
     if (messages.length < 3) return; // Need enough context
     
     try {
-      const feedback = await claudeFeedbackService.generateRealTimeFeedback(
+      const feedback = await feedbackService.generateRealTimeFeedback( 
         messages,
         conversation.mode.id
       );
@@ -92,14 +92,14 @@ export function RealTimeFeedbackSystem({
     }
   };
   
-  const handleDismissFeedback = () => {
+  const handleDismissFeedback = () => { 
     setCurrentFeedback(null);
   };
   
   return (
     <View style={styles.container}>
       {currentFeedback && (
-        <RealTimeFeedbackIndicator
+        <RealTimeFeedbackIndicator 
           feedback={currentFeedback}
           onDismiss={handleDismissFeedback}
         />

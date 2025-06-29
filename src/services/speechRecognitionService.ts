@@ -230,7 +230,7 @@ class SpeechRecognitionService {
   private async startWebSpeechRecognition(
     language: string,
     continuous: boolean,
-    interimResults: boolean,
+    interimResults: boolean, 
     maxAlternatives: number,
     timeout: number
   ): Promise<boolean> {
@@ -243,7 +243,7 @@ class SpeechRecognitionService {
       // Configure recognition
       this.recognition.lang = language;
       this.recognition.continuous = continuous;
-      this.recognition.interimResults = interimResults;
+      this.recognition.interimResults = interimResults; 
       this.recognition.maxAlternatives = maxAlternatives;
 
       // Set timeout
@@ -263,7 +263,7 @@ class SpeechRecognitionService {
         timeout
       });
 
-      this.recognition.start();
+      this.recognition.start(); 
       return true;
     } catch (error) {
       console.error('Failed to start web speech recognition:', error);
@@ -272,7 +272,7 @@ class SpeechRecognitionService {
     }
   }
 
-  stopListening(): void {
+  stopListening(): void { 
     if (!this.isListening) return;
 
     console.log('Stopping speech recognition');
@@ -282,7 +282,7 @@ class SpeechRecognitionService {
       this.timeoutId = null;
     }
 
-    if (Platform.OS === 'web' && this.recognition) {
+    if (Platform.OS === 'web' && this.recognition) { 
       try {
         this.recognition.stop();
       } catch (error) {
@@ -294,7 +294,7 @@ class SpeechRecognitionService {
   }
 
   // Get the final transcript without stopping
-  getFinalTranscript(): string {
+  getFinalTranscript(): string { 
     return this.finalTranscript.trim();
   }
 
@@ -304,7 +304,7 @@ class SpeechRecognitionService {
   }
 
   // Clear the transcript
-  clearTranscript(): void {
+  clearTranscript(): void { 
     this.finalTranscript = '';
     this.interimTranscript = '';
   }
@@ -315,7 +315,7 @@ class SpeechRecognitionService {
 
   // Utility method to test speech recognition
   async testSpeechRecognition(): Promise<{ success: boolean; error?: string; transcript?: string }> {
-    try {
+    try { 
       const hasPermission = await this.requestPermissions();
       if (!hasPermission) {
         return { success: false, error: 'Microphone permission denied' };
@@ -324,7 +324,7 @@ class SpeechRecognitionService {
       return new Promise((resolve) => {
         let finalTranscript = '';
         
-        const timeout = setTimeout(() => {
+        const timeout = setTimeout(() => { 
           this.stopListening();
           if (finalTranscript) {
             resolve({ success: true, transcript: finalTranscript });
@@ -334,7 +334,7 @@ class SpeechRecognitionService {
         }, 5000);
 
         this.startListening(
-          (result) => {
+          (result) => { 
             if (result.isFinal && result.transcript.trim()) {
               finalTranscript = result.transcript.trim();
               clearTimeout(timeout);
@@ -342,7 +342,7 @@ class SpeechRecognitionService {
               resolve({ success: true, transcript: finalTranscript });
             }
           },
-          (error) => {
+          (error) => { 
             clearTimeout(timeout);
             resolve({ success: false, error });
           },
@@ -358,7 +358,7 @@ class SpeechRecognitionService {
   }
 
   // Get available languages (web only)
-  getAvailableLanguages(): string[] {
+  getAvailableLanguages(): string[] { 
     if (Platform.OS === 'web' && this.recognition) {
       // Common languages supported by Web Speech API
       return [
@@ -372,7 +372,7 @@ class SpeechRecognitionService {
   }
 
   // Check if speech recognition is supported
-  isSupported(): boolean {
+  isSupported(): boolean { 
     if (Platform.OS === 'web') {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       return !!SpeechRecognition;
@@ -381,7 +381,7 @@ class SpeechRecognitionService {
   }
 
   // Get current status
-  getStatus() {
+  getStatus() { 
     return {
       isListening: this.isListening,
       isSupported: this.isSupported(),

@@ -9,7 +9,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { 
   Star, 
-  TrendingUp, 
+  TrendingUp,  
   TrendingDown, 
   CheckCircle, 
   AlertTriangle,
@@ -36,7 +36,7 @@ interface DetailedFeedbackScreenProps {
 
 export function DetailedFeedbackScreen({ 
   feedback, 
-  conversationMode,
+  conversationMode, 
   conversationDuration,
   onClose 
 }: DetailedFeedbackScreenProps) {
@@ -44,7 +44,7 @@ export function DetailedFeedbackScreen({
   const [activeTab, setActiveTab] = useState<'overview' | 'scores' | 'analytics' | 'tips'>('overview');
 
   const formatModeName = (mode: string) => {
-    return mode.split('-')
+    return mode.split('-') 
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
   };
@@ -56,7 +56,7 @@ export function DetailedFeedbackScreen({
   };
 
   const getScoreColor = (score: number) => {
-    if (score >= 85) return colors.success;
+    if (score >= 85) return colors.success; 
     if (score >= 70) return colors.primary;
     if (score >= 50) return colors.warning;
     return colors.error;
@@ -70,7 +70,7 @@ export function DetailedFeedbackScreen({
   };
 
   const renderScoreBar = (score: number, label: string) => (
-    <View style={styles.scoreBarContainer}>
+    <View style={styles.scoreBarContainer}> 
       <Text style={[styles.scoreBarLabel, { color: colors.text }]}>{label}</Text>
       <View style={[styles.scoreBarTrack, { backgroundColor: colors.border }]}>
         <View 
@@ -88,7 +88,7 @@ export function DetailedFeedbackScreen({
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}> 
       <LinearGradient
         colors={[colors.primary, colors.secondary]}
         style={styles.header}
@@ -96,7 +96,7 @@ export function DetailedFeedbackScreen({
         <View style={styles.headerTop}>
           <TouchableOpacity
             style={styles.closeButton}
-            onPress={onClose}
+            onPress={onClose} 
           >
             <X size={24} color="white" />
           </TouchableOpacity>
@@ -106,7 +106,7 @@ export function DetailedFeedbackScreen({
           <View style={styles.placeholder} />
         </View>
         
-        <View style={styles.headerContent}>
+        <View style={styles.headerContent}> 
           <View style={styles.scoreContainer}>
             <Text style={styles.scoreLabelText}>Overall Score</Text>
             <Text style={styles.scoreText}>{feedback.scores.overall}</Text>
@@ -114,7 +114,7 @@ export function DetailedFeedbackScreen({
               <View style={styles.changeContainer}>
                 {getChangeIcon(feedback.progressTracking.improvement)}
                 <Text style={styles.changeText}>
-                  {feedback.progressTracking.improvement > 0 ? '+' : ''}
+                  {feedback.progressTracking.improvement > 0 ? '+' : ''} 
                   {feedback.progressTracking.improvement}
                 </Text>
               </View>
@@ -123,7 +123,7 @@ export function DetailedFeedbackScreen({
           
           <View style={styles.sessionInfo}>
             <View style={styles.infoItem}>
-              <Award size={16} color="rgba(255, 255, 255, 0.9)" />
+              <Award size={16} color="rgba(255, 255, 255, 0.9)" /> 
               <Text style={styles.infoText}>
                 {formatModeName(conversationMode)}
               </Text>
@@ -131,14 +131,14 @@ export function DetailedFeedbackScreen({
             
             <View style={styles.infoItem}>
               <Clock size={16} color="rgba(255, 255, 255, 0.9)" />
-              <Text style={styles.infoText}>
+              <Text style={styles.infoText}> 
                 {formatDuration(conversationDuration)}
               </Text>
             </View>
             
             <View style={styles.infoItem}>
               <MessageSquare size={16} color="rgba(255, 255, 255, 0.9)" />
-              <Text style={styles.infoText}>
+              <Text style={styles.infoText}> 
                 {feedback.analytics.questionCount || 0} questions
               </Text>
             </View>
@@ -147,7 +147,7 @@ export function DetailedFeedbackScreen({
       </LinearGradient>
 
       {/* Tab Navigation */}
-      <View style={styles.tabContainer}>
+      <View style={styles.tabContainer}> 
         <TouchableOpacity
           style={[
             styles.tab,
@@ -156,7 +156,7 @@ export function DetailedFeedbackScreen({
           ]}
           onPress={() => setActiveTab('overview')}
         >
-          <Star size={16} color={activeTab === 'overview' ? 'white' : colors.textSecondary} />
+          <Star size={16} color={activeTab === 'overview' ? 'white' : colors.textSecondary} /> 
           <Text style={[
             styles.tabText,
             { color: activeTab === 'overview' ? 'white' : colors.textSecondary }
@@ -173,7 +173,7 @@ export function DetailedFeedbackScreen({
           ]}
           onPress={() => setActiveTab('scores')}
         >
-          <BarChart3 size={16} color={activeTab === 'scores' ? 'white' : colors.textSecondary} />
+          <BarChart3 size={16} color={activeTab === 'scores' ? 'white' : colors.textSecondary} /> 
           <Text style={[
             styles.tabText,
             { color: activeTab === 'scores' ? 'white' : colors.textSecondary }
@@ -190,7 +190,7 @@ export function DetailedFeedbackScreen({
           ]}
           onPress={() => setActiveTab('analytics')}
         >
-          <Brain size={16} color={activeTab === 'analytics' ? 'white' : colors.textSecondary} />
+          <Brain size={16} color={activeTab === 'analytics' ? 'white' : colors.textSecondary} /> 
           <Text style={[
             styles.tabText,
             { color: activeTab === 'analytics' ? 'white' : colors.textSecondary }
@@ -207,7 +207,7 @@ export function DetailedFeedbackScreen({
           ]}
           onPress={() => setActiveTab('tips')}
         >
-          <Zap size={16} color={activeTab === 'tips' ? 'white' : colors.textSecondary} />
+          <Zap size={16} color={activeTab === 'tips' ? 'white' : colors.textSecondary} /> 
           <Text style={[
             styles.tabText,
             { color: activeTab === 'tips' ? 'white' : colors.textSecondary }
@@ -217,13 +217,13 @@ export function DetailedFeedbackScreen({
         </TouchableOpacity>
       </View>
 
-      <ScrollView
+      <ScrollView 
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
         {activeTab === 'overview' && (
-          <View style={styles.overviewTab}>
+          <View style={styles.overviewTab}> 
             {/* Strengths */}
             <View style={[styles.section, { backgroundColor: colors.surface }]}>
               <View style={styles.sectionHeader}>
@@ -231,7 +231,7 @@ export function DetailedFeedbackScreen({
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>
                   Your Strengths
                 </Text>
-              </View>
+              </View> 
               
               {feedback.strengths.map((strength, index) => (
                 <View key={index} style={styles.listItem}>
@@ -245,7 +245,7 @@ export function DetailedFeedbackScreen({
             <View style={[styles.section, { backgroundColor: colors.surface }]}>
               <View style={styles.sectionHeader}>
                 <AlertTriangle size={20} color={colors.warning} />
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}> 
                   Areas for Improvement
                 </Text>
               </View>
@@ -262,7 +262,7 @@ export function DetailedFeedbackScreen({
             {feedback.progressTracking && (
               <View style={[styles.section, { backgroundColor: colors.surface }]}>
                 <View style={styles.sectionHeader}>
-                  <TrendingUp size={20} color={colors.primary} />
+                  <TrendingUp size={20} color={colors.primary} /> 
                   <Text style={[styles.sectionTitle, { color: colors.text }]}>
                     Your Progress
                   </Text>
@@ -271,7 +271,7 @@ export function DetailedFeedbackScreen({
                 <View style={styles.progressContainer}>
                   <View style={styles.progressItem}>
                     <Text style={[styles.progressLabel, { color: colors.textSecondary }]}>
-                      Previous Score
+                      Previous Score 
                     </Text>
                     <Text style={[styles.progressValue, { color: colors.text }]}>
                       {feedback.progressTracking.previousScore}
@@ -280,7 +280,7 @@ export function DetailedFeedbackScreen({
                   
                   <View style={styles.progressArrow}>
                     <ArrowRight size={20} color={colors.textSecondary} />
-                  </View>
+                  </View> 
                   
                   <View style={styles.progressItem}>
                     <Text style={[styles.progressLabel, { color: colors.textSecondary }]}>
@@ -295,7 +295,7 @@ export function DetailedFeedbackScreen({
                     <View style={[
                       styles.changeIndicator,
                       { 
-                        backgroundColor: feedback.progressTracking.improvement >= 0 
+                        backgroundColor: feedback.progressTracking.improvement >= 0  
                           ? colors.success 
                           : colors.error 
                       }
@@ -308,7 +308,7 @@ export function DetailedFeedbackScreen({
                     <Text style={[
                       styles.changeValue,
                       { 
-                        color: feedback.progressTracking.improvement >= 0 
+                        color: feedback.progressTracking.improvement >= 0  
                           ? colors.success 
                           : colors.error 
                       }
@@ -322,7 +322,7 @@ export function DetailedFeedbackScreen({
                 {feedback.progressTracking.consistentStrengths.length > 0 && (
                   <View style={styles.consistentStrengths}>
                     <Text style={[styles.consistentLabel, { color: colors.text }]}>
-                      Consistent Strengths:
+                      Consistent Strengths: 
                     </Text>
                     {feedback.progressTracking.consistentStrengths.map((strength, index) => (
                       <View key={index} style={styles.listItem}>
@@ -338,7 +338,7 @@ export function DetailedFeedbackScreen({
         )}
 
         {activeTab === 'scores' && (
-          <View style={styles.scoresTab}>
+          <View style={styles.scoresTab}> 
             {/* Core Scores */}
             <View style={[styles.section, { backgroundColor: colors.surface }]}>
               <View style={styles.sectionHeader}>
@@ -346,7 +346,7 @@ export function DetailedFeedbackScreen({
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>
                   Core Communication Skills
                 </Text>
-              </View>
+              </View> 
               
               {renderScoreBar(feedback.scores.fluency, 'Fluency')}
               {renderScoreBar(feedback.scores.clarity, 'Clarity')}
@@ -360,7 +360,7 @@ export function DetailedFeedbackScreen({
             {feedback.modeSpecific && (
               <View style={[styles.section, { backgroundColor: colors.surface }]}>
                 <View style={styles.sectionHeader}>
-                  <Award size={20} color={colors.secondary} />
+                  <Award size={20} color={colors.secondary} /> 
                   <Text style={[styles.sectionTitle, { color: colors.text }]}>
                     {formatModeName(conversationMode)} Skills
                   </Text>
@@ -423,7 +423,7 @@ export function DetailedFeedbackScreen({
             {/* Additional Scores */}
             <View style={[styles.section, { backgroundColor: colors.surface }]}>
               <View style={styles.sectionHeader}>
-                <Zap size={20} color={colors.accent} />
+                <Zap size={20} color={colors.accent} /> 
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>
                   Additional Metrics
                 </Text>
@@ -452,7 +452,7 @@ export function DetailedFeedbackScreen({
         )}
 
         {activeTab === 'analytics' && (
-          <View style={styles.analyticsTab}>
+          <View style={styles.analyticsTab}> 
             {/* Communication Metrics */}
             <View style={[styles.section, { backgroundColor: colors.surface }]}>
               <View style={styles.sectionHeader}>
@@ -460,7 +460,7 @@ export function DetailedFeedbackScreen({
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>
                   Speaking Metrics
                 </Text>
-              </View>
+              </View> 
               
               <View style={styles.metricsGrid}>
                 <View style={styles.metricItem}>
@@ -577,7 +577,7 @@ export function DetailedFeedbackScreen({
             {feedback.modeSpecific && (
               <View style={[styles.section, { backgroundColor: colors.surface }]}>
                 <View style={styles.sectionHeader}>
-                  <Award size={20} color={colors.secondary} />
+                  <Award size={20} color={colors.secondary} /> 
                   <Text style={[styles.sectionTitle, { color: colors.text }]}>
                     {formatModeName(conversationMode)} Analytics
                   </Text>
@@ -645,7 +645,7 @@ export function DetailedFeedbackScreen({
         )}
 
         {activeTab === 'tips' && (
-          <View style={styles.tipsTab}>
+          <View style={styles.tipsTab}> 
             {/* Practical Tips */}
             <View style={[styles.section, { backgroundColor: colors.surface }]}>
               <View style={styles.sectionHeader}>
@@ -653,7 +653,7 @@ export function DetailedFeedbackScreen({
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>
                   Practical Tips
                 </Text>
-              </View>
+              </View> 
               
               {feedback.tips.map((tip, index) => (
                 <View key={index} style={styles.listItem}>
@@ -666,7 +666,7 @@ export function DetailedFeedbackScreen({
             {/* Next Steps */}
             <View style={[styles.section, { backgroundColor: colors.surface }]}>
               <View style={styles.sectionHeader}>
-                <ArrowRight size={20} color={colors.secondary} />
+                <ArrowRight size={20} color={colors.secondary} /> 
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>
                   Recommended Next Steps
                 </Text>
@@ -683,7 +683,7 @@ export function DetailedFeedbackScreen({
             {/* Mode-Specific Practice Suggestions */}
             <View style={[styles.section, { backgroundColor: colors.surface }]}>
               <View style={styles.sectionHeader}>
-                <Award size={20} color={colors.accent} />
+                <Award size={20} color={colors.accent} /> 
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>
                   {formatModeName(conversationMode)} Practice
                 </Text>
@@ -692,7 +692,7 @@ export function DetailedFeedbackScreen({
               {getModeSpecificPractice(conversationMode).map((practice, index) => (
                 <View key={index} style={styles.practiceItem}>
                   <View style={[styles.practiceNumber, { backgroundColor: colors.accent }]}>
-                    <Text style={styles.practiceNumberText}>{index + 1}</Text>
+                    <Text style={styles.practiceNumberText}>{index + 1}</Text> 
                   </View>
                   <View style={styles.practiceContent}>
                     <Text style={[styles.practiceTitle, { color: colors.text }]}>

@@ -379,7 +379,7 @@ class SupabaseClaudeAPIService {
   // Main conversation method
   async sendMessage(
   message: string,
-  context: ConversationContext,
+  context: ConversationContext, 
   options: APIRequestOptions = {}
 ): Promise<APIResponse<ConversationMessage>> {
   console.log('📨 sendMessage called:', {
@@ -392,7 +392,7 @@ class SupabaseClaudeAPIService {
   // Get custom settings from context if available
   const customSettings = (context as any).customSettings;
   
-  // Generate system prompt with custom settings for interview mode
+  // Generate system prompt with custom settings for interview mode 
   const systemPrompt = this.getSystemPrompt(context.mode, customSettings);
   
   if (context.mode === 'interview-practice') {
@@ -402,7 +402,7 @@ class SupabaseClaudeAPIService {
     });
   }
 
-  // Prepare messages - this should NOT include the system prompt
+  // Prepare messages - this should NOT include the system prompt 
   const messages = this.prepareMessages(context, systemPrompt);
   
   // CRITICAL FIX: For interview practice initialization with empty message,
@@ -410,7 +410,7 @@ class SupabaseClaudeAPIService {
   if (context.mode === 'interview-practice' && 
       !message.trim() && 
       messages.length === 0 && 
-      customSettings?.documentAnalysis) {
+      customSettings?.documentAnalysis) { 
     
     // Send a starter message to initiate the interview
     messages.push({
@@ -427,7 +427,7 @@ class SupabaseClaudeAPIService {
     // If no message and not interview initialization, return error
     return {
       error: 'Cannot send empty message',
-      status: 400,
+      status: 400, 
       timestamp: Date.now()
     };
   }
@@ -435,7 +435,7 @@ class SupabaseClaudeAPIService {
   // Use custom maxTokens if provided, otherwise use mode default
   const maxTokens = (options as any).maxTokens || this.getMaxTokensForMode(context.mode);
 
-  const requestData = {
+  const requestData = { 
     model: 'claude-3-5-sonnet-20240620',
     max_tokens: maxTokens,
     messages,
@@ -444,7 +444,7 @@ class SupabaseClaudeAPIService {
     system: systemPrompt  // System prompt goes here as a top-level parameter
   };
 
-  console.log('🚀 Sending request to Claude:', {
+  console.log('🚀 Sending request to Claude:', { 
     mode: context.mode,
     message_length: message.length,
     total_messages: messages.length,
@@ -455,7 +455,7 @@ class SupabaseClaudeAPIService {
   });
 
   try {
-    const response = await this.makeRequest<any>(requestData, options);
+    const response = await this.makeRequest<any>(requestData, options); 
     
     if (response.data?.content?.[0]?.text) {
       const assistantMessage: ConversationMessage = {
@@ -464,7 +464,7 @@ class SupabaseClaudeAPIService {
         content: response.data.content[0].text,
         timestamp: new Date()
       };
-      
+       
       console.log('✅ Received response from Claude:', {
         response_length: assistantMessage.content.length,
         mode: context.mode
@@ -478,7 +478,7 @@ class SupabaseClaudeAPIService {
     }
     
     console.error('❌ Invalid response format from Claude:', response.data);
-    throw new Error('Invalid response format');
+    throw new Error('Invalid response format'); 
     
   } catch (error) {
     console.error('❌ Error sending message to Claude:', error);
@@ -493,7 +493,7 @@ class SupabaseClaudeAPIService {
   // Streaming conversation for real-time responses
   async sendMessageStream(
     message: string,
-    context: ConversationContext,
+    context: ConversationContext, 
     onChunk: (chunk: StreamingResponse) => void,
     options: APIRequestOptions = {}
   ): Promise<void> {
@@ -506,7 +506,7 @@ class SupabaseClaudeAPIService {
       return;
     }
 
-    const systemPrompt = this.getSystemPrompt(context.mode);
+    const systemPrompt = options.system || this.getSystemPrompt(context.mode);
     const messages = this.prepareMessages(context, systemPrompt);
     messages.push({
       role: 'user',
@@ -514,7 +514,7 @@ class SupabaseClaudeAPIService {
     });
 
     const requestData = {
-      model: 'claude-3-5-sonnet-20240620',
+      model: 'claude-3-5-sonnet-20240620', 
       max_tokens: this.getMaxTokensForMode(context.mode),
       messages,
       temperature: this.getTemperatureForMode(context.mode),
@@ -527,7 +527,7 @@ class SupabaseClaudeAPIService {
       total_messages: messages.length
     });
 
-    try {
+    try { 
       const response = await fetch(`${this.supabaseUrl}/functions/v1/claude-proxy`, {
         method: 'POST',
         headers: {
@@ -538,7 +538,7 @@ class SupabaseClaudeAPIService {
         body: JSON.stringify(requestData)
       });
 
-      if (!response.ok) {
+      if (!response.ok) { 
         const errorText = await response.text();
         console.error('Streaming request failed:', response.status, errorText);
         
@@ -548,7 +548,7 @@ class SupabaseClaudeAPIService {
         throw new Error(`API Error: ${response.status}`);
       }
 
-      const reader = response.body?.getReader();
+      const reader = response.body?.getReader(); 
       if (!reader) throw new Error('No response body');
 
       let content = '';
@@ -556,7 +556,7 @@ class SupabaseClaudeAPIService {
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) break; 
 
         const chunk = decoder.decode(value);
         const lines = chunk.split('\n');
@@ -564,7 +564,7 @@ class SupabaseClaudeAPIService {
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             try {
-              const data = JSON.parse(line.slice(6));
+              const data = JSON.parse(line.slice(6)); 
               if (data.type === 'content_block_delta') {
                 content += data.delta.text;
                 onChunk({
@@ -579,7 +579,7 @@ class SupabaseClaudeAPIService {
         }
       }
 
-      console.log('Streaming completed, total content length:', content.length);
+      console.log('Streaming completed, total content length:', content.length); 
 
       onChunk({
         content,
@@ -587,7 +587,7 @@ class SupabaseClaudeAPIService {
       });
 
     } catch (error) {
-      console.error('Streaming error:', error);
+      console.error('Streaming error:', error); 
       onChunk({
         content: '',
         isComplete: true,
@@ -598,7 +598,7 @@ class SupabaseClaudeAPIService {
 
   // Context management with intelligent truncation
   private prepareMessages(context: ConversationContext, systemPrompt: string): any[] {
-  console.log('📝 Preparing messages:', {
+  console.log('📝 Preparing messages:', { 
     mode: context.mode,
     systemPromptLength: systemPrompt.length,
     existingMessages: context.messages.length
@@ -606,7 +606,7 @@ class SupabaseClaudeAPIService {
 
   const messages: any[] = [];
   
-  // Intelligent context truncation for mobile memory management
+  // Intelligent context truncation for mobile memory management 
   const maxMessages = this.getMaxMessagesForDevice();
   const recentMessages = context.messages.slice(-maxMessages);
   
@@ -620,7 +620,7 @@ class SupabaseClaudeAPIService {
     }
   });
 
-  console.log('📋 Messages prepared:', {
+  console.log('📋 Messages prepared:', { 
     totalMessages: messages.length,
     firstMessageLength: messages[0]?.content?.length,
     firstMessageRole: messages[0]?.role
@@ -630,7 +630,7 @@ class SupabaseClaudeAPIService {
 }
 
   private getMaxMessagesForDevice(): number {
-    if (Platform.OS === 'web') return 50;
+    if (Platform.OS === 'web') return 50; 
     
     // Estimate based on available memory (simplified)
     const memoryInfo = (performance as any)?.memory;
@@ -642,7 +642,7 @@ class SupabaseClaudeAPIService {
     return 30; // Conservative default for mobile
   }
 
-  private generateContextSummary(messages: ConversationMessage[]): string {
+  private generateContextSummary(messages: ConversationMessage[]): string { 
     // Simple summarization - in production, you might use Claude for this
     const topics = new Set<string>();
     
@@ -659,7 +659,7 @@ class SupabaseClaudeAPIService {
   }
 
   // Mode-specific configurations
-  private getMaxTokensForMode(mode: string): number {
+  private getMaxTokensForMode(mode: string): number { 
     const configs = {
       'general-chat': 150,
       'debate-challenge': 200,
@@ -672,7 +672,7 @@ class SupabaseClaudeAPIService {
     return configs[mode as keyof typeof configs] || 150;
   }
 
-  private getTemperatureForMode(mode: string): number {
+  private getTemperatureForMode(mode: string): number { 
     const configs = {
       'general-chat': 0.7,
       'debate-challenge': 0.6,
@@ -687,7 +687,7 @@ class SupabaseClaudeAPIService {
   // Quick reply suggestions
   async generateQuickReplies(
     context: ConversationContext,
-    count: number = 3
+    count: number = 3 
   ): Promise<string[]> {
     const lastMessage = context.messages[context.messages.length - 1];
     if (!lastMessage || lastMessage.role !== 'assistant') return [];
@@ -695,7 +695,7 @@ class SupabaseClaudeAPIService {
     // Generate contextual quick replies based on the conversation
     const suggestions = this.getQuickReplySuggestions(context.mode, lastMessage.content);
     return suggestions.slice(0, count);
-  }
+  } 
 
   private getQuickReplySuggestions(mode: string, lastMessage: string): string[] {
     const baseSuggestions = {
@@ -747,7 +747,7 @@ class SupabaseClaudeAPIService {
   }
 
   // Analytics and monitoring
-  async logConversationMetrics(context: ConversationContext, responseTime: number) {
+  async logConversationMetrics(context: ConversationContext, responseTime: number) { 
     const metrics = {
       sessionId: context.sessionId,
       mode: context.mode,
@@ -758,7 +758,7 @@ class SupabaseClaudeAPIService {
       platform: Platform.OS
     };
 
-    // Store locally for later upload
+    // Store locally for later upload 
     try {
       const existingMetrics = await AsyncStorage.getItem('conversation_metrics');
       const metricsArray = existingMetrics ? JSON.parse(existingMetrics) : [];
@@ -776,7 +776,7 @@ class SupabaseClaudeAPIService {
   }
 
   // Test the connection with a simple "Hello" message
-  async testConnection(): Promise<{ success: boolean; error?: string }> {
+  async testConnection(): Promise<{ success: boolean; error?: string }> { 
     try {
       console.log('Testing connection to Claude API via Supabase...');
       
@@ -794,7 +794,7 @@ class SupabaseClaudeAPIService {
 
       const response = await this.sendMessage('Hello', testContext);
       
-      if (response.error) {
+      if (response.error) { 
         console.error('Connection test failed:', response.error);
         return { success: false, error: response.error };
       }
@@ -809,7 +809,7 @@ class SupabaseClaudeAPIService {
   }
 
   // Cleanup and memory management
-  cleanup() {
+  cleanup() { 
     this.cache.clear();
     this.requestQueue = [];
     this.activeRequests.clear();

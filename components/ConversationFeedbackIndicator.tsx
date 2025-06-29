@@ -6,22 +6,29 @@ import {
   Animated,
   TouchableOpacity,
 } from 'react-native';
-import { Zap, Volume2, MessageSquare, Clock, TriangleAlert as AlertTriangle, X } from 'lucide-react-native';
+import { 
+  Zap, 
+  Volume2, 
+  MessageSquare, 
+  Clock, 
+  AlertTriangle,
+  X
+} from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
 import { RealTimeFeedback } from '@/src/types';
 import { spacing, typography } from '@/src/constants/colors';
 
-interface ConversationFeedbackIndicatorProps {
+interface RealTimeFeedbackIndicatorProps {
   feedback: RealTimeFeedback;
   onDismiss: () => void;
   position?: 'top' | 'bottom';
 }
 
-export function ConversationFeedbackIndicator({ 
+export function RealTimeFeedbackIndicator({ 
   feedback,
   onDismiss,
   position = 'top'
-}: ConversationFeedbackIndicatorProps) {
+}: RealTimeFeedbackIndicatorProps) {
   const { colors } = useTheme();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateYAnim = useRef(new Animated.Value(position === 'top' ? -20 : 20)).current;
