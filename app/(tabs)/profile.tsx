@@ -128,11 +128,11 @@ export default function ProfileScreen() {
         colors={isDark ? ['#1E293B', '#0F172A'] : ['#F8FAFC', '#FFFFFF']}
         style={styles.gradient}
         start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
         <OfflineIndicator />
         <SyncStatusIndicator compact />
         
-        end={{ x: 1, y: 1 }}
-      >
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
