@@ -4,6 +4,7 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
+  Switch,
 } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
@@ -37,8 +38,8 @@ export function SettingItem({
       onPress={onPress}
     >
       <View style={styles.settingContent}>
-        <View style={[styles.settingIcon, { backgroundColor: colors.primary }]}>
-          <IconComponent size={20} color="white" />
+        <View style={[styles.settingIcon, { backgroundColor: colors.primary + '20' }]}>
+          <IconComponent size={20} color={colors.primary} />
         </View>
         <View style={styles.settingText}>
           <Text style={[styles.settingTitle, { color: colors.text }]}>{title}</Text>
@@ -50,18 +51,12 @@ export function SettingItem({
         </View>
       </View>
       {type === 'toggle' && value !== undefined && onValueChange ? (
-        <View style={[
-          styles.toggleSwitch, 
-          { backgroundColor: value ? colors.primary : colors.border }
-        ]}>
-          <View style={[
-            styles.toggleKnob, 
-            { 
-              backgroundColor: colors.surface,
-              transform: [{ translateX: value ? 20 : 0 }]
-            }
-          ]} />
-        </View>
+        <Switch
+          value={value}
+          onValueChange={onValueChange}
+          trackColor={{ false: colors.border, true: colors.primary }}
+          thumbColor={colors.surface}
+        />
       ) : (
         <ChevronRight size={20} color={colors.textTertiary} />
       )}
@@ -110,16 +105,5 @@ const styles = StyleSheet.create({
   settingSubtitle: {
     fontSize: typography.sizes.sm,
     lineHeight: typography.sizes.sm * 1.3,
-  },
-  toggleSwitch: {
-    width: 50,
-    height: 30,
-    borderRadius: 15,
-    padding: 5,
-  },
-  toggleKnob: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
   },
 });

@@ -4,104 +4,134 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  TouchableOpacity,
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { TrendingUp, Target, Clock, Award, ChartBar as BarChart3, Star } from 'lucide-react-native';
+import { 
+  TrendingUp, 
+  Target, 
+  Clock, 
+  Award, 
+  ChartBar as BarChart3, 
+  Star,
+  Calendar,
+  Flame,
+  MessageCircle,
+  Share2
+} from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
-import { useUserStore } from '@/src/stores/userStore';
-import { useSupabaseAuth } from '@/src/hooks/useSupabase';
-import { useUserProgress } from '@/src/hooks/useUserProgress';
-import { GuestModePrompt } from '@/components/GuestModePrompt';
+import { useDataPersistence } from '@/src/hooks/useDataPersistence';
+import { OfflineIndicator } from '@/components/OfflineIndicator';
 import { spacing, typography } from '@/src/constants/colors';
 
 const { width } = Dimensions.get('window');
 
 export default function AnalyticsScreen() {
   const { colors, isDark } = useTheme();
-  const { analytics, updateAnalytics } = useUserStore();
-  const { user: authUser } = useSupabaseAuth();
-  const { progress } = useUserProgress();
-  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
+  const { 
+    user, 
+    conversations, 
+    progress, 
+    streakDays, 
+    isOnline,
+    loadProgress,
+    loadConversations
+  } = useDataPersistence();
   
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [weeklyData, setWeeklyData] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
+  const [modeStats, setModeStats] = useState<{
+    mode: string;
+    count: number;
+    percentage: number;
+    color: string;
+  }[]>([]);
+  const [totalTime, setTotalTime] = useState(0);
+  const [achievements, setAchievements] = useState<any[]>([]);
+  const [mostActiveDay, setMostActiveDay] = useState('');
+  const [averageDuration, setAverageDuration] = useState(0);
+  
+  // Load data
   useEffect(() => {
-    if (!authUser) {
-      setShowAuthPrompt(true);
-    } else {
-      setShowAuthPrompt(false);
-    }
-    
-    // Generate analytics from progress data if user is authenticated
-    if (authUser && progress.length > 0) {
-      generateAnalyticsFromProgress();
-    }
-  }, [authUser, progress]);
+    loadAnalyticsData();
+  }, [conversations, progress]);
   
-  // Generate analytics from progress data
-  const generateAnalyticsFromProgress = () => {
-    if (!progress.length) return;
+  const loadAnalyticsData = () => {
+    if (conversations.length === 0) return;
     
-    try {
-      // Calculate total conversations
-      const totalConversations = progress.reduce(
-        (sum, p) => sum + (p.total_sessions || 0), 
-        0
-      );
+    // Calculate weekly data
+    const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 = Sunday, 6 = Saturday
+    
+    const weeklyConversations = Array(7).fill(0);
+    const dayCount = Array(7).fill(0);
+    
+    // Count conversations per day of week
+    conversations.forEach(conv => {
+      const convDate = new Date(conv.createdAt);
+      const dayDiff = Math.floor((today.getTime() - convDate.getTime()) / (1000 * 60 * 60 * 24));
       
-      // Calculate total practice time (in minutes)
-      const totalPracticeTime = progress.reduce(
-        (sum, p) => sum + (p.total_duration || 0), 
-        0
-      ) / 60;
-      
-      // Calculate average score
-      const totalScores = progress.reduce((sum, p) => {
-        const bestScores = p.best_scores as any || {};
-        return sum + (bestScores.quality || 0);
-      }, 0);
-      
-      const averageScore = totalScores / progress.length || 0;
-      
-      // Get streak days from user profile
-      const streakDays = authUser?.user_metadata?.streak_days || 0;
-      
-      // Generate weekly progress
-      const weeklyProgress = [65, 72, 68, 85, 92, 88, 95]; // Placeholder
-      
-      // Calculate skill progress
-      const skillProgress = {
-        fluency: 0,
-        confidence: 0,
-        clarity: 0,
-      };
-      
-      let skillCount = 0;
-      
-      progress.forEach(p => {
-        const scores = p.skill_scores as any || {};
-        if (scores.fluency) {
-          skillProgress.fluency += scores.fluency;
-          skillCount++;
-        }
-        if (scores.confidence) {
-          skillProgress.confidence += scores.confidence;
-          skillCount++;
-        }
-        if (scores.clarity) {
-          skillProgress.clarity += scores.clarity;
-          skillCount++;
-        }
-      });
-      
-      if (skillCount > 0) {
-        skillProgress.fluency = Math.round(skillProgress.fluency / skillCount);
-        skillProgress.confidence = Math.round(skillProgress.confidence / skillCount);
-        skillProgress.clarity = Math.round(skillProgress.clarity / skillCount);
+      // Only count conversations from the last 30 days
+      if (dayDiff < 30) {
+        const convDay = convDate.getDay();
+        dayCount[convDay]++;
       }
       
-      // Get achievements from progress
-      const achievements = progress.flatMap(p => {
+      // Only count conversations from the current week
+      if (dayDiff < 7) {
+        const weekDay = (dayOfWeek - dayDiff + 7) % 7;
+        weeklyConversations[weekDay]++;
+      }
+    });
+    
+    // Find most active day
+    const maxDayCount = Math.max(...dayCount);
+    const maxDayIndex = dayCount.indexOf(maxDayCount);
+    setMostActiveDay(weekDays[maxDayIndex]);
+    
+    setWeeklyData(weeklyConversations);
+    
+    // Calculate mode stats
+    const modeMap = new Map<string, number>();
+    conversations.forEach(conv => {
+      const mode = conv.mode.id;
+      modeMap.set(mode, (modeMap.get(mode) || 0) + 1);
+    });
+    
+    const modeColors = {
+      'general-chat': '#3B82F6',
+      'debate-challenge': '#EF4444',
+      'idea-brainstorm': '#10B981',
+      'interview-practice': '#8B5CF6',
+      'presentation-prep': '#F59E0B',
+      'language-learning': '#06B6D4'
+    };
+    
+    const totalConversations = conversations.length;
+    const modeStatsData = Array.from(modeMap.entries())
+      .map(([mode, count]) => ({
+        mode,
+        count,
+        percentage: Math.round((count / totalConversations) * 100),
+        color: modeColors[mode as keyof typeof modeColors] || colors.primary
+      }))
+      .sort((a, b) => b.count - a.count);
+    
+    setModeStats(modeStatsData);
+    
+    // Calculate total time
+    const totalMinutes = conversations.reduce((sum, conv) => sum + (conv.duration / 60), 0);
+    setTotalTime(totalMinutes);
+    
+    // Calculate average duration
+    setAverageDuration(totalMinutes / totalConversations);
+    
+    // Get achievements
+    if (progress.length > 0) {
+      const allAchievements = progress.flatMap(p => {
         const achievementsArray = p.achievements as any[] || [];
         return achievementsArray.map(a => ({
           id: a.id,
@@ -114,122 +144,69 @@ export default function AnalyticsScreen() {
         }));
       });
       
-      // Update analytics state
-      if (updateAnalytics) {
-        updateAnalytics({
-          totalConversations,
-          totalPracticeTime,
-          averageScore,
-          streakDays,
-          weeklyProgress,
-          skillProgress,
-          achievements,
-        });
-      }
-    } catch (error) {
-      console.error('Failed to generate analytics from progress:', error);
+      setAchievements(allAchievements.slice(0, 5));
     }
   };
-
-  const StatCard = ({ 
-    icon: IconComponent, 
-    title, 
-    value, 
-    subtitle,
-    color 
-  }: {
-    icon: any;
-    title: string;
-    value: string | number;
-    subtitle?: string;
-    color: string;
-  }) => (
-    <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-      <View style={[styles.statIcon, { backgroundColor: color }]}>
-        <IconComponent size={24} color="white" />
-      </View>
-      <View style={styles.statContent}>
-        <Text style={[styles.statValue, { color: colors.text }]}>{value}</Text>
-        <Text style={[styles.statTitle, { color: colors.textSecondary }]}>{title}</Text>
-        {subtitle && (
-          <Text style={[styles.statSubtitle, { color: colors.textTertiary }]}>
-            {subtitle}
-          </Text>
-        )}
-      </View>
-    </View>
-  );
-
-  const ProgressBar = ({ 
-    label, 
-    value, 
-    color 
-  }: { 
-    label: string; 
-    value: number; 
-    color: string; 
-  }) => (
-    <View style={styles.progressItem}>
-      <View style={styles.progressHeader}>
-        <Text style={[styles.progressLabel, { color: colors.text }]}>{label}</Text>
-        <Text style={[styles.progressValue, { color: colors.text }]}>{value}%</Text>
-      </View>
-      <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
-        <View
-          style={[
-            styles.progressFill,
-            {
-              backgroundColor: color,
-              width: `${value}%`,
-            },
-          ]}
-        />
-      </View>
-    </View>
-  );
-
-  const WeeklyChart = ({ data }: { data: number[] }) => {
-    const maxValue = Math.max(...data);
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    
-    return (
-      <View style={styles.chartContainer}>
-        <Text style={[styles.chartTitle, { color: colors.text }]}>
-          Weekly Progress
-        </Text>
-        <View style={styles.chart}>
-          {data.map((value, index) => (
-            <View key={index} style={styles.chartColumn}>
-              <View
-                style={[
-                  styles.chartBar,
-                  {
-                    height: (value / maxValue) * 100,
-                    backgroundColor: colors.primary,
-                  },
-                ]}
-              />
-              <Text style={[styles.chartDay, { color: colors.textSecondary }]}>
-                {days[index]}
-              </Text>
-            </View>
-          ))}
-        </View>
-      </View>
-    );
+  
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await Promise.all([
+      loadProgress(),
+      loadConversations()
+    ]);
+    loadAnalyticsData();
+    setIsRefreshing(false);
   };
-
-  if (!analytics) {
+  
+  const formatTime = (minutes: number) => {
+    const hours = Math.floor(minutes / 60);
+    const mins = Math.floor(minutes % 60);
+    
+    if (hours > 0) {
+      return `${hours}h ${mins}m`;
+    }
+    return `${mins}m`;
+  };
+  
+  const getWeekProgress = () => {
+    const currentWeekTotal = weeklyData.reduce((sum, count) => sum + count, 0);
+    
+    // For simplicity, we'll just compare to a fixed number
+    // In a real app, you'd compare to the previous week's data
+    const lastWeekTotal = currentWeekTotal > 0 ? currentWeekTotal - 2 : 0;
+    
+    if (currentWeekTotal > lastWeekTotal) {
+      return {
+        change: currentWeekTotal - lastWeekTotal,
+        isIncrease: true
+      };
+    } else {
+      return {
+        change: lastWeekTotal - currentWeekTotal,
+        isIncrease: false
+      };
+    }
+  };
+  
+  const weekProgress = getWeekProgress();
+  
+  // Render loading state
+  if (conversations.length === 0) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <LinearGradient
           colors={isDark ? ['#1E293B', '#0F172A'] : ['#F8FAFC', '#FFFFFF']}
           style={styles.gradient}
         >
+          <OfflineIndicator />
+          
           <View style={styles.loadingContainer}>
             <BarChart3 size={64} color={colors.textTertiary} />
             <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-              Loading analytics...
+              No analytics data available yet
+            </Text>
+            <Text style={[styles.loadingSubtext, { color: colors.textTertiary }]}>
+              Complete some conversations to see your progress
             </Text>
           </View>
         </LinearGradient>
@@ -245,6 +222,8 @@ export default function AnalyticsScreen() {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       >
+        <OfflineIndicator />
+        
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
@@ -259,65 +238,197 @@ export default function AnalyticsScreen() {
             </Text>
           </View>
 
+          {/* Stats Grid */}
           <View style={styles.statsGrid}>
-            <StatCard
-              icon={TrendingUp}
-              title="Conversations"
-              value={analytics.totalConversations}
-              color={colors.primary}
-            />
-            <StatCard
-              icon={Clock}
-              title="Practice Time"
-              value={`${Math.floor(analytics.totalPracticeTime / 60)}h`}
-              subtitle={`${Math.floor(analytics.totalPracticeTime % 60)}m total`}
-              color={colors.secondary}
-            />
-            <StatCard
-              icon={Target}
-              title="Average Score"
-              value={analytics.averageScore.toFixed(1)}
-              subtitle="out of 10"
-              color={colors.success}
-            />
-            <StatCard
-              icon={Award}
-              title="Streak"
-              value={`${analytics.streakDays} days`}
-              color={colors.warning}
-            />
+            <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+              <View style={[styles.statIcon, { backgroundColor: colors.primary }]}>
+                <MessageCircle size={20} color="white" />
+              </View>
+              <Text style={[styles.statValue, { color: colors.text }]}>
+                {conversations.length}
+              </Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+                Conversations
+              </Text>
+            </View>
+            
+            <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+              <View style={[styles.statIcon, { backgroundColor: colors.secondary }]}>
+                <Clock size={20} color="white" />
+              </View>
+              <Text style={[styles.statValue, { color: colors.text }]}>
+                {formatTime(totalTime)}
+              </Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+                Total Time
+              </Text>
+            </View>
+            
+            <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+              <View style={[styles.statIcon, { backgroundColor: colors.warning }]}>
+                <Flame size={20} color="white" />
+              </View>
+              <Text style={[styles.statValue, { color: colors.text }]}>
+                {streakDays}
+              </Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+                Day Streak
+              </Text>
+            </View>
+            
+            <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+              <View style={[styles.statIcon, { backgroundColor: colors.success }]}>
+                <Target size={20} color="white" />
+              </View>
+              <Text style={[styles.statValue, { color: colors.text }]}>
+                {modeStats.length > 0 ? modeStats[0].mode.split('-')[0] : '-'}
+              </Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+                Top Mode
+              </Text>
+            </View>
           </View>
 
-          <WeeklyChart data={analytics.weeklyProgress} />
-
-          <View style={[styles.skillsContainer, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Skill Progress
-            </Text>
-            <ProgressBar
-              label="Fluency"
-              value={analytics.skillProgress.fluency}
-              color={colors.primary}
-            />
-            <ProgressBar
-              label="Confidence"
-              value={analytics.skillProgress.confidence}
-              color={colors.secondary}
-            />
-            <ProgressBar
-              label="Clarity"
-              value={analytics.skillProgress.clarity}
-              color={colors.accent}
-            />
+          {/* Weekly Activity Chart */}
+          <View style={[styles.chartContainer, { backgroundColor: colors.surface }]}>
+            <View style={styles.chartHeader}>
+              <View style={styles.chartTitle}>
+                <Calendar size={18} color={colors.primary} />
+                <Text style={[styles.chartTitleText, { color: colors.text }]}>
+                  Weekly Activity
+                </Text>
+              </View>
+              
+              <View style={styles.weekProgress}>
+                <TrendingUp size={14} color={weekProgress.isIncrease ? colors.success : colors.error} />
+                <Text style={[
+                  styles.weekProgressText, 
+                  { color: weekProgress.isIncrease ? colors.success : colors.error }
+                ]}>
+                  {weekProgress.isIncrease ? '+' : '-'}{weekProgress.change} this week
+                </Text>
+              </View>
+            </View>
+            
+            <View style={styles.chart}>
+              {weeklyData.map((value, index) => (
+                <View key={index} style={styles.chartColumn}>
+                  <View style={styles.barContainer}>
+                    <View 
+                      style={[
+                        styles.bar, 
+                        { 
+                          height: `${Math.max(5, value * 20)}%`,
+                          backgroundColor: colors.primary 
+                        }
+                      ]}
+                    />
+                  </View>
+                  <Text style={[styles.dayLabel, { color: colors.textSecondary }]}>
+                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'][index]}
+                  </Text>
+                </View>
+              ))}
+            </View>
           </View>
 
-          <View style={[styles.achievementsContainer, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Recent Achievements
-            </Text>
-            {analytics.achievements.length > 0 ? (
-              analytics.achievements.slice(0, 5).map((achievement) => (
-                <View key={achievement.id} style={styles.achievementItem}>
+          {/* Mode Distribution */}
+          <View style={[styles.modeContainer, { backgroundColor: colors.surface }]}>
+            <View style={styles.sectionHeader}>
+              <Target size={18} color={colors.primary} />
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Conversation Modes
+              </Text>
+            </View>
+            
+            {modeStats.map((mode, index) => (
+              <View key={index} style={styles.modeItem}>
+                <View style={styles.modeInfo}>
+                  <Text style={[styles.modeName, { color: colors.text }]}>
+                    {mode.mode.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                  </Text>
+                  <Text style={[styles.modeCount, { color: colors.textSecondary }]}>
+                    {mode.count} conversation{mode.count !== 1 ? 's' : ''}
+                  </Text>
+                </View>
+                
+                <View style={styles.modePercentage}>
+                  <Text style={[styles.percentageText, { color: colors.text }]}>
+                    {mode.percentage}%
+                  </Text>
+                </View>
+                
+                <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
+                  <View 
+                    style={[
+                      styles.progressFill,
+                      { 
+                        width: `${mode.percentage}%`,
+                        backgroundColor: mode.color
+                      }
+                    ]}
+                  />
+                </View>
+              </View>
+            ))}
+          </View>
+
+          {/* Insights */}
+          <View style={[styles.insightsContainer, { backgroundColor: colors.surface }]}>
+            <View style={styles.sectionHeader}>
+              <TrendingUp size={18} color={colors.primary} />
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Your Insights
+              </Text>
+            </View>
+            
+            <View style={styles.insightsList}>
+              <View style={[styles.insightCard, { backgroundColor: colors.primary + '10' }]}>
+                <Clock size={16} color={colors.primary} />
+                <Text style={[styles.insightText, { color: colors.text }]}>
+                  Average conversation: {formatTime(averageDuration)}
+                </Text>
+              </View>
+              
+              <View style={[styles.insightCard, { backgroundColor: colors.secondary + '10' }]}>
+                <Calendar size={16} color={colors.secondary} />
+                <Text style={[styles.insightText, { color: colors.text }]}>
+                  Most active day: {mostActiveDay}
+                </Text>
+              </View>
+              
+              {modeStats.length > 0 && (
+                <View style={[styles.insightCard, { backgroundColor: colors.success + '10' }]}>
+                  <Target size={16} color={colors.success} />
+                  <Text style={[styles.insightText, { color: colors.text }]}>
+                    You've used {modeStats.length} different conversation modes
+                  </Text>
+                </View>
+              )}
+              
+              {weekProgress.isIncrease && (
+                <View style={[styles.insightCard, { backgroundColor: colors.warning + '10' }]}>
+                  <TrendingUp size={16} color={colors.warning} />
+                  <Text style={[styles.insightText, { color: colors.text }]}>
+                    {weekProgress.change} more conversation{weekProgress.change !== 1 ? 's' : ''} this week than last
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Achievements */}
+          {achievements.length > 0 && (
+            <View style={[styles.achievementsContainer, { backgroundColor: colors.surface }]}>
+              <View style={styles.sectionHeader}>
+                <Award size={18} color={colors.primary} />
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                  Recent Achievements
+                </Text>
+              </View>
+              
+              {achievements.map((achievement, index) => (
+                <View key={index} style={styles.achievementItem}>
                   <View style={[styles.achievementIcon, { backgroundColor: colors.warning }]}>
                     <Star size={20} color="white" />
                   </View>
@@ -328,24 +439,57 @@ export default function AnalyticsScreen() {
                     <Text style={[styles.achievementDescription, { color: colors.textSecondary }]}>
                       {achievement.description}
                     </Text>
+                    <Text style={[styles.achievementDate, { color: colors.textTertiary }]}>
+                      Unlocked: {new Date(achievement.unlockedAt).toLocaleDateString()}
+                    </Text>
                   </View>
                 </View>
-              ))
-            ) : (
-              <Text style={[styles.noAchievementsText, { color: colors.textSecondary }]}>
-                Complete conversations to unlock achievements!
+              ))}
+              
+              {achievements.length === 0 && (
+                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                  Complete more conversations to earn achievements!
+                </Text>
+              )}
+            </View>
+          )}
+
+          {/* Export Section */}
+          <View style={[styles.exportContainer, { backgroundColor: colors.surface }]}>
+            <View style={styles.sectionHeader}>
+              <Share2 size={18} color={colors.primary} />
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Share Your Progress
               </Text>
-            )}
+            </View>
+            
+            <TouchableOpacity 
+              style={[styles.exportButton, { backgroundColor: colors.primary }]}
+              disabled={!isOnline}
+            >
+              <Text style={styles.exportButtonText}>
+                Export Progress Summary
+              </Text>
+            </TouchableOpacity>
+            
+            <Text style={[styles.exportNote, { color: colors.textTertiary }]}>
+              Export a summary of your conversation history and progress
+            </Text>
           </View>
+
+          {/* Refresh Button */}
+          <TouchableOpacity 
+            style={[styles.refreshButton, { backgroundColor: colors.primary }]}
+            onPress={handleRefresh}
+            disabled={isRefreshing || !isOnline}
+          >
+            <RefreshCw size={16} color="white" />
+            <Text style={styles.refreshButtonText}>
+              {isRefreshing ? 'Refreshing...' : 'Refresh Analytics'}
+            </Text>
+          </TouchableOpacity>
         </ScrollView>
       </LinearGradient>
-      
-      {/* Auth Prompt Modal */}
-      <GuestModePrompt
-        visible={showAuthPrompt}
-        onClose={() => setShowAuthPrompt(false)}
-        feature="analytics"
-      />
     </SafeAreaView>
   );
 }
@@ -362,6 +506,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
   header: {
     marginBottom: spacing.xl,
@@ -396,59 +541,23 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
   },
   statIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
-  },
-  statContent: {
-    alignItems: 'flex-start',
   },
   statValue: {
     fontSize: typography.sizes['2xl'],
     fontWeight: typography.weights.bold,
     marginBottom: spacing.xs,
   },
-  statTitle: {
+  statLabel: {
     fontSize: typography.sizes.sm,
     fontWeight: typography.weights.medium,
   },
-  statSubtitle: {
-    fontSize: typography.sizes.xs,
-    marginTop: spacing.xs / 2,
-  },
   chartContainer: {
-    backgroundColor: 'transparent',
-    padding: spacing.lg,
-    borderRadius: 16,
-    marginBottom: spacing.xl,
-  },
-  chartTitle: {
-    fontSize: typography.sizes.lg,
-    fontWeight: typography.weights.semibold,
-    marginBottom: spacing.lg,
-  },
-  chart: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    height: 120,
-    gap: spacing.sm,
-  },
-  chartColumn: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  chartBar: {
-    width: '100%',
-    borderRadius: 4,
-    marginBottom: spacing.sm,
-  },
-  chartDay: {
-    fontSize: typography.sizes.xs,
-  },
-  skillsContainer: {
     padding: spacing.lg,
     borderRadius: 16,
     marginBottom: spacing.xl,
@@ -461,26 +570,100 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3.84,
   },
-  sectionTitle: {
-    fontSize: typography.sizes.lg,
-    fontWeight: typography.weights.semibold,
-    marginBottom: spacing.lg,
-  },
-  progressItem: {
-    marginBottom: spacing.md,
-  },
-  progressHeader: {
+  chartHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.lg,
   },
-  progressLabel: {
+  chartTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  chartTitleText: {
+    fontSize: typography.sizes.lg,
+    fontWeight: typography.weights.semibold,
+  },
+  weekProgress: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs / 2,
+  },
+  weekProgressText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.medium,
+  },
+  chart: {
+    flexDirection: 'row',
+    height: 150,
+    justifyContent: 'space-between',
+  },
+  chartColumn: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  barContainer: {
+    height: '85%',
+    width: '60%',
+    justifyContent: 'flex-end',
+  },
+  bar: {
+    width: '100%',
+    borderRadius: 4,
+    minHeight: 4,
+  },
+  dayLabel: {
+    marginTop: spacing.xs,
+    fontSize: typography.sizes.xs,
+    fontWeight: typography.weights.medium,
+  },
+  modeContainer: {
+    padding: spacing.lg,
+    borderRadius: 16,
+    marginBottom: spacing.xl,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+    gap: spacing.xs,
+  },
+  sectionTitle: {
+    fontSize: typography.sizes.lg,
+    fontWeight: typography.weights.semibold,
+  },
+  modeItem: {
+    marginBottom: spacing.md,
+  },
+  modeInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  modeName: {
     fontSize: typography.sizes.base,
     fontWeight: typography.weights.medium,
   },
-  progressValue: {
-    fontSize: typography.sizes.base,
+  modeCount: {
+    fontSize: typography.sizes.sm,
+  },
+  modePercentage: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  percentageText: {
+    fontSize: typography.sizes.sm,
     fontWeight: typography.weights.semibold,
   },
   progressTrack: {
@@ -492,9 +675,38 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 4,
   },
+  insightsContainer: {
+    padding: spacing.lg,
+    borderRadius: 16,
+    marginBottom: spacing.xl,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+  },
+  insightsList: {
+    gap: spacing.md,
+  },
+  insightCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: 12,
+    gap: spacing.sm,
+  },
+  insightText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.medium,
+    flex: 1,
+  },
   achievementsContainer: {
     padding: spacing.lg,
     borderRadius: 16,
+    marginBottom: spacing.xl,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: {
@@ -506,7 +718,6 @@ const styles = StyleSheet.create({
   },
   achievementItem: {
     flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: spacing.md,
   },
   achievementIcon: {
@@ -523,25 +734,79 @@ const styles = StyleSheet.create({
   achievementTitle: {
     fontSize: typography.sizes.base,
     fontWeight: typography.weights.semibold,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.xs / 2,
   },
   achievementDescription: {
     fontSize: typography.sizes.sm,
-    lineHeight: typography.sizes.sm * 1.4,
+    marginBottom: spacing.xs / 2,
   },
-  noAchievementsText: {
-    fontSize: typography.sizes.base,
+  achievementDate: {
+    fontSize: typography.sizes.xs,
+  },
+  emptyText: {
     textAlign: 'center',
     fontStyle: 'italic',
-    paddingVertical: spacing.lg,
+    padding: spacing.md,
+  },
+  exportContainer: {
+    padding: spacing.lg,
+    borderRadius: 16,
+    marginBottom: spacing.xl,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+  },
+  exportButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    borderRadius: 12,
+    marginBottom: spacing.sm,
+  },
+  exportButtonText: {
+    color: 'white',
+    fontSize: typography.sizes.base,
+    fontWeight: typography.weights.semibold,
+  },
+  exportNote: {
+    fontSize: typography.sizes.xs,
+    textAlign: 'center',
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    borderRadius: 12,
+    marginBottom: spacing.xl,
+    gap: spacing.sm,
+  },
+  refreshButtonText: {
+    color: 'white',
+    fontSize: typography.sizes.base,
+    fontWeight: typography.weights.semibold,
   },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: spacing.xl,
   },
   loadingText: {
-    fontSize: typography.sizes.lg,
+    fontSize: typography.sizes.xl,
+    fontWeight: typography.weights.bold,
     marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  loadingSubtext: {
+    fontSize: typography.sizes.base,
+    textAlign: 'center',
+    maxWidth: '80%',
   },
 });
