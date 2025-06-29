@@ -30,7 +30,7 @@ export default function HistoryScreen() {
   const { user: authUser } = useSupabaseAuth();
   const {
     conversations,
-    conversationsLoading: loading,
+    loading,
     deleteConversation,
     loadConversations,
     searchConversations,
