@@ -10,7 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { X, Volume2, Mic, Sliders } from 'lucide-react-native';
+import { X, Volume2, Mic, FileSliders as Sliders } from 'lucide-react-native';
 import Slider from '@react-native-community/slider';
 import { useTheme } from '@/src/hooks/useTheme';
 import { spacing, typography } from '@/src/constants/colors';
