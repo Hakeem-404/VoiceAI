@@ -19,61 +19,37 @@ import {
   Trash2
 } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
-import { useConversationStore } from '@/src/stores/conversationStore';
 import { useSupabaseAuth } from '@/src/hooks/useSupabase';
-import { useConversationDatabase } from '@/src/hooks/useConversationDatabase';
-import { GuestModePrompt } from '@/components/GuestModePrompt';
+import { useDataPersistence } from '@/src/hooks/useDataPersistence';
+import { OfflineIndicator } from '@/components/OfflineIndicator';
 import { Conversation } from '@/src/types';
 import { spacing, typography } from '@/src/constants/colors';
 
 export default function HistoryScreen() {
   const { colors, isDark } = useTheme();
-  const { conversations, removeConversation } = useConversationStore();
   const { user: authUser } = useSupabaseAuth();
-  const { 
-    conversations: dbConversations, 
-    loading, 
-    loadConversations, 
-    deleteConversation: deleteDbConversation 
-  } = useConversationDatabase();
+  const {
+    conversations,
+    conversationsLoading: loading,
+    deleteConversation,
+    loadConversations,
+    searchConversations,
+    isOnline
+  } = useDataPersistence();
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'recent' | 'favorites'>('all');
-  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
-  
-  // Combined conversations from store and database
-  const [allConversations, setAllConversations] = useState<Conversation[]>([]);
   
   useEffect(() => {
     if (authUser) {
       loadConversations();
-      setShowAuthPrompt(false);
-    } else if (!conversations.length) {
-      // Show auth prompt if guest user has no conversations
-      setShowAuthPrompt(true);
     }
-  }, [authUser]);
-
-  // Combine conversations from store and database
-  useEffect(() => {
-    if (authUser && dbConversations.length > 0) {
-      // Use database conversations for authenticated users
-      setAllConversations(dbConversations);
-    } else {
-      // Use store conversations for guest users or when no DB conversations
-      setAllConversations(conversations);
-    }
-  }, [authUser, dbConversations, conversations]);
+  }, [authUser, loadConversations]);
 
   // Handle conversation deletion
   const handleDeleteConversation = async (id: string) => {
     try {
-      if (authUser && !id.startsWith('local_')) {
-        // Delete from database
-        await deleteDbConversation(id);
-      } else {
-        // Delete from local store
-        removeConversation(id);
-      }
+      await deleteConversation(id);
     } catch (error) {
       console.error('Failed to delete conversation:', error);
     }
@@ -96,20 +72,17 @@ export default function HistoryScreen() {
     return date.toLocaleDateString();
   };
 
-  const filteredConversations = allConversations.filter(conversation => {
-    const matchesSearch = conversation.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         conversation.mode.name.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    if (selectedFilter === 'all') return matchesSearch;
+  const filteredConversations = searchConversations(searchQuery).filter(conversation => {
+    if (selectedFilter === 'all') return true;
     if (selectedFilter === 'recent') {
       const isRecent = (new Date().getTime() - conversation.createdAt.getTime()) < (7 * 24 * 60 * 60 * 1000);
-      return matchesSearch && isRecent;
+      return isRecent;
     }
     if (selectedFilter === 'favorites') {
-      return matchesSearch && conversation.isBookmarked;
+      return conversation.isBookmarked;
     }
     
-    return matchesSearch;
+    return true;
   });
 
   const renderConversationItem = ({ item }: { item: Conversation }) => (
@@ -198,6 +171,8 @@ export default function HistoryScreen() {
             Conversation History
           </Text>
           
+          <OfflineIndicator />
+          
           <View style={[styles.searchContainer, { backgroundColor: colors.surface }]}>
             <Search size={20} color={colors.textSecondary} />
             <TextInput
@@ -238,7 +213,7 @@ export default function HistoryScreen() {
         <FlatList
           data={filteredConversations}
           renderItem={renderConversationItem}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={renderEmptyState}
           showsVerticalScrollIndicator={false}
@@ -250,13 +225,6 @@ export default function HistoryScreen() {
           }}
         />
       </LinearGradient>
-      
-      {/* Auth Prompt Modal */}
-      <GuestModePrompt
-        visible={showAuthPrompt}
-        onClose={() => setShowAuthPrompt(false)}
-        feature="history"
-      />
     </SafeAreaView>
   );
 }

@@ -22,12 +22,12 @@ import {
   LogOut
 } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
-import { useUserStore } from '@/src/stores/userStore';
 import { useSupabaseAuth } from '@/src/hooks/useSupabase';
-import { useVoiceProfiles } from '@/src/hooks/useVoiceProfiles';
-import { SettingItem } from '@/components/SettingItem';
+import { useDataPersistence } from '@/src/hooks/useDataPersistence';
+import { OfflineIndicator } from '@/components/OfflineIndicator';
+import { SyncStatusIndicator } from '@/components/SyncStatusIndicator';
 import { UserAvatar } from '@/components/UserAvatar';
-import { GuestModePrompt } from '@/components/GuestModePrompt';
+import { SettingItem } from '@/components/SettingItem';
 import { ProfileSettings } from '@/components/ProfileSettings';
 import { VoiceSettingsModal } from '@/components/VoiceSettingsModal';
 import { NotificationSettingsModal } from '@/components/NotificationSettingsModal';
@@ -37,16 +37,16 @@ import { spacing, typography } from '@/src/constants/colors';
 export default function ProfileScreen() {
   const { colors, isDark, theme } = useTheme();
   const { 
-    user, 
-    theme: userTheme, 
+    user,
+    theme,
     setTheme,
-    updatePreferences 
-  } = useUserStore();
-  const { user: authUser, signOut } = useSupabaseAuth();
-  const { voiceProfiles, loading: voiceProfilesLoading } = useVoiceProfiles();
+    updatePreferences,
+    isOnline,
+    pendingChanges
+  } = useDataPersistence();
   
-  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
-  const [promptFeature, setPromptFeature] = useState<'save' | 'history' | 'voice' | 'analytics' | 'premium'>('save');
+  const { user: authUser, signOut } = useSupabaseAuth();
+  
   const [showSettings, setShowSettings] = useState(false);
   const [showVoiceSettings, setShowVoiceSettings] = useState(false);
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
@@ -57,15 +57,8 @@ export default function ProfileScreen() {
   const [localPreferences, setLocalPreferences] = useState({
     practiceReminders: true,
     achievements: false,
-    darkMode: userTheme === 'dark',
+    darkMode: theme === 'dark',
   });
-
-  // Reset auth prompt when user authentication status changes
-  useEffect(() => {
-    if (authUser) {
-      setShowAuthPrompt(false);
-    }
-  }, [authUser]);
 
   // Refresh user data when profile is updated
   const handleProfileUpdated = () => {
@@ -103,39 +96,7 @@ export default function ProfileScreen() {
   const saveThemePreference = (isDark: boolean) => {
     const newTheme = isDark ? 'dark' : 'light';
     setTheme(newTheme);
-    
-    if (authUser) {
-      updatePreferences(authUser.id, { theme: newTheme });
-    }
-    
     setShowThemeSettings(false);
-  };
-
-  const mockUser = {
-    id: '1',
-    name: 'Alex Johnson',
-    email: 'alex.johnson@example.com',
-    preferences: {
-      theme: userTheme,
-      voiceSettings: {
-        selectedVoice: 'en-US-Standard-A',
-        speed: 1.0,
-        pitch: 1.0,
-        volume: 0.8,
-      },
-      notifications: {
-        practiceReminders: localPreferences.practiceReminders,
-        dailyGoals: true,
-        achievements: localPreferences.achievements,
-      },
-      language: 'en-US',
-    },
-    subscription: {
-      tier: 'premium' as const,
-      expiresAt: new Date('2024-12-31'),
-      features: ['unlimited_conversations', 'advanced_analytics', 'custom_voices'],
-    },
-    createdAt: new Date('2024-01-15'),
   };
 
   const SubscriptionCard = () => (
@@ -149,9 +110,11 @@ export default function ProfileScreen() {
         <View style={styles.subscriptionContent}>
           <Crown size={24} color="white" />
           <Text style={styles.subscriptionTitle}>Premium Member</Text>
-          <Text style={styles.subscriptionExpiry}>
-            Expires Dec 31, 2024
-          </Text>
+          {user?.subscription?.expiresAt && (
+            <Text style={styles.subscriptionExpiry}>
+              Expires {user.subscription.expiresAt.toLocaleDateString()}
+            </Text>
+          )}
         </View>
         <TouchableOpacity style={styles.manageButton}>
           <Text style={styles.manageButtonText}>Manage</Text>
@@ -166,6 +129,9 @@ export default function ProfileScreen() {
         colors={isDark ? ['#1E293B', '#0F172A'] : ['#F8FAFC', '#FFFFFF']}
         style={styles.gradient}
         start={{ x: 0, y: 0 }}
+        <OfflineIndicator />
+        <SyncStatusIndicator compact />
+        
         end={{ x: 1, y: 1 }}
       >
         <ScrollView
@@ -176,23 +142,18 @@ export default function ProfileScreen() {
           <View style={styles.header}>
             <UserAvatar 
               size={80} 
-              showBadge={true} 
-              onPress={() => {
-                if (!authUser) {
-                  setPromptFeature('save');
-                  setShowAuthPrompt(true);
-                }
-              }}
+              showBadge={!!user?.subscription && user.subscription.tier !== 'free'}
+              onPress={() => setShowSettings(true)}
             />
             <Text style={[styles.userName, { color: colors.text }]}>
-              {authUser?.user_metadata?.name || user?.name || 'Guest User'}
+              {user?.name || 'Guest User'}
             </Text>
             <Text style={[styles.userEmail, { color: colors.textSecondary }]}>
-              {authUser?.email || user?.email || 'Sign in to save your progress'}
+              {user?.email || 'Sign in to save your progress'}
             </Text>
           </View>
 
-          <SubscriptionCard />
+          {user?.subscription?.tier !== 'free' && <SubscriptionCard />}
 
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
@@ -202,7 +163,9 @@ export default function ProfileScreen() {
               icon={isDark ? Moon : Sun}
               title="Dark Mode"
               subtitle="Change app appearance"
-              type="nav"
+              type="toggle"
+              value={theme === 'dark'}
+              onValueChange={(value) => setTheme(value ? 'dark' : 'light')}
               onPress={() => setShowThemeSettings(true)}
             />
           </View>
@@ -216,14 +179,7 @@ export default function ProfileScreen() {
               title="Practice Reminders"
               subtitle="Configure notification settings"
               type="nav"
-              onPress={() => {
-                if (authUser) {
-                  setShowNotificationSettings(true);
-                } else {
-                  setPromptFeature('save');
-                  setShowAuthPrompt(true);
-                }
-              }}
+              onPress={() => setShowNotificationSettings(true)}
             />
           </View>
 
@@ -236,14 +192,7 @@ export default function ProfileScreen() {
               title="Voice & Speech"
               subtitle="Customize voice speed, pitch, and language"
               type="nav"
-              onPress={() => {
-                if (authUser) {
-                  setShowVoiceSettings(true);
-                } else {
-                  setPromptFeature('voice');
-                  setShowAuthPrompt(true);
-                }
-              }}
+              onPress={() => setShowVoiceSettings(true)}
             />
           </View>
 
@@ -256,14 +205,7 @@ export default function ProfileScreen() {
               title="Account Settings"
               subtitle="Manage your account and privacy"
               type="nav"
-              onPress={() => {
-                if (authUser) {
-                  setShowSettings(true);
-                } else {
-                  setPromptFeature('save');
-                  setShowAuthPrompt(true);
-                }
-              }}
+              onPress={() => setShowSettings(true)}
             />
             <TouchableOpacity
               style={[styles.logoutButton, { backgroundColor: colors.surface }]}
@@ -271,9 +213,6 @@ export default function ProfileScreen() {
               onPress={async () => {
                 if (authUser) {
                   await signOut();
-                } else {
-                  setPromptFeature('save');
-                  setShowAuthPrompt(true);
                 }
               }}
             >
@@ -285,13 +224,6 @@ export default function ProfileScreen() {
           </View>
         </ScrollView>
       </LinearGradient>
-      
-      {/* Auth Prompt Modal */}
-      <GuestModePrompt
-        visible={showAuthPrompt}
-        onClose={() => setShowAuthPrompt(false)}
-        feature={promptFeature}
-      />
       
       {/* Profile Settings Modal */}
       <ProfileSettings
@@ -305,7 +237,6 @@ export default function ProfileScreen() {
       <VoiceSettingsModal
         visible={showVoiceSettings}
         onClose={() => setShowVoiceSettings(false)}
-        voiceProfiles={voiceProfiles}
       />
       
       {/* Notification Settings Modal */}
@@ -335,7 +266,7 @@ export default function ProfileScreen() {
       <ThemeSettingsModal
         visible={showThemeSettings}
         onClose={() => setShowThemeSettings(false)}
-        isDarkMode={localPreferences.darkMode}
+        isDarkMode={theme === 'dark'}
         onSave={saveThemePreference}
       />
     </SafeAreaView>
