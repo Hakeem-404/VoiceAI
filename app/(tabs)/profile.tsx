@@ -38,7 +38,6 @@ export default function ProfileScreen() {
   const { colors, isDark, theme } = useTheme();
   const { 
     user,
-    theme,
     setTheme,
     updatePreferences,
     isOnline,
