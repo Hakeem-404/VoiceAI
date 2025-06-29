@@ -122,7 +122,7 @@ export default function HistoryScreen() {
           </Text>
         </View>
         
-        {item.feedback && (
+        {item.feedback?.scores && (
           <View style={styles.stat}>
             <Star size={14} color={colors.warning} />
             <Text style={[styles.statText, { color: colors.textSecondary }]}>
