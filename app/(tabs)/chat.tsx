@@ -27,11 +27,11 @@ import {
 import { SupabaseConversationView } from '../../components/SupabaseConversationView';
 import { supabaseClaudeAPI } from '../../services/supabaseClaudeAPI';
 import { InterviewSetupScreen } from '../../components/InterviewSetupScreen';
-import { useInputStore } from '@/src/stores/inputStore';
-import { useConversationStore } from '@/src/stores/conversationStore';
-import { useUserStore } from '@/src/stores/userStore';
+import { useDataPersistence } from '@/src/hooks/useDataPersistence';
 import { useSupabaseAuth } from '@/src/hooks/useSupabase';
 import { conversationModes } from '@/src/constants/conversationModes';
+import { OfflineIndicator } from '@/components/OfflineIndicator';
+import { useInputStore } from '@/src/stores/inputStore';
 
 const conversationModesList = [
   {
@@ -94,8 +94,11 @@ export default function ChatScreen() {
   
   // Store hooks
   const { documentData, updateDocumentData } = useInputStore();
-  const { createConversation, addRecentMode } = useConversationStore();
-  const { addRecentMode: addRecentModeToUser } = useUserStore();
+  const { 
+    createConversation, 
+    addRecentMode,
+    isOnline
+  } = useDataPersistence();
   const { user: authUser } = useSupabaseAuth();
 
   useEffect(() => {
@@ -144,7 +147,7 @@ export default function ChatScreen() {
     }
   };
 
-  const startConversation = (modeId: string) => {
+  const startConversation = async (modeId: string) => {
     if (!isSupabaseConfigured) {
       Alert.alert(
         'Configuration Required',
@@ -171,11 +174,13 @@ export default function ChatScreen() {
     }
 
     // Create conversation using store
-    const conversation = createConversation(mode);
+    const conversation = await createConversation(mode, {
+      title: `${mode.name} - ${new Date().toLocaleDateString()}`
+    });
     
     if (conversation) {
       // Update recent modes
-      addRecentModeToUser(modeId);
+      await addRecentMode(modeId);
       
       // Set state for navigation
       setSelectedMode(modeId);
@@ -183,29 +188,18 @@ export default function ChatScreen() {
     }
   };
 
-  const handleInterviewContinue = () => {
+  const handleInterviewContinue = async () => {
     const mode = conversationModes.find(m => m.id === 'interview-practice');
     if (!mode) return;
     
-    // Create conversation with document analysis if available
-    const configuration = documentData.analysisResult ? {
-      modeId: 'interview-practice',
-      difficulty: 'intermediate' as any,
-      sessionType: 'standard' as any,
-      selectedTopics: mode.topics.slice(0, 3),
-      aiPersonality: 'Professional',
-      customSettings: {
-        documentAnalysis: documentData.analysisResult,
-        jobDescription: documentData.jobDescription,
-        cvContent: documentData.cvContent,
-      },
-    } : undefined;
-    
-    const conversation = createConversation(mode, configuration);
+    // Create conversation
+    const conversation = await createConversation(mode, {
+      title: `Interview Practice - ${new Date().toLocaleDateString()}`
+    });
     
     if (conversation) {
       // Update recent modes
-      addRecentModeToUser('interview-practice');
+      await addRecentMode('interview-practice');
       
       // Set state and close setup
       setSelectedMode('interview-practice');
@@ -233,6 +227,8 @@ export default function ChatScreen() {
         colors={['#F8FAFC', '#FFFFFF']}
         style={styles.gradient}
       >
+        <OfflineIndicator />
+        
         {/* Header */}
         <View style={styles.header}>
           <View>
@@ -333,7 +329,10 @@ export default function ChatScreen() {
                     <View style={styles.modeHeader}>
                       <IconComponent size={28} color="white" />
                       <View style={styles.difficultyBadge}>
-                        <Text style={styles.difficultyText}>{mode.difficulty}</Text>
+                        <Text style={styles.difficultyText}>
+                          {mode.difficulty}
+                          {!isOnline && mode.id !== 'general-chat' && ' (Offline)'}
+                        </Text>
                       </View>
                     </View>
                     
@@ -343,7 +342,9 @@ export default function ChatScreen() {
                     <View style={styles.startButton}>
                       <Plus size={16} color="white" />
                       <Text style={styles.startButtonText}>
-                        {isSupabaseConfigured ? 'Start' : 'Config Required'}
+                        {isSupabaseConfigured 
+                          ? (!isOnline && mode.id !== 'general-chat' ? 'Offline' : 'Start') 
+                          : 'Config Required'}
                       </Text>
                     </View>
                   </LinearGradient>
@@ -404,7 +405,7 @@ export default function ChatScreen() {
               if (mode) {
                 const conversation = createConversation(mode);
                 if (conversation) {
-                  addRecentModeToUser('interview-practice');
+                  addRecentMode('interview-practice');
                   setSelectedMode('interview-practice');
                   setSessionId(conversation.id);
                   setShowInterviewSetup(false);

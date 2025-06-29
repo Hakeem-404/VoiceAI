@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, ScrollView,
 import { LinearGradient } from 'expo-linear-gradient';
 import { User, Camera, Mail, X, CircleCheck as CheckCircle, Upload, CircleAlert as AlertCircle } from 'lucide-react-native';
 import { useTheme } from '@/src/hooks/useTheme';
-import { useSupabaseAuth } from '@/src/hooks/useSupabase'; 
+import { useSupabaseAuth } from '@/src/hooks/useSupabase';
+import { useDataPersistence } from '@/src/hooks/useDataPersistence';
 import * as supabaseService from '@/src/services/supabaseService';
 import { spacing, typography } from '@/src/constants/colors';
 import supabase from '@/src/lib/supabase';
@@ -17,6 +18,7 @@ interface ProfileSettingsProps {
 export function ProfileSettings({ visible, onClose, onProfileUpdated }: ProfileSettingsProps) {
   const { colors, isDark } = useTheme();
   const { user, session } = useSupabaseAuth();
+  const { updatePreferences } = useDataPersistence();
   
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -91,6 +93,11 @@ export function ProfileSettings({ visible, onClose, onProfileUpdated }: ProfileS
       const { error: authError } = await supabase.auth.updateUser({
         data: { name }
       });
+      
+      // Update local user data
+      if (user) {
+        await updatePreferences(user.id, { name });
+      }
       
       if (authError) throw authError;
       
